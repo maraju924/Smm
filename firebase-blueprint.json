@@ -1,0 +1,249 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with balance, tier, affiliate data, and preferences",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "balance": { "type": "number" },
+        "totalSpent": { "type": "number" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "currency": { "type": "string", "enum": ["BDT", "USD"] },
+        "language": { "type": "string", "enum": ["bn", "en"] },
+        "darkMode": { "type": "boolean" },
+        "apiKey": { "type": "string" },
+        "referralCode": { "type": "string" },
+        "referredBy": { "type": "string" },
+        "referralCount": { "type": "number" },
+        "referralEarnings": { "type": "number" },
+        "unpaidReferralEarnings": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Service": {
+      "title": "Service",
+      "description": "SMM social media marketing service",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "category": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "rate": { "type": "number" },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "dripfeed": { "type": "boolean" },
+        "refill": { "type": "boolean" },
+        "description": { "type": "string" },
+        "averageTime": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "providerId": { "type": "string" },
+        "providerServiceId": { "type": "string" }
+      },
+      "required": ["id", "category", "name", "rate", "min", "max", "status"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "SMM order submitted by user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "serviceId": { "type": "string" },
+        "serviceName": { "type": "string" },
+        "category": { "type": "string" },
+        "link": { "type": "string" },
+        "quantity": { "type": "number" },
+        "charge": { "type": "number" },
+        "startCount": { "type": "number" },
+        "remains": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "in_progress", "processing", "completed", "partial", "canceled"] },
+        "runs": { "type": "number" },
+        "interval": { "type": "number" },
+        "customComments": { "type": "string" },
+        "providerId": { "type": "string" },
+        "providerOrderId": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "serviceId", "link", "quantity", "charge", "status"]
+    },
+    "Refill": {
+      "title": "Refill",
+      "description": "Refill request for an order",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "serviceName": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "refilling", "completed", "rejected"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "orderId", "userId", "status"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Deposit transaction via bKash, Nagad, Crypto or Card",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "method": { "type": "string" },
+        "amount": { "type": "number" },
+        "currency": { "type": "string" },
+        "transactionId": { "type": "string" },
+        "senderNumber": { "type": "string" },
+        "bonus": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "method", "amount", "transactionId", "status"]
+    },
+    "Ticket": {
+      "title": "Ticket",
+      "description": "Customer support ticket",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "subject": { "type": "string" },
+        "orderId": { "type": "string" },
+        "department": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "answered", "closed"] },
+        "priority": { "type": "string", "enum": ["low", "normal", "high"] },
+        "messages": { "type": "array" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "subject", "status"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "System notices and updates",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "type": { "type": "string", "enum": ["info", "success", "warning", "update"] },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "title", "content", "active"]
+    },
+    "Provider": {
+      "title": "Provider",
+      "description": "Upstream SMM API v2 provider configuration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "apiUrl": { "type": "string" },
+        "apiKey": { "type": "string" },
+        "balance": { "type": "number" },
+        "currency": { "type": "string" },
+        "profitMargin": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "lastSyncAt": { "type": "number" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "name", "apiUrl", "status"]
+    },
+    "Coupon": {
+      "title": "Coupon",
+      "description": "Promo code for bonus wallet balance",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "rewardAmount": { "type": "number" },
+        "maxUses": { "type": "number" },
+        "usedCount": { "type": "number" },
+        "usedBy": { "type": "array" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "code", "rewardAmount", "maxUses", "active"]
+    },
+    "SiteSettings": {
+      "title": "SiteSettings",
+      "description": "Global payment gateways, bonus rates, and support configuration",
+      "type": "object",
+      "properties": {
+        "bKashNumber": { "type": "string" },
+        "nagadNumber": { "type": "string" },
+        "rocketNumber": { "type": "string" },
+        "upayNumber": { "type": "string" },
+        "usdtAddress": { "type": "string" },
+        "bkashBonusPercent": { "type": "number" },
+        "cryptoBonusPercent": { "type": "number" },
+        "minDepositForBonus": { "type": "number" },
+        "usdToBdtRate": { "type": "number" },
+        "referralCommissionPercent": { "type": "number" },
+        "minAffiliatePayout": { "type": "number" },
+        "whatsappNumber": { "type": "string" },
+        "telegramUrl": { "type": "string" },
+        "supportHours": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["bKashNumber", "nagadNumber", "usdToBdtRate"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and account data"
+    },
+    "/services/{serviceId}": {
+      "schema": "Service",
+      "description": "SMM catalog services"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Orders placed by users"
+    },
+    "/refills/{refillId}": {
+      "schema": "Refill",
+      "description": "Refill requests for orders"
+    },
+    "/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Balance deposit transactions"
+    },
+    "/tickets/{ticketId}": {
+      "schema": "Ticket",
+      "description": "Customer support tickets"
+    },
+    "/announcements/{announcementId}": {
+      "schema": "Announcement",
+      "description": "Public system announcements"
+    },
+    "/providers/{providerId}": {
+      "schema": "Provider",
+      "description": "Upstream SMM API v2 providers"
+    },
+    "/coupons/{couponId}": {
+      "schema": "Coupon",
+      "description": "Promotional gift codes"
+    },
+    "/settings/{settingId}": {
+      "schema": "SiteSettings",
+      "description": "Global site settings"
+    },
+    "/admins/{adminId}": {
+      "schema": "User",
+      "description": "Admin identity markers"
+    }
+  }
+}

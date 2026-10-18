@@ -1,0 +1,6 @@
+{
+  "name": "AmarTrend SMM",
+  "description": "Modern fluid SMM panel native mobile app with dark mode, orders, services, payments, and live tracking powered by Firebase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
