@@ -579,7 +579,13 @@ export const AdminView: React.FC<AdminViewProps> = ({
           checkCatalogCount: true
         })
       });
-      const data = await resp.json();
+      const rawText = await resp.text();
+      let data: any = {};
+      try {
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        throw new Error('Server API route not reachable. Please redeploy with /api serverless function.');
+      }
       if (!resp.ok || data.error) {
         throw new Error(data.error || 'Connection test failed');
       }

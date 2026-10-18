@@ -14,9 +14,26 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load Firebase config for server-side Firestore reads
-const firebaseConfigPath = path.resolve(__dirname, 'firebase-applet-config.json');
-const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf-8'));
+// Load Firebase config for server-side Firestore reads (with embedded fallback for Vercel Serverless)
+const DEFAULT_FIREBASE_CONFIG = {
+  projectId: 'gen-lang-client-0443958458',
+  appId: '1:1045439821005:web:4bbf8d978088c0981f2584',
+  apiKey: 'AIzaSyDepIdZG7Q8VuHwB34chhGT2twyMma2BhQ',
+  authDomain: 'gen-lang-client-0443958458.firebaseapp.com',
+  firestoreDatabaseId: 'ai-studio-amartrendsmm-b2bb1453-211f-47c1-9b6e-54cd031e4e18',
+  storageBucket: 'gen-lang-client-0443958458.firebasestorage.app',
+  messagingSenderId: '1045439821005'
+};
+
+let firebaseConfig = DEFAULT_FIREBASE_CONFIG;
+try {
+  const firebaseConfigPath = path.resolve(__dirname, 'firebase-applet-config.json');
+  if (fs.existsSync(firebaseConfigPath)) {
+    firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf-8'));
+  }
+} catch {
+  firebaseConfig = DEFAULT_FIREBASE_CONFIG;
+}
 
 const firebaseApp = initializeApp(firebaseConfig, 'server-instance');
 const serverDb = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
@@ -124,12 +141,11 @@ async function resolveUserByApiKey(apiKey: string, fallbackUid?: string): Promis
   return null;
 }
 
-async function startServer() {
-  const app = express();
-  const PORT = Number(process.env.PORT) || 3000;
+export const app = express();
+const PORT = Number(process.env.PORT) || 3000;
 
-  app.use(express.json({ limit: '5mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '5mb' }));
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
   // ============================================================================
   // 1. SERVER HEALTH & REAL-TIME TELEMETRY (/api/server-status)
@@ -2278,6 +2294,7 @@ async function startServer() {
   // ============================================================================
   // 6. VITE MIDDLEWARE (DEV) OR STATIC ASSETS (PRODUCTION)
   // ============================================================================
+async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
@@ -2298,4 +2315,9 @@ async function startServer() {
   });
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;
+
