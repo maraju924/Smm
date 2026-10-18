@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Navbar } from './components/layout/Navbar';
@@ -45,9 +45,12 @@ import {
   subscribeAllUsers,
   subscribeCoupons,
   subscribeProviders,
-  subscribeSiteSettings
+  subscribeSiteSettings,
+  autoSyncAllProvidersEverything
 } from './services/db';
 import { DEFAULT_SITE_SETTINGS } from './data/seedServices';
+
+const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
 const MainAppContent: React.FC = () => {
   const { profile, isAdmin } = useAuth();
@@ -62,6 +65,8 @@ const MainAppContent: React.FC = () => {
 
   // Firestore Real-time Collections
   const [services, setServices] = useState<SMMService[]>([]);
+  const [servicesLoading, setServicesLoading] = useState<boolean>(true);
+  const [isSyncingCatalog, setIsSyncingCatalog] = useState<boolean>(false);
   const [orders, setOrders] = useState<SMMOrder[]>([]);
   const [refills, setRefills] = useState<SMMRefill[]>([]);
   const [payments, setPayments] = useState<SMMPayment[]>([]);
@@ -71,6 +76,28 @@ const MainAppContent: React.FC = () => {
   const [coupons, setCoupons] = useState<SMMCoupon[]>([]);
   const [providers, setProviders] = useState<SMMProvider[]>([]);
   const [siteSettings, setSiteSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS);
+
+  const providersRef = useRef<SMMProvider[]>([]);
+  const ordersRef = useRef<SMMOrder[]>([]);
+  const servicesRef = useRef<SMMService[]>([]);
+  const siteSettingsRef = useRef<SiteSettings>(DEFAULT_SITE_SETTINGS);
+  const isAutoSyncingRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    providersRef.current = providers;
+  }, [providers]);
+
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
+
+  useEffect(() => {
+    servicesRef.current = services;
+  }, [services]);
+
+  useEffect(() => {
+    siteSettingsRef.current = siteSettings;
+  }, [siteSettings]);
 
   const addToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -91,9 +118,71 @@ const MainAppContent: React.FC = () => {
     }
   }, [isAdmin]);
 
+  // Automatic 5-Minute Background Sync for All API Providers (All Services + Balances + Order Statuses)
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    const runAutoSync = async () => {
+      if (isAutoSyncingRef.current || providersRef.current.length === 0) return;
+      isAutoSyncingRef.current = true;
+      setIsSyncingCatalog(true);
+      try {
+        await autoSyncAllProvidersEverything(
+          providersRef.current,
+          ordersRef.current,
+          servicesRef.current,
+          siteSettingsRef.current.usdToBdtRate || 122
+        );
+      } catch (e) {
+        console.warn('Automatic 5m provider sync warning:', e);
+      } finally {
+        isAutoSyncingRef.current = false;
+        setIsSyncingCatalog(false);
+      }
+    };
+
+    const intervalId = setInterval(runAutoSync, FIVE_MINUTES_MS);
+    return () => clearInterval(intervalId);
+  }, [isAdmin]);
+
+  // Trigger immediate background sync if any connected provider has incomplete catalog (e.g. 100 vs 1046) or is older than 5 minutes
+  useEffect(() => {
+    if (!isAdmin || providers.length === 0 || isAutoSyncingRef.current) return;
+
+    const needsImmediateFullSync = providers.some(prv => {
+      if (prv.status !== 'active' || !prv.apiUrl || !prv.apiKey) return false;
+      const localLinkedCount = services.filter(s => s.providerId === prv.id).length;
+      const hasMissingCatalogServices =
+        prv.totalRemoteServices !== undefined &&
+        prv.totalRemoteServices > 0 &&
+        localLinkedCount < prv.totalRemoteServices;
+      const isStaleSync = !prv.lastSyncAt || Date.now() - prv.lastSyncAt >= FIVE_MINUTES_MS;
+      return hasMissingCatalogServices || isStaleSync;
+    });
+
+    if (needsImmediateFullSync) {
+      isAutoSyncingRef.current = true;
+      setIsSyncingCatalog(true);
+      autoSyncAllProvidersEverything(
+        providers,
+        ordersRef.current,
+        servicesRef.current,
+        siteSettingsRef.current.usdToBdtRate || 122
+      )
+        .catch(() => {})
+        .finally(() => {
+          isAutoSyncingRef.current = false;
+          setIsSyncingCatalog(false);
+        });
+    }
+  }, [isAdmin, providers.length]);
+
   // Subscribe Services, Announcements, Coupons & Site Settings (Public)
   useEffect(() => {
-    const unsubServices = subscribeServices(setServices);
+    const unsubServices = subscribeServices((loadedServices) => {
+      setServices(loadedServices);
+      setServicesLoading(false);
+    });
     const unsubAnnouncements = subscribeAnnouncements(setAnnouncements);
     const unsubCoupons = subscribeCoupons(setCoupons);
     const unsubSettings = subscribeSiteSettings(setSiteSettings);
@@ -149,7 +238,7 @@ const MainAppContent: React.FC = () => {
 
   const handleNavigate = (tabId: string, params?: any) => {
     setCurrentTab(tabId);
-    if (params) setNavParams(params);
+    setNavParams(params || {});
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -203,10 +292,10 @@ const MainAppContent: React.FC = () => {
         <AnimatePresence mode="wait">
           <motion.div
             key={currentTab}
-            initial={{ opacity: 0, y: 8 }}
+            initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.18, ease: "easeOut" }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.1, ease: "easeOut" }}
             className="w-full max-w-full overflow-x-hidden"
           >
             {currentTab === 'home' && (
@@ -258,10 +347,20 @@ const MainAppContent: React.FC = () => {
             {currentTab === 'services' && (
               <ServicesView
                 services={services}
+                orders={orders}
+                isLoading={servicesLoading}
+                isSyncing={isSyncingCatalog}
                 onSelectServiceForOrder={(serviceId, category) => {
                   handleNavigate('new-order', { serviceId, category });
                 }}
+                onOrderSuccess={(id) => {
+                  addToast(`অর্ডার #${id} সফলভাবে গ্রহণ করা হয়েছে!`, 'success');
+                  handleNavigate('orders');
+                }}
+                onOpenAuth={() => setIsAuthOpen(true)}
+                onShowToast={addToast}
                 initialPlatform={navParams.platform}
+                initialSearchQuery={navParams.searchQuery}
               />
             )}
 

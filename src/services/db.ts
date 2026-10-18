@@ -170,6 +170,29 @@ export async function removeService(serviceId: string): Promise<void> {
   }
 }
 
+export async function toggleUserFavoriteServiceOnServer(
+  userId: string,
+  serviceId: string,
+  currentFavorites: string[] = []
+): Promise<boolean> {
+  const path = `users/${userId}`;
+  const isAlreadyFav = currentFavorites.includes(serviceId);
+  const nextFavorites = isAlreadyFav
+    ? currentFavorites.filter(id => id !== serviceId)
+    : [...currentFavorites, serviceId];
+
+  try {
+    await updateDoc(doc(db, 'users', userId), sanitizeForFirestore({
+      favoriteServices: nextFavorites,
+      updatedAt: Date.now()
+    }));
+    return !isAlreadyFav;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+    throw error;
+  }
+}
+
 // ==========================================
 // 3. ORDERS MANAGEMENT (ATOMIC SERVER TRANSACTIONS)
 // ==========================================
@@ -1010,14 +1033,18 @@ export async function removeProviderAndLinkedServices(
   deleteLinkedServices: boolean = true
 ): Promise<number> {
   const linked = allServices.filter(s => s.providerId === providerId);
-  const batch = writeBatch(db);
-  batch.delete(doc(db, 'providers', providerId));
-  if (deleteLinkedServices) {
-    for (const srv of linked) {
-      batch.delete(doc(db, 'services', srv.id));
+  await deleteDoc(doc(db, 'providers', providerId));
+  if (deleteLinkedServices && linked.length > 0) {
+    const CHUNK_SIZE = 400;
+    for (let i = 0; i < linked.length; i += CHUNK_SIZE) {
+      const chunk = linked.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      for (const srv of chunk) {
+        batch.delete(doc(db, 'services', srv.id));
+      }
+      await batch.commit();
     }
   }
-  await batch.commit();
   return deleteLinkedServices ? linked.length : 0;
 }
 
@@ -1049,6 +1076,7 @@ export async function pingProviderOnServer(provider: SMMProvider): Promise<{
 
   await setDoc(doc(db, 'providers', provider.id), sanitizeForFirestore({
     ...provider,
+    status: 'active',
     balance: Number(data.balance ?? provider.balance),
     currency: data.currency || provider.currency,
     lastLatencyMs: Number(data.latencyMs || 0),
@@ -1155,8 +1183,9 @@ export async function fetchRemoteProviderCatalog(
 }
 
 /**
- * Fetches real services from the upstream SMM provider via our Express Server (/api/provider/services)
- * and saves them into the Firestore `services` catalog. Supports selective category/service import.
+ * Fetches ALL real services (or filtered subset) from the upstream SMM provider via Express Server (/api/provider/services)
+ * and saves them into the Firestore `services` catalog using 400-doc chunked batches (supporting 1,000+ to 10,000+ services).
+ * Also updates the status of any removed upstream services to 'inactive' during a full catalog sync.
  */
 export async function syncProviderServices(
   provider: SMMProvider,
@@ -1166,7 +1195,8 @@ export async function syncProviderServices(
     selectedCategories?: string[];
     selectedServiceIds?: string[];
     customCategoryName?: string;
-  } = 60
+  } = 0,
+  existingServices: SMMService[] = []
 ): Promise<number> {
   const options = typeof limitOrOptions === 'number' ? { limit: limitOrOptions } : limitOrOptions;
   const effectiveRate = provider.customExchangeRate && provider.customExchangeRate > 0
@@ -1186,7 +1216,7 @@ export async function syncProviderServices(
       priceRounding: provider.priceRounding || 'none',
       currency: provider.currency,
       usdToBdtRate: effectiveRate,
-      limit: options.limit ?? 150,
+      limit: options.limit ?? 0,
       selectedCategories: options.selectedCategories,
       selectedServiceIds: options.selectedServiceIds,
       customCategoryName: options.customCategoryName
@@ -1203,18 +1233,174 @@ export async function syncProviderServices(
     return 0;
   }
 
-  const batch = writeBatch(db);
-  for (const s of importedServices) {
-    batch.set(doc(db, 'services', s.id), sanitizeForFirestore(s), { merge: true });
+  // Chunk into batches of 400 to respect Firestore's 500-operation per batch limit
+  const CHUNK_SIZE = 400;
+  for (let i = 0; i < importedServices.length; i += CHUNK_SIZE) {
+    const chunk = importedServices.slice(i, i + CHUNK_SIZE);
+    const batch = writeBatch(db);
+    for (const s of chunk) {
+      batch.set(doc(db, 'services', s.id), sanitizeForFirestore(s), { merge: true });
+    }
+    await batch.commit();
   }
-  batch.set(doc(db, 'providers', provider.id), sanitizeForFirestore({
+
+  // If this was a FULL provider sync (not a selective filter), mark any local services linked to this provider
+  // that are no longer in the upstream catalog as 'inactive'
+  const isFullCatalogSync =
+    (!options.limit || options.limit <= 0) &&
+    (!options.selectedServiceIds || options.selectedServiceIds.length === 0) &&
+    (!options.selectedCategories || options.selectedCategories.length === 0);
+
+  if (isFullCatalogSync && existingServices.length > 0) {
+    const importedIdSet = new Set(importedServices.map(s => s.id));
+    const staleLocalServices = existingServices.filter(
+      s => s.providerId === provider.id && !importedIdSet.has(s.id) && s.status !== 'disabled'
+    );
+    for (let i = 0; i < staleLocalServices.length; i += CHUNK_SIZE) {
+      const chunk = staleLocalServices.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      for (const stale of chunk) {
+        batch.update(doc(db, 'services', stale.id), { status: 'disabled' });
+      }
+      await batch.commit();
+    }
+  }
+
+  await setDoc(doc(db, 'providers', provider.id), sanitizeForFirestore({
     ...provider,
+    status: 'active',
     totalRemoteServices: Number(data.totalAvailable || provider.totalRemoteServices || importedServices.length),
     lastSyncAt: Date.now()
   }), { merge: true });
 
-  await batch.commit();
   return importedServices.length;
+}
+
+/**
+ * Full 1-Click & Background Auto-Sync for a Provider:
+ * 1. Pings provider & updates live balance, currency, latency, and active status
+ * 2. Imports & updates ALL 100% of provider services (rates, min/max, status) in Firestore
+ * 3. Dispatches any undispatched pending API orders & updates all active API order statuses, startCount, and remains
+ */
+export async function fullSyncProviderServicesAndStatuses(
+  provider: SMMProvider,
+  allOrders: SMMOrder[],
+  allServices: SMMService[],
+  usdToBdtRate: number = 122
+): Promise<{
+  importedServices: number;
+  updatedOrders: number;
+  dispatchedOrders: number;
+  balance: number;
+  currency: string;
+  latencyMs: number;
+}> {
+  let balance = provider.balance;
+  let currency = provider.currency;
+  let latencyMs = provider.lastLatencyMs || 0;
+
+  // 1. Ping & Balance update
+  try {
+    const pingRes = await pingProviderOnServer(provider);
+    balance = pingRes.balance;
+    currency = pingRes.currency;
+    latencyMs = pingRes.latencyMs;
+  } catch (e) {
+    console.warn(`Ping check warning for ${provider.name}:`, e);
+  }
+
+  const updatedProvider: SMMProvider = {
+    ...provider,
+    balance,
+    currency,
+    lastLatencyMs: latencyMs,
+    status: 'active',
+    lastSyncAt: Date.now()
+  };
+
+  // 2. Sync ALL 100% of services from this provider (limit: 0)
+  const importedServices = await syncProviderServices(
+    updatedProvider,
+    usdToBdtRate,
+    { limit: 0 },
+    allServices
+  );
+
+  // 3. Auto-dispatch any pending orders linked to this provider's services that haven't been forwarded yet
+  let dispatchedOrders = 0;
+  if (provider.autoForwardOrders !== false) {
+    const pendingUndispatched = allOrders.filter(o => {
+      if (o.status !== 'pending' || o.providerOrderId) return false;
+      const srv = allServices.find(s => s.id === o.serviceId);
+      return srv && srv.providerId === provider.id && srv.providerServiceId;
+    });
+
+    for (const ord of pendingUndispatched) {
+      const srv = allServices.find(s => s.id === ord.serviceId);
+      if (!srv) continue;
+      try {
+        await manualDispatchOrderToProvider(ord, srv, updatedProvider);
+        dispatchedOrders++;
+      } catch (e) {
+        console.warn(`Auto-dispatch skipped for order #${ord.id}:`, e);
+      }
+    }
+  }
+
+  // 4. Sync all active API orders statuses for this provider
+  const providerOrders = allOrders.filter(o => o.providerId === provider.id);
+  const updatedOrders = await syncActiveOrdersWithProviders(providerOrders, [updatedProvider]);
+
+  return {
+    importedServices,
+    updatedOrders,
+    dispatchedOrders,
+    balance,
+    currency,
+    latencyMs
+  };
+}
+
+/**
+ * Syncs ALL connected active providers (all services + provider balances + all active order statuses).
+ * Used by the automatic 5-minute background sync engine.
+ */
+export async function autoSyncAllProvidersEverything(
+  providers: SMMProvider[],
+  allOrders: SMMOrder[],
+  allServices: SMMService[],
+  usdToBdtRate: number = 122
+): Promise<{
+  providersSynced: number;
+  totalServicesSynced: number;
+  totalOrdersUpdated: number;
+}> {
+  const activeProviders = providers.filter(p => p.status === 'active' && p.apiUrl && p.apiKey);
+  let providersSynced = 0;
+  let totalServicesSynced = 0;
+  let totalOrdersUpdated = 0;
+
+  for (const prv of activeProviders) {
+    try {
+      const res = await fullSyncProviderServicesAndStatuses(
+        prv,
+        allOrders,
+        allServices,
+        prv.customExchangeRate || usdToBdtRate
+      );
+      providersSynced++;
+      totalServicesSynced += res.importedServices;
+      totalOrdersUpdated += res.updatedOrders + res.dispatchedOrders;
+    } catch (e) {
+      console.warn(`Background 5m sync failed for provider ${prv.name}:`, e);
+    }
+  }
+
+  return {
+    providersSynced,
+    totalServicesSynced,
+    totalOrdersUpdated
+  };
 }
 
 /**
@@ -1237,22 +1423,26 @@ export async function recalculateProviderServicesPrices(
   const fixedAdd = Number(provider.fixedMarkup || 0);
   const rounding = provider.priceRounding || 'none';
 
-  const batch = writeBatch(db);
-  for (const srv of linked) {
-    const baseRate = srv.originalRate !== undefined && srv.originalRate > 0
-      ? srv.originalRate
-      : srv.rate / (effectiveExchange * marginMult);
-    let newBdtRate = Math.max(0.5, baseRate * effectiveExchange * marginMult + fixedAdd);
-    if (rounding === 'nearest_int') newBdtRate = Math.max(1, Math.round(newBdtRate));
-    else if (rounding === 'ceil') newBdtRate = Math.max(1, Math.ceil(newBdtRate));
-    else newBdtRate = Number(newBdtRate.toFixed(2));
+  const CHUNK_SIZE = 400;
+  for (let i = 0; i < linked.length; i += CHUNK_SIZE) {
+    const chunk = linked.slice(i, i + CHUNK_SIZE);
+    const batch = writeBatch(db);
+    for (const srv of chunk) {
+      const baseRate = srv.originalRate !== undefined && srv.originalRate > 0
+        ? srv.originalRate
+        : srv.rate / (effectiveExchange * marginMult);
+      let newBdtRate = Math.max(0.5, baseRate * effectiveExchange * marginMult + fixedAdd);
+      if (rounding === 'nearest_int') newBdtRate = Math.max(1, Math.round(newBdtRate));
+      else if (rounding === 'ceil') newBdtRate = Math.max(1, Math.ceil(newBdtRate));
+      else newBdtRate = Number(newBdtRate.toFixed(2));
 
-    batch.update(doc(db, 'services', srv.id), sanitizeForFirestore({
-      rate: newBdtRate
-    }));
+      batch.update(doc(db, 'services', srv.id), sanitizeForFirestore({
+        rate: newBdtRate
+      }));
+    }
+    await batch.commit();
   }
 
-  await batch.commit();
   return linked.length;
 }
 

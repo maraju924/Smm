@@ -475,7 +475,7 @@ async function startServer() {
       }
 
       const categorySet = new Set<string>();
-      const catalog = rawServices.slice(0, 1000).map((item: any) => {
+      const catalog = rawServices.map((item: any) => {
         const cat = String(item.category || 'General').trim();
         categorySet.add(cat);
         const rawRate = Number(item.rate || 0);
@@ -553,7 +553,7 @@ async function startServer() {
       priceRounding = 'none',
       currency = 'USD',
       usdToBdtRate = 122,
-      limit = 100,
+      limit = 0,
       selectedCategories,
       selectedServiceIds,
       customCategoryName
@@ -577,7 +577,7 @@ async function startServer() {
           'User-Agent': 'AmarTrend-SMM-Enterprise/3.0'
         },
         body: bodyParams.toString(),
-        signal: AbortSignal.timeout(18000)
+        signal: AbortSignal.timeout(25000)
       });
 
       const latencyMs = Date.now() - startTime;
@@ -605,7 +605,10 @@ async function startServer() {
         filteredRaw = filteredRaw.filter((item: any) => catSet.has(String(item.category || 'General').trim()));
       }
 
-      const mappedServices = filteredRaw.slice(0, Number(limit || 250)).map((item: any) => {
+      const numericLimit = Number(limit || 0);
+      const servicesToMap = numericLimit > 0 ? filteredRaw.slice(0, numericLimit) : filteredRaw;
+
+      const mappedServices = servicesToMap.map((item: any) => {
         const rawRate = Number(item.rate || 0);
         const bdtRate = calculateMarkedUpBdtRate(
           rawRate,

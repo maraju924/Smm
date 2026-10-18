@@ -142,15 +142,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
           value={homeSearchQuery}
           onChange={(e) => setHomeSearchQuery(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && homeSearchQuery.trim()) {
-              onNavigateTab('services');
+            if (e.key === 'Enter') {
+              onNavigateTab('services', { searchQuery: homeSearchQuery.trim() });
             }
           }}
           placeholder={language === 'bn' ? 'সার্ভিস খুঁজুন (ফেসবুক লাইক, ইউটিউব ভিউজ...)' : 'Search any SMM service...'}
           className="flex-1 bg-transparent py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none min-w-0"
         />
         <button
-          onClick={() => onNavigateTab('services')}
+          onClick={() => onNavigateTab('services', { searchQuery: homeSearchQuery.trim() })}
           className="text-xs font-bold text-rose-400 hover:text-rose-300 px-2 py-1 shrink-0"
         >
           {language === 'bn' ? 'খুঁজুন' : 'Search'}

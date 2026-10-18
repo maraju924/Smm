@@ -70,6 +70,7 @@ import {
   pingProviderOnServer,
   fetchRemoteProviderCatalog,
   syncProviderServices,
+  fullSyncProviderServicesAndStatuses,
   recalculateProviderServicesPrices,
   manualDispatchOrderToProvider,
   forwardRefillToProvider,
@@ -566,16 +567,17 @@ export const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
-  const handleSyncProviderCatalog = async (prv: SMMProvider, limitCount: number = 100) => {
+  const handleSyncProviderCatalog = async (prv: SMMProvider) => {
     setSyncingProviderId(prv.id);
     try {
-      const importedCount = await syncProviderServices(
+      const result = await fullSyncProviderServicesAndStatuses(
         prv,
-        prv.customExchangeRate || siteSettings.usdToBdtRate || 122,
-        { limit: limitCount }
+        orders,
+        services,
+        prv.customExchangeRate || siteSettings.usdToBdtRate || 122
       );
       onShowToast(
-        `Synced ${importedCount} live services from ${prv.name} (+${prv.profitMargin}% markup)!`,
+        `${prv.name}: ${result.importedServices}টি সার্ভিস ইমপোর্ট/আপডেট ও ${result.updatedOrders + result.dispatchedOrders}টি অর্ডারের স্ট্যাটাস সিঙ্ক হয়েছে (ব্যালেন্স: ${result.balance} ${result.currency})!`,
         'success'
       );
     } catch (err: any) {
@@ -2202,35 +2204,39 @@ export const AdminView: React.FC<AdminViewProps> = ({
                                     </button>
                                   </div>
 
-                                  {/* Secondary Action Row: Quick Import 100 & Recalculate Prices */}
+                                  {/* Secondary Action Row: Full Import All Services + Status Sync & Recalculate Prices */}
                                   <div className="grid grid-cols-2 gap-2">
                                     <button
                                       type="button"
                                       disabled={syncingProviderId === prv.id}
-                                      onClick={() => handleSyncProviderCatalog(prv, 100)}
-                                      className="py-2 px-3 rounded-2xl bg-sky-500/15 border border-sky-500/30 text-sky-300 font-bold text-[11px] flex items-center justify-center gap-1.5 active:scale-95"
+                                      onClick={() => handleSyncProviderCatalog(prv)}
+                                      className="py-2.5 px-3 rounded-2xl bg-sky-500/20 border border-sky-500/40 text-sky-300 font-extrabold text-[11px] flex items-center justify-center gap-1.5 active:scale-95"
                                     >
-                                      <RefreshCw className={`w-3.5 h-3.5 ${syncingProviderId === prv.id ? 'animate-spin' : ''}`} />
-                                      <span>{syncingProviderId === prv.id ? 'Importing...' : 'Quick Import (100)'}</span>
+                                      <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${syncingProviderId === prv.id ? 'animate-spin' : ''}`} />
+                                      <span className="truncate">
+                                        {syncingProviderId === prv.id
+                                          ? `Syncing All (${prv.totalRemoteServices || 'All'})...`
+                                          : `Sync All (${prv.totalRemoteServices || 'All'}) & Status`}
+                                      </span>
                                     </button>
 
                                     <button
                                       type="button"
                                       disabled={repricingProviderId === prv.id}
                                       onClick={() => handleRecalculateProviderPrices(prv)}
-                                      className="py-2 px-3 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold text-[11px] flex items-center justify-center gap-1.5 active:scale-95"
+                                      className="py-2.5 px-3 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold text-[11px] flex items-center justify-center gap-1.5 active:scale-95"
                                     >
-                                      <DollarSign className="w-3.5 h-3.5" />
+                                      <DollarSign className="w-3.5 h-3.5 shrink-0" />
                                       <span>{repricingProviderId === prv.id ? 'Updating...' : 'Re-Sync Prices'}</span>
                                     </button>
                                   </div>
 
-                                  {/* Footer Row: Edit & Delete */}
+                                  {/* Footer Row: Auto-Sync 5m Status, Edit & Delete */}
                                   <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[10px] text-slate-400">
-                                    <span>
+                                    <span className="font-mono text-emerald-400/90">
                                       {prv.lastSyncAt
-                                        ? `Synced: ${new Date(prv.lastSyncAt).toLocaleTimeString()}`
-                                        : 'Ready'}
+                                        ? `Synced: ${new Date(prv.lastSyncAt).toLocaleTimeString()} · Auto 5m`
+                                        : 'Auto-Sync: Every 5m'}
                                     </span>
                                     <div className="flex items-center gap-3">
                                       <button
@@ -2352,12 +2358,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    const visibleIds = filteredRemoteCatalog.slice(0, 150).map(s => s.service);
-                                    setSelectedRemoteServiceIds(visibleIds);
+                                    const allFilteredIds = filteredRemoteCatalog.map(s => s.service);
+                                    setSelectedRemoteServiceIds(allFilteredIds);
                                   }}
                                   className="py-1 px-2.5 rounded-lg bg-slate-800 text-sky-300 font-bold text-[11px]"
                                 >
-                                  Select Visible ({Math.min(150, filteredRemoteCatalog.length)})
+                                  Select All ({filteredRemoteCatalog.length})
                                 </button>
                                 <button
                                   type="button"

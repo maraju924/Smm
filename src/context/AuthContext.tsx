@@ -43,7 +43,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const BDT_TO_USD_RATE = 122; // 1 USD = 122 BDT
-const SUPER_ADMIN_EMAILS = ['maraju924@gmail.com', 'maraju921@gmail.com'];
+const SUPER_ADMIN_EMAILS = ['maraju921@gmail.com'];
 
 const isSuperAdminEmail = (email?: string | null): boolean => {
   if (!email) return false;

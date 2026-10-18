@@ -19,6 +19,7 @@ export interface UserProfile {
   referralCount?: number;
   referralEarnings?: number;
   unpaidReferralEarnings?: number;
+  favoriteServices?: string[];
   createdAt: number;
   updatedAt?: number;
 }

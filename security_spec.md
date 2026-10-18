@@ -5,7 +5,7 @@
 2. Only authenticated users can access, create, or read their own orders, refills, tickets, and payments.
 3. Services and Announcements can be read by any signed-in user or guest, but can only be modified by Admins.
 4. An order cannot be placed with negative quantity, empty link, or mismatching user identity.
-5. Bootstrapped admin: `maraju924@gmail.com` and `maraju921@gmail.com` are granted administrative governance over all collections.
+5. Bootstrapped admin: `maraju921@gmail.com` is granted administrative governance over all collections.
 6. Support tickets can only be replied to by the ticket owner or admins.
 7. Payment deposits require transaction verification and can only be set to `approved` by Admins.
 
