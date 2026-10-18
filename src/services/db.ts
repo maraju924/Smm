@@ -19,6 +19,7 @@ import {
   SMMOrder, 
   SMMRefill, 
   SMMPayment, 
+  PaymentGateway,
   SMMTicket, 
   TicketMessage, 
   Announcement,
@@ -28,6 +29,7 @@ import {
   ApiTrafficLog,
   SMMCoupon,
   SiteSettings,
+  ZiniPayGatewayLog,
   ServerHealthStatus
 } from '../types';
 import { 
@@ -264,6 +266,7 @@ export async function createOrder(
 
   const orderId = 'ORD-' + Math.floor(100000 + Math.random() * 900000);
   let upstreamOrderId: string | undefined;
+  let computedProviderCostBdt: number | undefined;
 
   // If service is linked to an upstream API provider, try dispatching via Express backend server
   if (serviceObj?.providerId && serviceObj?.providerServiceId) {
@@ -271,6 +274,15 @@ export async function createOrder(
       const provSnap = await getDoc(doc(db, 'providers', serviceObj.providerId));
       if (provSnap.exists()) {
         const prov = provSnap.data() as SMMProvider;
+        const exchangeMult = prov.currency?.toUpperCase() === 'USD' || !prov.currency
+          ? (prov.customExchangeRate && prov.customExchangeRate > 0 ? prov.customExchangeRate : 122)
+          : 1;
+        if (serviceObj.originalRate !== undefined && serviceObj.originalRate > 0) {
+          computedProviderCostBdt = Number(((serviceObj.originalRate * exchangeMult * order.quantity) / 1000).toFixed(2));
+        } else if (prov.profitMargin !== undefined) {
+          computedProviderCostBdt = Number((order.charge / (1 + Math.max(0, prov.profitMargin) / 100)).toFixed(2));
+        }
+
         if (prov.status === 'active' && prov.apiUrl && prov.apiKey) {
           const resp = await fetch('/api/provider/order', {
             method: 'POST',
@@ -297,6 +309,8 @@ export async function createOrder(
     } catch (e) {
       console.warn('Upstream API order dispatch notice (order saved in queue):', e);
     }
+  } else if (serviceObj?.originalRate && serviceObj.originalRate > 0) {
+    computedProviderCostBdt = Number(((serviceObj.originalRate * order.quantity) / 1000).toFixed(2));
   }
 
   const newOrder: SMMOrder = {
@@ -306,6 +320,7 @@ export async function createOrder(
     remains: order.quantity,
     ...(serviceObj?.providerId ? { providerId: serviceObj.providerId } : {}),
     ...(upstreamOrderId ? { providerOrderId: upstreamOrderId } : {}),
+    ...(computedProviderCostBdt !== undefined ? { providerCost: computedProviderCostBdt } : {}),
     createdAt: Date.now(),
     updatedAt: Date.now()
   };
@@ -601,6 +616,387 @@ export async function rejectPaymentDeposit(paymentId: string): Promise<void> {
     }));
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+// ==========================================
+// 5B. ZINIPAY AUTOMATED PAYMENT GATEWAY CLIENT ENGINE
+// ==========================================
+
+export async function createZiniPayCheckoutInvoice(params: {
+  userId: string;
+  userEmail: string;
+  cusName?: string;
+  amount: number;
+  bonus?: number;
+  preferredMethod?: string;
+}): Promise<{
+  paymentId: string;
+  invoiceId: string;
+  paymentUrl: string;
+  mode: 'sandbox' | 'live';
+  sandboxSimulation: boolean;
+}> {
+  const paymentId = 'ZNP-' + Math.floor(100000 + Math.random() * 900000);
+  const resp = await fetch('/api/zinipay/create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      amount: params.amount,
+      bonus: params.bonus || 0,
+      paymentId,
+      userId: params.userId,
+      userEmail: params.userEmail,
+      cusName: params.cusName,
+      preferredMethod: params.preferredMethod || 'bKash',
+      originUrl: window.location.origin
+    })
+  });
+
+  const data = await resp.json();
+  if (!resp.ok || data.error) {
+    throw new Error(data.error || 'Failed to initialize ZiniPay checkout invoice');
+  }
+
+  const invoiceId = String(data.invoiceId || paymentId);
+  const paymentUrl = String(data.paymentUrl || '');
+
+  const newPayment: SMMPayment = {
+    id: paymentId,
+    userId: params.userId,
+    userEmail: params.userEmail,
+    gateway: 'ZiniPay',
+    amount: params.amount,
+    bonus: params.bonus || 0,
+    transactionId: invoiceId,
+    senderNumber: `ZiniPay (${params.preferredMethod || 'Checkout'})`,
+    status: 'pending',
+    zinipayInvoiceId: invoiceId,
+    zinipayPaymentUrl: paymentUrl,
+    zinipayMethod: params.preferredMethod || 'bKash',
+    verificationMode: 'auto_zinipay',
+    createdAt: Date.now()
+  };
+
+  const path = `payments/${paymentId}`;
+  try {
+    await setDoc(doc(db, 'payments', paymentId), sanitizeForFirestore(newPayment));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+    throw error;
+  }
+
+  return {
+    paymentId,
+    invoiceId,
+    paymentUrl,
+    mode: data.mode === 'live' ? 'live' : 'sandbox',
+    sandboxSimulation: Boolean(data.sandboxSimulation)
+  };
+}
+
+export async function completeZiniPaySandboxSession(params: {
+  invoiceId: string;
+  paymentMethod: string;
+  senderNumber: string;
+  transactionId?: string;
+  action?: 'complete' | 'cancel';
+}): Promise<{
+  status: string;
+  verified?: boolean;
+  invoiceId: string;
+  transactionId?: string;
+  senderNumber?: string;
+  paymentMethod?: string;
+}> {
+  const resp = await fetch('/api/zinipay/sandbox-complete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params)
+  });
+  const data = await resp.json();
+  if (!resp.ok || data.error) {
+    throw new Error(data.error || 'Sandbox payment action failed');
+  }
+  return data;
+}
+
+export async function verifyAndCreditZiniPayInvoice(params: {
+  payment: SMMPayment;
+  referralCommissionPercent?: number;
+}): Promise<{
+  verified: boolean;
+  alreadyApproved?: boolean;
+  status: string;
+  transactionId: string;
+  senderNumber: string;
+  paymentMethod: string;
+}> {
+  const { payment, referralCommissionPercent = 5 } = params;
+  const invoiceId = payment.zinipayInvoiceId || payment.transactionId;
+
+  const resp = await fetch('/api/zinipay/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      invoice_id: invoiceId,
+      invoiceId
+    })
+  });
+
+  const data = await resp.json();
+  if (!resp.ok || data.error) {
+    throw new Error(data.error || 'ZiniPay verification call failed');
+  }
+
+  if (!data.verified) {
+    return {
+      verified: false,
+      status: String(data.status || 'PENDING'),
+      transactionId: String(data.transactionId || invoiceId),
+      senderNumber: String(data.senderNumber || payment.senderNumber),
+      paymentMethod: String(data.paymentMethod || payment.zinipayMethod || 'ZiniPay')
+    };
+  }
+
+  const finalTrxId = String(data.transactionId || invoiceId).toUpperCase();
+  const finalSender = String(data.senderNumber || payment.senderNumber || 'ZiniPay Verified');
+  const finalMethod = String(data.paymentMethod || payment.zinipayMethod || 'ZiniPay');
+
+  const path = `payments/${payment.id}`;
+  let alreadyApproved = false;
+
+  try {
+    const userRef = doc(db, 'users', payment.userId);
+    const paymentRef = doc(db, 'payments', payment.id);
+
+    await runTransaction(db, async (tx) => {
+      const pSnap = await tx.get(paymentRef);
+      if (pSnap.exists() && pSnap.data()?.status === 'approved') {
+        alreadyApproved = true;
+        return;
+      }
+
+      const userDocSnap = await tx.get(userRef);
+      let referredByUid: string | undefined;
+
+      if (userDocSnap.exists()) {
+        const uData = userDocSnap.data() as UserProfile;
+        referredByUid = uData.referredBy;
+        const creditAmount = payment.amount + (payment.bonus || 0);
+        tx.update(userRef, sanitizeForFirestore({
+          balance: Number(((uData.balance || 0) + creditAmount).toFixed(2)),
+          updatedAt: Date.now()
+        }));
+      }
+
+      if (referredByUid) {
+        const referrerRef = doc(db, 'users', referredByUid);
+        const refSnap = await tx.get(referrerRef);
+        if (refSnap.exists()) {
+          const refData = refSnap.data() as UserProfile;
+          const commission = Math.round((payment.amount * referralCommissionPercent) / 100);
+          if (commission > 0) {
+            tx.update(referrerRef, sanitizeForFirestore({
+              referralEarnings: (refData.referralEarnings || 0) + commission,
+              unpaidReferralEarnings: (refData.unpaidReferralEarnings || 0) + commission,
+              updatedAt: Date.now()
+            }));
+          }
+        }
+      }
+
+      tx.update(paymentRef, sanitizeForFirestore({
+        status: 'approved',
+        transactionId: finalTrxId,
+        senderNumber: `${finalSender} (${finalMethod})`,
+        zinipayMethod: finalMethod,
+        verificationMode: 'auto_zinipay',
+        verifiedAt: Date.now()
+      }));
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+    throw error;
+  }
+
+  return {
+    verified: true,
+    alreadyApproved,
+    status: 'COMPLETED',
+    transactionId: finalTrxId,
+    senderNumber: finalSender,
+    paymentMethod: finalMethod
+  };
+}
+
+export async function verifyAndCreditZiniPayTwoStepTrx(params: {
+  userId: string;
+  userEmail: string;
+  gateway: PaymentGateway;
+  amount: number;
+  bonus: number;
+  senderNumber: string;
+  transactionId: string;
+  referralCommissionPercent?: number;
+}): Promise<{
+  autoApproved: boolean;
+  paymentId: string;
+  message: string;
+}> {
+  const cleanTrx = params.transactionId.trim().toUpperCase();
+  const paymentId = 'DEP-' + Math.floor(100000 + Math.random() * 900000);
+
+  // Call ZiniPay 2-Step Trx Verification API (/v1/trx/verify -> /v1/trx/confirm)
+  let isAutoVerified = false;
+  let verifyMsg = '';
+  try {
+    const resp = await fetch('/api/zinipay/trx-verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount: params.amount,
+        transactionId: cleanTrx,
+        smsRef: cleanTrx,
+        senderNumber: params.senderNumber.trim(),
+        gateway: params.gateway
+      })
+    });
+    const data = await resp.json();
+    if (resp.ok && data.verified && data.confirmed) {
+      isAutoVerified = true;
+      verifyMsg = data.message || 'Auto-verified by ZiniPay 2-Step Trx API';
+    } else {
+      verifyMsg = data.error || 'Submitted for manual verification';
+    }
+  } catch {
+    isAutoVerified = false;
+  }
+
+  if (!isAutoVerified) {
+    // Fallback to standard pending deposit queue if not yet in ZiniPay SMS ledger
+    const pendingId = await submitDepositPayment({
+      userId: params.userId,
+      userEmail: params.userEmail,
+      gateway: params.gateway,
+      amount: params.amount,
+      bonus: params.bonus,
+      senderNumber: params.senderNumber.trim(),
+      transactionId: cleanTrx,
+      verificationMode: 'manual'
+    });
+    return {
+      autoApproved: false,
+      paymentId: pendingId,
+      message: verifyMsg
+    };
+  }
+
+  // Atomically create approved payment & credit user wallet + affiliate commission
+  const path = `payments/${paymentId}`;
+  try {
+    const userRef = doc(db, 'users', params.userId);
+    const paymentRef = doc(db, 'payments', paymentId);
+    const referralCommissionPercent = params.referralCommissionPercent ?? 5;
+
+    await runTransaction(db, async (tx) => {
+      const userDocSnap = await tx.get(userRef);
+      let referredByUid: string | undefined;
+
+      if (userDocSnap.exists()) {
+        const uData = userDocSnap.data() as UserProfile;
+        referredByUid = uData.referredBy;
+        const creditAmount = params.amount + (params.bonus || 0);
+        tx.update(userRef, sanitizeForFirestore({
+          balance: Number(((uData.balance || 0) + creditAmount).toFixed(2)),
+          updatedAt: Date.now()
+        }));
+      }
+
+      if (referredByUid) {
+        const referrerRef = doc(db, 'users', referredByUid);
+        const refSnap = await tx.get(referrerRef);
+        if (refSnap.exists()) {
+          const refData = refSnap.data() as UserProfile;
+          const commission = Math.round((params.amount * referralCommissionPercent) / 100);
+          if (commission > 0) {
+            tx.update(referrerRef, sanitizeForFirestore({
+              referralEarnings: (refData.referralEarnings || 0) + commission,
+              unpaidReferralEarnings: (refData.unpaidReferralEarnings || 0) + commission,
+              updatedAt: Date.now()
+            }));
+          }
+        }
+      }
+
+      const approvedPayment: SMMPayment = {
+        id: paymentId,
+        userId: params.userId,
+        userEmail: params.userEmail,
+        gateway: params.gateway,
+        amount: params.amount,
+        bonus: params.bonus,
+        senderNumber: params.senderNumber.trim(),
+        transactionId: cleanTrx,
+        status: 'approved',
+        zinipayMethod: `${params.gateway} (2-Step Auto)`,
+        verificationMode: 'auto_zinipay',
+        verifiedAt: Date.now(),
+        createdAt: Date.now()
+      };
+
+      tx.set(paymentRef, sanitizeForFirestore(approvedPayment));
+    });
+
+    return {
+      autoApproved: true,
+      paymentId,
+      message: verifyMsg
+    };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+    throw error;
+  }
+}
+
+export async function pingZiniPayGatewayOnServer(overrides?: Partial<SiteSettings>): Promise<{
+  status: string;
+  mode: 'sandbox' | 'live';
+  hasApiKey: boolean;
+  baseUrl: string;
+  reachableNodes: number;
+  totalNodes: number;
+  primaryLatencyMs: number;
+  nodes: { node: string; reachable: boolean; httpCode: number; latencyMs: number }[];
+}> {
+  const resp = await fetch('/api/zinipay/ping', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(overrides || {})
+  });
+  const data = await resp.json();
+  if (!resp.ok || data.error) {
+    throw new Error(data.error || 'ZiniPay ping failed');
+  }
+  return data;
+}
+
+export async function fetchZiniPayGatewayLogs(): Promise<{
+  logs: ZiniPayGatewayLog[];
+  confirmedCount: number;
+  activeInvoicesCount: number;
+}> {
+  try {
+    const resp = await fetch('/api/zinipay/logs');
+    if (!resp.ok) return { logs: [], confirmedCount: 0, activeInvoicesCount: 0 };
+    const data = await resp.json();
+    return {
+      logs: data.logs || [],
+      confirmedCount: data.confirmedCount || 0,
+      activeInvoicesCount: data.activeInvoicesCount || 0
+    };
+  } catch {
+    return { logs: [], confirmedCount: 0, activeInvoicesCount: 0 };
   }
 }
 

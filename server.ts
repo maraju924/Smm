@@ -1440,7 +1440,843 @@ async function startServer() {
   app.get('/api/v2', handleApiV2);
 
   // ============================================================================
-  // 5. VITE MIDDLEWARE (DEV) OR STATIC ASSETS (PRODUCTION)
+  // 5. ZINIPAY AUTOMATED PAYMENT GATEWAY ENGINE (/api/zinipay/*)
+  //    Supports:
+  //    - Hosted Invoice API: POST /v1/payment/create & POST /v1/payment/verify
+  //    - 2-Step Transaction Verification API: POST /v1/trx/verify & POST /v1/trx/confirm
+  //    - Multi-Route Failover: api.zinipay.com -> api2 -> api3 -> api4
+  //    - Interactive Sandbox Simulator & Real-Time Webhook Listener
+  // ============================================================================
+
+  interface ZiniPayLogItem {
+    id: string;
+    timestamp: number;
+    type: 'create_invoice' | 'verify_invoice' | 'trx_verify' | 'trx_confirm' | 'webhook' | 'ping';
+    mode: 'sandbox' | 'live';
+    status: 'success' | 'error' | 'pending';
+    invoiceId?: string;
+    transactionId?: string;
+    amount?: number;
+    latencyMs: number;
+    summary: string;
+  }
+
+  interface SandboxInvoiceSession {
+    invoiceId: string;
+    paymentId: string;
+    userId: string;
+    userEmail: string;
+    cusName: string;
+    amount: number;
+    bonus: number;
+    status: 'PENDING' | 'COMPLETED' | 'CANCELLED';
+    paymentMethod: string;
+    senderNumber: string;
+    transactionId: string;
+    createdAt: number;
+    completedAt?: number;
+  }
+
+  const zinipayLogs: ZiniPayLogItem[] = [];
+  const sandboxInvoices = new Map<string, SandboxInvoiceSession>();
+  const webhookVerifiedTrx = new Map<string, { amount: number; senderNumber: string; provider: string; timestamp: number }>();
+  const confirmedTrxIds = new Set<string>();
+
+  function recordZiniPayLog(entry: Omit<ZiniPayLogItem, 'id' | 'timestamp'>) {
+    const item: ZiniPayLogItem = {
+      id: 'zini-log-' + Date.now() + '-' + Math.floor(100 + Math.random() * 900),
+      timestamp: Date.now(),
+      ...entry
+    };
+    zinipayLogs.unshift(item);
+    if (zinipayLogs.length > 100) {
+      zinipayLogs.pop();
+    }
+  }
+
+  async function resolveZiniPaySettings(overrides?: Record<string, any>) {
+    let dbSettings: Record<string, any> = {};
+    try {
+      const snap = await getDoc(doc(serverDb, 'settings', 'global'));
+      if (snap.exists()) {
+        dbSettings = snap.data() || {};
+      }
+    } catch {
+      // fallback to defaults
+    }
+
+    const mode: 'sandbox' | 'live' =
+      (overrides?.zinipayMode || dbSettings.zinipayMode || process.env.ZINIPAY_MODE || 'sandbox') === 'live'
+        ? 'live'
+        : 'sandbox';
+    const apiKey = String(
+      overrides?.zinipayApiKey ?? dbSettings.zinipayApiKey ?? process.env.ZINIPAY_API_KEY ?? ''
+    ).trim();
+    const baseUrl = String(
+      overrides?.zinipayBaseUrl || dbSettings.zinipayBaseUrl || 'https://api.zinipay.com'
+    )
+      .trim()
+      .replace(/\/+$/, '');
+    const brandDomain = String(
+      overrides?.zinipayBrandDomain ?? dbSettings.zinipayBrandDomain ?? ''
+    ).trim();
+    const enabled = overrides?.zinipayEnabled ?? dbSettings.zinipayEnabled ?? true;
+    const autoVerifyTrx = overrides?.zinipayAutoVerifyTrx ?? dbSettings.zinipayAutoVerifyTrx ?? true;
+
+    return { mode, apiKey, baseUrl, brandDomain, enabled, autoVerifyTrx };
+  }
+
+  async function callZiniPayWithFailover(
+    primaryBaseUrl: string,
+    pathSuffix: string,
+    apiKey: string,
+    payload: Record<string, any>
+  ): Promise<{ ok: boolean; status: number; data: any; usedUrl: string; latencyMs: number }> {
+    const startTime = Date.now();
+    const candidateBases = Array.from(
+      new Set([
+        primaryBaseUrl,
+        'https://api.zinipay.com',
+        'https://api2.zinipay.com',
+        'https://api3.zinipay.com',
+        'https://api4.zinipay.com'
+      ])
+    );
+
+    let lastErrorData: any = { message: 'ZiniPay API request failed' };
+    let lastStatus = 500;
+    let lastUrl = candidateBases[0] + pathSuffix;
+
+    for (const base of candidateBases) {
+      const fullUrl = `${base.replace(/\/+$/, '')}${pathSuffix}`;
+      lastUrl = fullUrl;
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 9000);
+        const resp = await fetch(fullUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'zini-api-key': apiKey,
+            'zinipay-api-key': apiKey,
+            'User-Agent': 'AmarTrend-ZiniPay-Gateway/2.0'
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+        clearTimeout(timer);
+
+        lastStatus = resp.status;
+        const text = await resp.text();
+        let parsed: any = {};
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          parsed = { raw: text };
+        }
+
+        if (resp.ok) {
+          return {
+            ok: true,
+            status: resp.status,
+            data: parsed,
+            usedUrl: fullUrl,
+            latencyMs: Date.now() - startTime
+          };
+        }
+
+        lastErrorData = parsed;
+        // If 4xx client error (e.g. invalid API key or domain mismatch), don't retry all 4 failover servers unnecessarily
+        if (resp.status >= 400 && resp.status < 500) {
+          break;
+        }
+      } catch (err: any) {
+        lastErrorData = { message: err?.message || 'Network connection error to ZiniPay node' };
+      }
+    }
+
+    return {
+      ok: false,
+      status: lastStatus,
+      data: lastErrorData,
+      usedUrl: lastUrl,
+      latencyMs: Date.now() - startTime
+    };
+  }
+
+  // 5.1 Create ZiniPay Hosted Invoice (/api/zinipay/create -> POST /v1/payment/create)
+  app.post('/api/zinipay/create', async (req: Request, res: Response) => {
+    const startTime = Date.now();
+    try {
+      const {
+        amount,
+        bonus = 0,
+        paymentId,
+        userId,
+        userEmail,
+        cusName,
+        preferredMethod = 'bKash',
+        originUrl = ''
+      } = req.body;
+
+      const numAmount = Number(amount);
+      if (!numAmount || numAmount <= 0) {
+        res.status(400).json({ error: 'Valid deposit amount greater than 0 is required' });
+        return;
+      }
+
+      const cfg = await resolveZiniPaySettings();
+      if (!cfg.enabled) {
+        res.status(400).json({ error: 'ZiniPay gateway is currently disabled by administrator' });
+        return;
+      }
+
+      const effectiveDomain = cfg.brandDomain
+        ? cfg.brandDomain.startsWith('http')
+          ? cfg.brandDomain.replace(/\/+$/, '')
+          : `https://${cfg.brandDomain.replace(/\/+$/, '')}`
+        : originUrl || `${req.protocol}://${req.get('host')}`;
+
+      const generatedInvoiceId = 'ZINI-' + Date.now().toString(36).toUpperCase() + '-' + Math.floor(1000 + Math.random() * 9000);
+
+      const createPayload = {
+        amount: String(numAmount),
+        cus_name: cusName || (userEmail ? String(userEmail).split('@')[0] : 'Customer'),
+        cus_email: userEmail || 'customer@amartrend.com',
+        metadata: {
+          paymentId: paymentId || generatedInvoiceId,
+          userId: userId || '',
+          bonus: String(bonus || 0),
+          preferredMethod
+        },
+        redirect_url: `${effectiveDomain}/?zinipay_status=success&payment_id=${encodeURIComponent(paymentId || '')}`,
+        cancel_url: `${effectiveDomain}/?zinipay_status=cancel&payment_id=${encodeURIComponent(paymentId || '')}`,
+        webhook_url: `${effectiveDomain}/api/zinipay/webhook`
+      };
+
+      // If API Key is configured, attempt calling real ZiniPay /v1/payment/create endpoint
+      if (cfg.apiKey) {
+        const apiResult = await callZiniPayWithFailover(
+          cfg.baseUrl,
+          '/v1/payment/create',
+          cfg.apiKey,
+          createPayload
+        );
+
+        const paymentUrl =
+          apiResult.data?.payment_url ||
+          apiResult.data?.data?.payment_url ||
+          apiResult.data?.url ||
+          '';
+        const remoteInvoiceId =
+          apiResult.data?.invoice_id ||
+          apiResult.data?.invoiceId ||
+          apiResult.data?.data?.invoice_id ||
+          apiResult.data?.val_id ||
+          generatedInvoiceId;
+
+        if (apiResult.ok && paymentUrl) {
+          // Also register in local map so we can track metadata
+          sandboxInvoices.set(String(remoteInvoiceId), {
+            invoiceId: String(remoteInvoiceId),
+            paymentId: String(paymentId || ''),
+            userId: String(userId || ''),
+            userEmail: String(userEmail || ''),
+            cusName: createPayload.cus_name,
+            amount: numAmount,
+            bonus: Number(bonus || 0),
+            status: 'PENDING',
+            paymentMethod: preferredMethod,
+            senderNumber: '',
+            transactionId: '',
+            createdAt: Date.now()
+          });
+
+          recordZiniPayLog({
+            type: 'create_invoice',
+            mode: cfg.mode,
+            status: 'success',
+            invoiceId: String(remoteInvoiceId),
+            amount: numAmount,
+            latencyMs: apiResult.latencyMs,
+            summary: `ZiniPay Invoice #${remoteInvoiceId} created (৳${numAmount}) via ${apiResult.usedUrl}`
+          });
+
+          res.json({
+            status: true,
+            mode: cfg.mode,
+            sandboxSimulation: false,
+            invoiceId: String(remoteInvoiceId),
+            paymentUrl: String(paymentUrl),
+            amount: numAmount,
+            bonus: Number(bonus || 0),
+            message: apiResult.data?.message || 'ZiniPay checkout invoice created successfully'
+          });
+          return;
+        }
+
+        // If Live mode failed and user did NOT enable sandbox mode, report the exact ZiniPay API error
+        if (cfg.mode === 'live') {
+          const errMsg =
+            apiResult.data?.message ||
+            apiResult.data?.error ||
+            'ZiniPay Live API rejected invoice creation. Check Brand API Key & Brand Website Domain in Admin Settings.';
+          recordZiniPayLog({
+            type: 'create_invoice',
+            mode: 'live',
+            status: 'error',
+            amount: numAmount,
+            latencyMs: apiResult.latencyMs,
+            summary: `Live create failed: ${errMsg}`
+          });
+          res.status(400).json({ error: errMsg, details: apiResult.data });
+          return;
+        }
+      } else if (cfg.mode === 'live') {
+        res.status(400).json({
+          error: 'ZiniPay Live Brand API Key is not configured yet. Please add your zini-api-key in Admin Settings or switch to Sandbox mode.'
+        });
+        return;
+      }
+
+      // Sandbox Mode Interactive Checkout Session
+      const sbxSession: SandboxInvoiceSession = {
+        invoiceId: generatedInvoiceId,
+        paymentId: String(paymentId || ''),
+        userId: String(userId || ''),
+        userEmail: String(userEmail || ''),
+        cusName: createPayload.cus_name,
+        amount: numAmount,
+        bonus: Number(bonus || 0),
+        status: 'PENDING',
+        paymentMethod: preferredMethod,
+        senderNumber: '',
+        transactionId: '',
+        createdAt: Date.now()
+      };
+      sandboxInvoices.set(generatedInvoiceId, sbxSession);
+
+      recordZiniPayLog({
+        type: 'create_invoice',
+        mode: 'sandbox',
+        status: 'success',
+        invoiceId: generatedInvoiceId,
+        amount: numAmount,
+        latencyMs: Date.now() - startTime,
+        summary: `ZiniPay Sandbox Invoice #${generatedInvoiceId} initialized (৳${numAmount} · ${preferredMethod})`
+      });
+
+      res.json({
+        status: true,
+        mode: 'sandbox',
+        sandboxSimulation: true,
+        invoiceId: generatedInvoiceId,
+        paymentUrl: `${effectiveDomain}/?zinipay_sandbox_invoice=${generatedInvoiceId}`,
+        amount: numAmount,
+        bonus: Number(bonus || 0),
+        message: 'ZiniPay Sandbox Invoice initialized'
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message || 'Failed to create ZiniPay invoice' });
+    }
+  });
+
+  // 5.2 Complete Interactive Sandbox Invoice (/api/zinipay/sandbox-complete)
+  app.post('/api/zinipay/sandbox-complete', async (req: Request, res: Response) => {
+    const startTime = Date.now();
+    try {
+      const { invoiceId, paymentMethod = 'bKash', senderNumber = '01700000000', transactionId, action = 'complete' } = req.body;
+      if (!invoiceId) {
+        res.status(400).json({ error: 'invoiceId is required' });
+        return;
+      }
+
+      const session = sandboxInvoices.get(String(invoiceId));
+      if (!session) {
+        res.status(404).json({ error: `Sandbox invoice #${invoiceId} not found or expired` });
+        return;
+      }
+
+      if (action === 'cancel') {
+        session.status = 'CANCELLED';
+        sandboxInvoices.set(String(invoiceId), session);
+        recordZiniPayLog({
+          type: 'verify_invoice',
+          mode: 'sandbox',
+          status: 'error',
+          invoiceId: String(invoiceId),
+          amount: session.amount,
+          latencyMs: Date.now() - startTime,
+          summary: `Sandbox Invoice #${invoiceId} canceled by user`
+        });
+        res.json({ status: 'CANCELLED', invoiceId });
+        return;
+      }
+
+      const finalTrxId =
+        (transactionId && String(transactionId).trim().toUpperCase()) ||
+        'ZINI' + Math.floor(10000000 + Math.random() * 90000000).toString();
+
+      session.status = 'COMPLETED';
+      session.paymentMethod = String(paymentMethod || 'bKash');
+      session.senderNumber = String(senderNumber || '01700000000');
+      session.transactionId = finalTrxId;
+      session.completedAt = Date.now();
+      sandboxInvoices.set(String(invoiceId), session);
+
+      recordZiniPayLog({
+        type: 'webhook',
+        mode: 'sandbox',
+        status: 'success',
+        invoiceId: String(invoiceId),
+        transactionId: finalTrxId,
+        amount: session.amount,
+        latencyMs: Date.now() - startTime,
+        summary: `Sandbox Payment Completed: #${invoiceId} · ${session.paymentMethod} · TrxID: ${finalTrxId} · ৳${session.amount}`
+      });
+
+      res.json({
+        status: 'COMPLETED',
+        verified: true,
+        invoiceId: session.invoiceId,
+        transactionId: session.transactionId,
+        senderNumber: session.senderNumber,
+        paymentMethod: session.paymentMethod,
+        amount: session.amount
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message || 'Sandbox completion failed' });
+    }
+  });
+
+  // 5.3 Verify ZiniPay Invoice (/api/zinipay/verify -> POST /v1/payment/verify)
+  app.post('/api/zinipay/verify', async (req: Request, res: Response) => {
+    const startTime = Date.now();
+    try {
+      const { invoiceId, invoice_id } = req.body;
+      const targetInvoiceId = String(invoiceId || invoice_id || '').trim();
+      if (!targetInvoiceId) {
+        res.status(400).json({ error: 'Parameter "invoice_id" is required for verification' });
+        return;
+      }
+
+      const cfg = await resolveZiniPaySettings();
+
+      // 1. Check if this is a completed Sandbox Invoice session
+      const localSession = sandboxInvoices.get(targetInvoiceId);
+      if (localSession && localSession.status === 'COMPLETED') {
+        recordZiniPayLog({
+          type: 'verify_invoice',
+          mode: 'sandbox',
+          status: 'success',
+          invoiceId: targetInvoiceId,
+          transactionId: localSession.transactionId,
+          amount: localSession.amount,
+          latencyMs: Date.now() - startTime,
+          summary: `Verified Invoice #${targetInvoiceId} (COMPLETED · TrxID: ${localSession.transactionId})`
+        });
+
+        res.json({
+          verified: true,
+          status: 'COMPLETED',
+          invoice_id: targetInvoiceId,
+          invoiceId: targetInvoiceId,
+          amount: localSession.amount,
+          transactionId: localSession.transactionId,
+          senderNumber: localSession.senderNumber,
+          paymentMethod: localSession.paymentMethod,
+          metadata: {
+            paymentId: localSession.paymentId,
+            userId: localSession.userId,
+            bonus: localSession.bonus
+          }
+        });
+        return;
+      }
+
+      // 2. If API key is configured, query ZiniPay POST /v1/payment/verify
+      if (cfg.apiKey) {
+        const verifyRes = await callZiniPayWithFailover(
+          cfg.baseUrl,
+          '/v1/payment/verify',
+          cfg.apiKey,
+          {
+            invoice_id: targetInvoiceId,
+            invoiceId: targetInvoiceId
+          }
+        );
+
+        const d = verifyRes.data || {};
+        const rawStatus = String(
+          d.status || d.payment_status || d.data?.status || ''
+        ).toUpperCase();
+        const isPaid =
+          rawStatus === 'COMPLETED' ||
+          rawStatus === 'SUCCESS' ||
+          rawStatus === 'PAID' ||
+          rawStatus === 'APPROVED' ||
+          (d.status === true && String(d.payment_status || '').toUpperCase() === 'COMPLETED');
+
+        const trxId =
+          d.transaction_id ||
+          d.transactionId ||
+          d.trx_id ||
+          d.data?.transaction_id ||
+          targetInvoiceId;
+        const sender =
+          d.sender_number ||
+          d.senderNumber ||
+          d.cus_phone ||
+          d.payment_number ||
+          d.data?.sender_number ||
+          'ZiniPay Verified';
+        const method =
+          d.payment_method ||
+          d.paymentMethod ||
+          d.provider ||
+          d.data?.payment_method ||
+          'ZiniPay';
+        const verifiedAmt = Number(d.amount || d.data?.amount || localSession?.amount || 0);
+
+        recordZiniPayLog({
+          type: 'verify_invoice',
+          mode: cfg.mode,
+          status: isPaid ? 'success' : 'pending',
+          invoiceId: targetInvoiceId,
+          transactionId: String(trxId),
+          amount: verifiedAmt,
+          latencyMs: verifyRes.latencyMs,
+          summary: `ZiniPay /v1/payment/verify #${targetInvoiceId}: ${isPaid ? 'COMPLETED' : rawStatus || 'PENDING'}`
+        });
+
+        res.json({
+          verified: isPaid,
+          status: isPaid ? 'COMPLETED' : rawStatus || 'PENDING',
+          invoice_id: targetInvoiceId,
+          invoiceId: targetInvoiceId,
+          amount: verifiedAmt,
+          transactionId: String(trxId),
+          senderNumber: String(sender),
+          paymentMethod: String(method),
+          metadata: d.metadata || d.data?.metadata || {},
+          raw: d
+        });
+        return;
+      }
+
+      res.json({
+        verified: false,
+        status: localSession?.status || 'PENDING',
+        invoice_id: targetInvoiceId,
+        invoiceId: targetInvoiceId,
+        message: 'Invoice payment is still pending completion'
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message || 'ZiniPay verification failed' });
+    }
+  });
+
+  // 5.4 ZiniPay 2-Step Transaction Verification API (/api/zinipay/trx-verify -> /v1/trx/verify + /v1/trx/confirm)
+  app.post('/api/zinipay/trx-verify', async (req: Request, res: Response) => {
+    const startTime = Date.now();
+    try {
+      const { amount, transactionId, smsRef, senderNumber = '', gateway = 'bKash' } = req.body;
+      const cleanTrx = String(transactionId || smsRef || '').trim().toUpperCase();
+      const numAmount = Number(amount || 0);
+
+      if (!cleanTrx || numAmount <= 0) {
+        res.status(400).json({ error: 'Valid amount and transactionId (or smsRef) are required' });
+        return;
+      }
+
+      if (confirmedTrxIds.has(cleanTrx)) {
+        res.status(400).json({
+          verified: false,
+          error: `Transaction ID (${cleanTrx}) has already been verified and confirmed!`
+        });
+        return;
+      }
+
+      const cfg = await resolveZiniPaySettings();
+
+      // Check if received via ZiniPay SMS Webhook listener first
+      const webhookHit = webhookVerifiedTrx.get(cleanTrx);
+      if (webhookHit && Number(webhookHit.amount) === numAmount) {
+        confirmedTrxIds.add(cleanTrx);
+        recordZiniPayLog({
+          type: 'trx_confirm',
+          mode: cfg.mode,
+          status: 'success',
+          transactionId: cleanTrx,
+          amount: numAmount,
+          latencyMs: Date.now() - startTime,
+          summary: `TrxID ${cleanTrx} matched & confirmed via ZiniPay Webhook SMS cache (৳${numAmount})`
+        });
+
+        res.json({
+          verified: true,
+          confirmed: true,
+          mode: cfg.mode,
+          transactionId: cleanTrx,
+          senderNumber: webhookHit.senderNumber || senderNumber,
+          provider: webhookHit.provider || gateway,
+          amount: numAmount,
+          message: 'Verified & confirmed via ZiniPay Webhook SMS Automation'
+        });
+        return;
+      }
+
+      // Step 1 & Step 2 against ZiniPay /v1/trx/verify and /v1/trx/confirm if API key is present
+      if (cfg.apiKey) {
+        const step1 = await callZiniPayWithFailover(
+          cfg.baseUrl,
+          '/v1/trx/verify',
+          cfg.apiKey,
+          {
+            amount: numAmount,
+            transactionId: cleanTrx,
+            smsRef: smsRef || cleanTrx
+          }
+        );
+
+        const s1Data = step1.data || {};
+        const isStep1Verified =
+          step1.ok &&
+          (s1Data.status === true ||
+            s1Data.verified === true ||
+            String(s1Data.status || '').toUpperCase() === 'VERIFIED' ||
+            String(s1Data.status || '').toUpperCase() === 'SUCCESS' ||
+            Boolean(s1Data.id || s1Data.data?.id));
+
+        recordZiniPayLog({
+          type: 'trx_verify',
+          mode: cfg.mode,
+          status: isStep1Verified ? 'success' : 'error',
+          transactionId: cleanTrx,
+          amount: numAmount,
+          latencyMs: step1.latencyMs,
+          summary: `Step 1 (/v1/trx/verify) TrxID ${cleanTrx}: ${isStep1Verified ? 'MATCHED' : s1Data.message || 'Not found'}`
+        });
+
+        if (isStep1Verified) {
+          const trxInternalId = s1Data.id || s1Data.data?.id || cleanTrx;
+          const step2 = await callZiniPayWithFailover(
+            cfg.baseUrl,
+            '/v1/trx/confirm',
+            cfg.apiKey,
+            {
+              id: trxInternalId,
+              transactionId: cleanTrx,
+              amount: numAmount
+            }
+          );
+
+          confirmedTrxIds.add(cleanTrx);
+          recordZiniPayLog({
+            type: 'trx_confirm',
+            mode: cfg.mode,
+            status: 'success',
+            transactionId: cleanTrx,
+            amount: numAmount,
+            latencyMs: step2.latencyMs,
+            summary: `Step 2 (/v1/trx/confirm) TrxID ${cleanTrx} finalized & locked (৳${numAmount})`
+          });
+
+          res.json({
+            verified: true,
+            confirmed: true,
+            mode: cfg.mode,
+            transactionId: cleanTrx,
+            senderNumber: s1Data.senderNumber || s1Data.sender_number || senderNumber,
+            provider: s1Data.provider || gateway,
+            amount: numAmount,
+            message: 'Transaction verified & confirmed via ZiniPay 2-Step Trx API'
+          });
+          return;
+        }
+
+        if (cfg.mode === 'live') {
+          res.json({
+            verified: false,
+            confirmed: false,
+            mode: 'live',
+            error: s1Data.message || s1Data.error || 'Transaction ID not found in ZiniPay SMS ledger yet'
+          });
+          return;
+        }
+      }
+
+      // Sandbox Mode 2-Step Trx Verification Simulation (accepts ZINI*, SBX*, TEST* or valid 8+ char TrxID in Sandbox)
+      if (cfg.mode === 'sandbox' && cleanTrx.length >= 6 && !cleanTrx.includes('FAIL')) {
+        confirmedTrxIds.add(cleanTrx);
+        recordZiniPayLog({
+          type: 'trx_confirm',
+          mode: 'sandbox',
+          status: 'success',
+          transactionId: cleanTrx,
+          amount: numAmount,
+          latencyMs: Date.now() - startTime,
+          summary: `Sandbox 2-Step Trx Verified & Confirmed: ${cleanTrx} (${gateway} · ৳${numAmount})`
+        });
+
+        res.json({
+          verified: true,
+          confirmed: true,
+          mode: 'sandbox',
+          transactionId: cleanTrx,
+          senderNumber: senderNumber || '01700000000',
+          provider: gateway,
+          amount: numAmount,
+          message: 'Verified & confirmed via ZiniPay Sandbox 2-Step Trx Engine'
+        });
+        return;
+      }
+
+      res.json({
+        verified: false,
+        confirmed: false,
+        mode: cfg.mode,
+        error: 'Transaction ID could not be auto-verified by ZiniPay'
+      });
+    } catch (error: any) {
+      res.status(500).json({ verified: false, error: error?.message || 'ZiniPay Trx verification error' });
+    }
+  });
+
+  // 5.5 ZiniPay Webhook Receiver (/api/zinipay/webhook) for Invoice Callbacks & SMS Automation
+  app.post('/api/zinipay/webhook', async (req: Request, res: Response) => {
+    const startTime = Date.now();
+    try {
+      const body = req.body || {};
+      const invoiceId = String(body.invoice_id || body.invoiceId || '').trim();
+      const trxId = String(body.transactionId || body.transaction_id || body.trxId || body.reference || '').trim().toUpperCase();
+      const amount = Number(body.amount || 0);
+      const sender = String(body.senderNumber || body.sender_number || body.sender || '');
+      const provider = String(body.provider || body.payment_method || 'ZiniPay');
+      const status = String(body.status || 'COMPLETED').toUpperCase();
+
+      if (trxId && amount > 0) {
+        webhookVerifiedTrx.set(trxId, {
+          amount,
+          senderNumber: sender,
+          provider,
+          timestamp: Date.now()
+        });
+      }
+
+      if (invoiceId && sandboxInvoices.has(invoiceId)) {
+        const sess = sandboxInvoices.get(invoiceId)!;
+        if (status === 'COMPLETED' || status === 'SUCCESS' || status === 'PAID') {
+          sess.status = 'COMPLETED';
+          if (trxId) sess.transactionId = trxId;
+          if (sender) sess.senderNumber = sender;
+          sess.completedAt = Date.now();
+          sandboxInvoices.set(invoiceId, sess);
+        }
+      }
+
+      recordZiniPayLog({
+        type: 'webhook',
+        mode: 'live',
+        status: 'success',
+        invoiceId: invoiceId || undefined,
+        transactionId: trxId || undefined,
+        amount: amount || undefined,
+        latencyMs: Date.now() - startTime,
+        summary: `Webhook received: ${provider} · ${trxId || invoiceId || 'Event'} · ৳${amount} (${status})`
+      });
+
+      res.json({ status: 'received', verified: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message || 'Webhook processing error' });
+    }
+  });
+
+  // 5.6 Admin ZiniPay Connection & Multi-Node Diagnostic (/api/zinipay/ping)
+  app.post('/api/zinipay/ping', async (req: Request, res: Response) => {
+    const startTime = Date.now();
+    try {
+      const cfg = await resolveZiniPaySettings(req.body);
+      const nodes = [
+        'https://api.zinipay.com',
+        'https://api2.zinipay.com',
+        'https://api3.zinipay.com',
+        'https://api4.zinipay.com'
+      ];
+
+      const nodeResults = await Promise.all(
+        nodes.map(async (nodeUrl) => {
+          const t0 = Date.now();
+          try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 5000);
+            const r = await fetch(`${nodeUrl}/v1/payment/verify`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'zini-api-key': cfg.apiKey || 'sandbox_ping_check',
+                'zinipay-api-key': cfg.apiKey || 'sandbox_ping_check'
+              },
+              body: JSON.stringify({ invoice_id: 'PING_DIAGNOSTIC' }),
+              signal: controller.signal
+            });
+            clearTimeout(timer);
+            return {
+              node: nodeUrl,
+              reachable: true,
+              httpCode: r.status,
+              latencyMs: Date.now() - t0
+            };
+          } catch {
+            return {
+              node: nodeUrl,
+              reachable: false,
+              httpCode: 0,
+              latencyMs: Date.now() - t0
+            };
+          }
+        })
+      );
+
+      const reachableCount = nodeResults.filter(n => n.reachable).length;
+      const primaryLatency = nodeResults[0]?.latencyMs || Date.now() - startTime;
+
+      recordZiniPayLog({
+        type: 'ping',
+        mode: cfg.mode,
+        status: reachableCount > 0 ? 'success' : 'error',
+        latencyMs: primaryLatency,
+        summary: `Diagnostic Ping: ${reachableCount}/${nodes.length} ZiniPay API nodes reachable (${cfg.mode.toUpperCase()} mode)`
+      });
+
+      res.json({
+        status: 'success',
+        mode: cfg.mode,
+        hasApiKey: Boolean(cfg.apiKey),
+        baseUrl: cfg.baseUrl,
+        reachableNodes: reachableCount,
+        totalNodes: nodes.length,
+        primaryLatencyMs: primaryLatency,
+        nodes: nodeResults
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message || 'ZiniPay diagnostic ping failed' });
+    }
+  });
+
+  // 5.7 Fetch ZiniPay Gateway Logs (/api/zinipay/logs)
+  app.get('/api/zinipay/logs', (_req: Request, res: Response) => {
+    res.json({
+      status: 'success',
+      logs: zinipayLogs,
+      confirmedCount: confirmedTrxIds.size,
+      activeInvoicesCount: sandboxInvoices.size
+    });
+  });
+
+  // ============================================================================
+  // 6. VITE MIDDLEWARE (DEV) OR STATIC ASSETS (PRODUCTION)
   // ============================================================================
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');

@@ -37,7 +37,8 @@ import {
   Square,
   DollarSign,
   Cpu,
-  AlertTriangle
+  AlertTriangle,
+  TrendingUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
@@ -54,12 +55,16 @@ import {
   SMMCoupon,
   Announcement,
   SiteSettings,
+  ZiniPayGatewayLog,
   ServerHealthStatus
 } from '../../types';
 import { 
   updateOrderStatus, 
   approvePaymentDeposit, 
   rejectPaymentDeposit, 
+  verifyAndCreditZiniPayInvoice,
+  pingZiniPayGatewayOnServer,
+  fetchZiniPayGatewayLogs,
   saveService, 
   removeService, 
   adminAdjustUserBalance,
@@ -87,6 +92,7 @@ import {
   fetchServerHealthStatus
 } from '../../services/db';
 import { DEFAULT_SITE_SETTINGS } from '../../data/seedServices';
+import { AdminFinanceView } from './AdminFinanceView';
 
 interface AdminViewProps {
   orders: SMMOrder[];
@@ -105,6 +111,7 @@ interface AdminViewProps {
 
 type AdminSection =
   | 'overview'
+  | 'finance'
   | 'orders'
   | 'refills'
   | 'payments'
@@ -157,7 +164,25 @@ export const AdminView: React.FC<AdminViewProps> = ({
   }, []);
 
   // Metrics & Badges
-  const totalRevenue = orders.reduce((acc, o) => acc + (o.status !== 'canceled' ? o.charge : 0), 0);
+  const totalRevenue = orders.reduce((acc, o) => acc + (o.status !== 'canceled' && o.status !== 'refunded' ? o.charge : 0), 0);
+  const totalEstimatedNetProfit = orders.reduce((acc, o) => {
+    if (o.status === 'canceled' || o.status === 'refunded') return acc;
+    const srv = services.find(s => s.id === o.serviceId);
+    const prv = providers.find(p => p.id === (o.providerId || srv?.providerId));
+    const usdRate = prv?.customExchangeRate || siteSettings.usdToBdtRate || 122;
+    let cost = 0;
+    if (o.providerCost !== undefined && o.providerCost > 0) {
+      cost = o.providerCost;
+    } else if (srv?.originalRate !== undefined && srv.originalRate > 0) {
+      const isUsd = !prv || prv.currency?.toUpperCase() === 'USD';
+      cost = ((isUsd ? srv.originalRate * usdRate : srv.originalRate) * o.quantity) / 1000;
+    } else if (prv?.profitMargin) {
+      cost = o.charge / (1 + prv.profitMargin / 100);
+    } else if (o.providerId || srv?.providerId) {
+      cost = o.charge / 1.25;
+    }
+    return acc + (o.charge - cost);
+  }, 0);
   const pendingDeposits = payments.filter(p => p.status === 'pending');
   const pendingOrders = orders.filter(o => ['pending', 'processing', 'in_progress'].includes(o.status));
   const openTickets = tickets.filter(t => t.status === 'open');
@@ -316,13 +341,78 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [adminReplyText, setAdminReplyText] = useState('');
 
-  // Site Settings State
+  // Site Settings & ZiniPay Gateway State
   const [settingsForm, setSettingsForm] = useState<SiteSettings>(siteSettings);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [showZiniApiKey, setShowZiniApiKey] = useState(false);
+  const [testingZiniPay, setTestingZiniPay] = useState(false);
+  const [ziniPingResult, setZiniPingResult] = useState<{
+    mode: 'sandbox' | 'live';
+    hasApiKey: boolean;
+    reachableNodes: number;
+    totalNodes: number;
+    primaryLatencyMs: number;
+    nodes: { node: string; reachable: boolean; httpCode: number; latencyMs: number }[];
+  } | null>(null);
+  const [ziniLogs, setZiniLogs] = useState<ZiniPayGatewayLog[]>([]);
 
   useEffect(() => {
     setSettingsForm(siteSettings);
   }, [siteSettings]);
+
+  const refreshZiniPayLogs = async () => {
+    const res = await fetchZiniPayGatewayLogs();
+    setZiniLogs(res.logs || []);
+  };
+
+  useEffect(() => {
+    if (activeSection === 'settings' || activeSection === 'payments') {
+      refreshZiniPayLogs();
+    }
+  }, [activeSection]);
+
+  const handleTestZiniPayConnection = async () => {
+    setTestingZiniPay(true);
+    try {
+      const res = await pingZiniPayGatewayOnServer(settingsForm);
+      setZiniPingResult(res);
+      await refreshZiniPayLogs();
+      onShowToast(
+        `ZiniPay Gateway Online: ${res.reachableNodes}/${res.totalNodes} API nodes reachable (${res.primaryLatencyMs}ms)`,
+        'success'
+      );
+    } catch (err: any) {
+      onShowToast(err?.message || 'ZiniPay connection diagnostic failed', 'error');
+    } finally {
+      setTestingZiniPay(false);
+    }
+  };
+
+  const handleAdminVerifyZiniPayment = async (p: SMMPayment) => {
+    setPaymentProcessing(p.id);
+    try {
+      const res = await verifyAndCreditZiniPayInvoice({
+        payment: p,
+        referralCommissionPercent: siteSettings.referralCommissionPercent || 5
+      });
+      await refreshZiniPayLogs();
+      if (res.verified) {
+        onShowToast(
+          `ZiniPay Verified! Payment #${p.id} approved & ৳${p.amount + (p.bonus || 0)} credited (TrxID: ${res.transactionId}).`,
+          'success'
+        );
+      } else {
+        onShowToast(
+          `ZiniPay Status for #${p.id}: ${res.status}. Not yet marked completed on ZiniPay.`,
+          'info'
+        );
+      }
+    } catch (err: any) {
+      onShowToast(err?.message || 'ZiniPay verification failed', 'error');
+    } finally {
+      setPaymentProcessing(null);
+    }
+  };
 
   const navigateSection = (sec: AdminSection) => {
     setActiveSection(sec);
@@ -868,6 +958,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const getSectionTitle = (): string => {
     switch (activeSection) {
       case 'overview': return language === 'bn' ? 'অ্যাডমিন ড্যাশবোর্ড' : 'Admin Dashboard';
+      case 'finance': return language === 'bn' ? 'প্রফিট ও ফাইন্যান্সিয়াল ইন্টেলিজেন্স' : 'Financial & Profit Intelligence';
       case 'orders': return language === 'bn' ? 'অর্ডার কন্ট্রোল' : 'Orders Control';
       case 'refills': return language === 'bn' ? 'রিফিল রিকোয়েস্ট' : 'Refill Queue';
       case 'payments': return language === 'bn' ? 'পেমেন্ট ভেরিফিকেশন' : 'Deposit Requests';
@@ -882,7 +973,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
-  const isSubHubScreen = ['users', 'tickets', 'coupons', 'announcements', 'settings'].includes(activeSection);
+  const isSubHubScreen = ['finance', 'users', 'tickets', 'coupons', 'announcements', 'settings'].includes(activeSection);
 
   // Filtered Orders
   const filteredOrders = orders.filter(o => {
@@ -936,112 +1027,222 @@ export const AdminView: React.FC<AdminViewProps> = ({
     .filter(o => o.status !== 'canceled')
     .reduce((acc, o) => acc + o.charge, 0);
 
-  return (
-    <div className="min-h-screen w-full bg-[#040711] text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950 overflow-x-hidden">
-      {/* STANDALONE NATIVE MOBILE ADMIN APP TOP BAR */}
-      <header className="sticky top-0 z-40 w-full bg-[#070B19]/95 backdrop-blur-2xl border-b border-slate-800/80">
-        <div className="w-full max-w-lg mx-auto px-3.5 h-15 flex items-center justify-between gap-2">
-          {/* Left: Back Button (if inside Hub sub-page) OR Admin App Identity */}
-          <div className="flex items-center gap-2.5 min-w-0">
-            {isSubHubScreen ? (
-              <button
-                type="button"
-                onClick={() => navigateSection('hub')}
-                className="w-9 h-9 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-200 active:scale-95 transition-transform shrink-0"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </button>
-            ) : (
-              <div
-                onClick={() => navigateSection('overview')}
-                className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-amber-500 via-orange-500 to-emerald-500 flex items-center justify-center text-slate-950 shadow-lg shadow-amber-500/20 cursor-pointer shrink-0"
-              >
-                <ShieldCheck className="w-5 h-5 stroke-[2.5]" />
-              </div>
-            )}
+  const totalProviderOperationalCost = Math.max(0, totalRevenue - totalEstimatedNetProfit);
+  const overallNetMarginPercent = totalRevenue > 0 ? (totalEstimatedNetProfit / totalRevenue) * 100 : 0;
 
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <h1 className="text-sm font-extrabold text-white tracking-tight truncate">
-                  {getSectionTitle()}
-                </h1>
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+  const adminSidebarLinks: { id: AdminSection; label: string; icon: React.ElementType; badge?: number }[] = [
+    { id: 'overview', label: language === 'bn' ? 'অ্যাডমিন ওভারভিউ' : 'Executive Overview', icon: LayoutGrid },
+    { id: 'finance', label: language === 'bn' ? 'ফাইন্যান্সিয়াল ইন্টেলিজেন্স' : 'Financial Intelligence', icon: TrendingUp },
+    { id: 'orders', label: language === 'bn' ? 'অর্ডার কন্ট্রোল' : 'Orders Control', icon: Package, badge: pendingOrders.length || undefined },
+    { id: 'refills', label: language === 'bn' ? 'রিফিল কিউ' : 'Refill Queue', icon: RefreshCw, badge: pendingRefills.length || undefined },
+    { id: 'payments', label: language === 'bn' ? 'ডিপোজিট ভেরিফিকেশন' : 'Deposit Verification', icon: Wallet, badge: pendingDeposits.length || undefined },
+    { id: 'services', label: language === 'bn' ? 'সার্ভিস ক্যাটালগ' : 'Services Catalog', icon: Layers, badge: services.length || undefined },
+    { id: 'providers', label: language === 'bn' ? 'API কন্ট্রোল স্টুডিও' : 'API Providers Studio', icon: Server, badge: providers.length || undefined },
+    { id: 'users', label: language === 'bn' ? 'ইউজার ম্যানেজমেন্ট' : 'Users & Balances', icon: Users, badge: users.length || undefined },
+    { id: 'tickets', label: language === 'bn' ? 'সাপোর্ট হেল্পডেস্ক' : 'Support Helpdesk', icon: MessageSquare, badge: openTickets.length || undefined },
+    { id: 'coupons', label: language === 'bn' ? 'প্রোমো ভাউচার' : 'Promo Vouchers', icon: Gift },
+    { id: 'announcements', label: language === 'bn' ? 'নোটিশ বোর্ড' : 'Announcements', icon: Megaphone },
+    { id: 'settings', label: language === 'bn' ? 'সাইট ও পেমেন্ট সেটিংস' : 'System Settings', icon: Settings }
+  ];
+
+  return (
+    <div className="min-h-screen w-full bg-[#080B14] text-[#F1F5F9] flex font-sans selection:bg-[#8B5CF6] selection:text-white overflow-x-hidden">
+      {/* DESKTOP PERSISTENT ADMIN SIDEBAR (lg+) */}
+      <aside className="hidden lg:flex flex-col w-64 shrink-0 fixed inset-y-0 left-0 z-50 bg-[#0D1220] border-r border-white/[0.07]">
+        <div className="h-16 px-5 flex items-center justify-between border-b border-white/[0.07]">
+          <div
+            onClick={() => navigateSection('overview')}
+            className="flex items-center gap-3 cursor-pointer"
+          >
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#8B5CF6] to-[#22D3EE] p-[1px] shadow-lg shadow-[#8B5CF6]/20">
+              <div className="w-full h-full rounded-[11px] bg-[#080B14] flex items-center justify-center">
+                <ShieldCheck className="w-4 h-4 text-[#22D3EE]" />
               </div>
-              <p className="text-[10px] text-slate-400 font-mono truncate">
-                AmarTrend Admin OS · {serverHealth ? `Node ${serverHealth.nodeVersion}` : 'Cloud Live'}
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-[#F1F5F9] tracking-tight leading-none">
+                Admin Suite
+              </h2>
+              <p className="text-[10px] font-mono text-[#22D3EE] mt-1">
+                {serverHealth ? `Node ${serverHealth.nodeVersion}` : 'Cloud Server Live'}
               </p>
             </div>
           </div>
+        </div>
 
-          {/* Right: Native Mobile Action Bar */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            {/* 1-Tap API Order Sync */}
+        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+          {adminSidebarLinks.map((item) => {
+            const Icon = item.icon;
+            const active = activeSection === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => navigateSection(item.id)}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  active
+                    ? 'bg-[#8B5CF6]/15 text-[#F1F5F9] border border-[#8B5CF6]/35 shadow-sm'
+                    : 'text-[#94A3B8] hover:text-[#F1F5F9] hover:bg-white/[0.04] border border-transparent'
+                }`}
+              >
+                <span className="flex items-center gap-2.5 truncate">
+                  <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-[#22D3EE]' : 'text-[#64748B]'}`} />
+                  <span className="truncate">{item.label}</span>
+                </span>
+                {item.badge !== undefined && (
+                  <span
+                    className={`font-mono text-[10px] px-1.5 py-0.5 rounded-md ${
+                      active ? 'bg-[#8B5CF6] text-white' : 'bg-[#141B2B] text-[#94A3B8]'
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {onExitAdmin && (
+          <div className="p-3 border-t border-white/[0.07]">
             <button
               type="button"
-              onClick={handleSyncAllOrders}
-              disabled={syncingOrders}
-              title="Sync Active Orders with API Providers"
-              className="h-8 px-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold text-[11px] flex items-center gap-1 active:scale-95 transition-all"
+              onClick={onExitAdmin}
+              className="w-full py-2.5 px-3 rounded-xl bg-[#141B2B] hover:bg-[#192337] border border-white/[0.08] text-[#F1F5F9] text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${syncingOrders ? 'animate-spin' : ''}`} />
-              <span className="hidden xs:inline">{language === 'bn' ? 'সিঙ্ক' : 'Sync'}</span>
+              <LogOut className="w-3.5 h-3.5 text-[#22D3EE]" />
+              <span>{language === 'bn' ? 'ইউজার প্যানেলে ফিরে যান' : 'Return to User Workspace'}</span>
             </button>
+          </div>
+        )}
+      </aside>
 
-            {/* Language Switch */}
-            <button
-              type="button"
-              onClick={() => setLanguage(language === 'bn' ? 'en' : 'bn')}
-              className="w-8 h-8 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 text-[11px] font-bold flex items-center justify-center active:scale-95"
-            >
-              {language === 'bn' ? 'বাং' : 'EN'}
-            </button>
+      {/* MAIN ADMIN COLUMN */}
+      <div className="flex-1 flex flex-col min-w-0 lg:pl-64">
+        {/* STANDALONE ADMIN TOP BAR */}
+        <header className="sticky top-0 z-40 w-full bg-[#080B14]/90 backdrop-blur-2xl border-b border-white/[0.07]">
+          <div className="w-full max-w-7xl mx-auto px-4 lg:px-8 h-15 flex items-center justify-between gap-2">
+            {/* Left: Back Button (if inside Hub sub-page on mobile) OR Admin App Identity */}
+            <div className="flex items-center gap-2.5 min-w-0">
+              {isSubHubScreen ? (
+                <button
+                  type="button"
+                  onClick={() => navigateSection('hub')}
+                  className="lg:hidden w-9 h-9 rounded-2xl bg-[#141B2B] border border-white/[0.08] flex items-center justify-center text-slate-200 active:scale-95 transition-transform shrink-0"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+              ) : (
+                <div
+                  onClick={() => navigateSection('overview')}
+                  className="lg:hidden w-9 h-9 rounded-2xl bg-gradient-to-tr from-[#8B5CF6] to-[#22D3EE] flex items-center justify-center text-white shadow-lg shadow-[#8B5CF6]/20 cursor-pointer shrink-0"
+                >
+                  <ShieldCheck className="w-5 h-5 stroke-[2.5]" />
+                </div>
+              )}
 
-            {/* Exit Admin App -> Go to User Panel */}
-            {onExitAdmin && (
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <h1 className="text-sm sm:text-base font-extrabold text-[#F1F5F9] tracking-tight truncate">
+                    {getSectionTitle()}
+                  </h1>
+                </div>
+                <p className="text-[10px] text-[#94A3B8] font-mono truncate">
+                  AmarTrend Admin Control · {serverHealth ? `Node ${serverHealth.nodeVersion}` : 'Cloud Live'}
+                </p>
+              </div>
+            </div>
+
+            {/* Right: Action Bar */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* 1-Tap API Order Sync */}
               <button
                 type="button"
-                onClick={onExitAdmin}
-                className="h-8 px-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-200 font-bold text-[11px] flex items-center gap-1 active:scale-95 transition-all"
-                title={language === 'bn' ? 'ইউজার প্যানেলে যান' : 'Switch to User App'}
+                onClick={handleSyncAllOrders}
+                disabled={syncingOrders}
+                title="Sync Active Orders with API Providers"
+                className="h-9 px-3 rounded-xl bg-[#8B5CF6]/15 border border-[#8B5CF6]/35 text-[#F1F5F9] font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all"
               >
-                <LogOut className="w-3.5 h-3.5 text-rose-400" />
-                <span>{language === 'bn' ? 'ইউজার অ্যাপ' : 'User App'}</span>
+                <RefreshCw className={`w-3.5 h-3.5 text-[#22D3EE] ${syncingOrders ? 'animate-spin' : ''}`} />
+                <span className="hidden xs:inline">{language === 'bn' ? 'অর্ডার সিঙ্ক' : 'Sync Orders'}</span>
               </button>
-            )}
-          </div>
-        </div>
-      </header>
 
-      {/* NATIVE MOBILE APP SCROLLABLE VIEWPORT */}
-      <main className="flex-1 w-full max-w-lg mx-auto px-3.5 pt-3.5 pb-28 overflow-x-hidden">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeSection}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.16, ease: 'easeOut' }}
-            className="space-y-4"
-          >
-            {/* =========================================================
-                SECTION 1: MOBILE ADMIN OVERVIEW (HOME SCREEN)
-               ========================================================= */}
-            {activeSection === 'overview' && (
-              <div className="space-y-4">
-                {/* Executive Hero Wallet Card */}
-                <div className="p-5 rounded-3xl bg-gradient-to-br from-[#0F172A] via-[#0B1325] to-[#090F1D] border border-amber-500/30 shadow-2xl space-y-4">
-                  <div className="flex items-start justify-between gap-2">
+              {/* Language Switch */}
+              <button
+                type="button"
+                onClick={() => setLanguage(language === 'bn' ? 'en' : 'bn')}
+                className="w-9 h-9 rounded-xl bg-[#141B2B] border border-white/[0.08] text-[#F1F5F9] text-xs font-bold flex items-center justify-center active:scale-95"
+              >
+                {language === 'bn' ? 'বাং' : 'EN'}
+              </button>
+
+              {/* Exit Admin App -> Go to User Panel */}
+              {onExitAdmin && (
+                <button
+                  type="button"
+                  onClick={onExitAdmin}
+                  className="h-9 px-3 rounded-xl bg-[#141B2B] hover:bg-[#192337] border border-white/[0.08] text-[#F1F5F9] font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all"
+                  title={language === 'bn' ? 'ইউজার প্যানেলে যান' : 'Switch to User App'}
+                >
+                  <LogOut className="w-3.5 h-3.5 text-[#22D3EE]" />
+                  <span>{language === 'bn' ? 'ইউজার অ্যাপ' : 'User App'}</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </header>
+
+        {/* SCROLLABLE WORKSPACE VIEWPORT */}
+        <main className="flex-1 w-full max-w-7xl mx-auto px-3.5 lg:px-8 pt-4 pb-28 lg:pb-12 overflow-x-hidden">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeSection}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.16, ease: 'easeOut' }}
+              className="space-y-4"
+            >
+              {/* =========================================================
+                  SECTION 1: ADMIN OVERVIEW (HOME SCREEN)
+                 ========================================================= */}
+              {activeSection === 'overview' && (
+                <div className="space-y-4">
+                  {/* Executive Hero Wallet Card */}
+                  <div className="p-5 rounded-3xl bg-[#0D1220] border border-[#8B5CF6]/30 shadow-2xl space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                     <div>
                       <p className="text-[11px] font-bold uppercase tracking-wider text-amber-400">
-                        {language === 'bn' ? 'মোট অর্ডার ভলিউম (রেভিনিউ)' : 'Total Order Volume'}
+                        {language === 'bn' ? 'মোট অর্ডার ভলিউম (রেভিনিউ)' : 'Total Revenue'}
                       </p>
                       <h2 className="text-2xl sm:text-3xl font-black text-white font-mono tabular-nums mt-0.5">
                         {formatPrice(totalRevenue)}
                       </h2>
+                      <p className="text-[11px] text-[#94A3B8] font-mono mt-1">
+                        {language === 'bn' ? 'প্রোভাইডার অপারেশনাল খরচ:' : 'Operational Costs (Providers):'}{' '}
+                        <strong className="text-amber-400">{formatPrice(totalProviderOperationalCost)}</strong>
+                      </p>
                     </div>
-                    <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-xl font-bold">
-                      100% Cloud Server
-                    </span>
+
+                    <div
+                      onClick={() => navigateSection('finance')}
+                      className="p-3 rounded-2xl bg-[#141B2B] border border-[#22C55E]/35 flex items-center justify-between sm:justify-end gap-3 cursor-pointer hover:border-[#22C55E] transition-all"
+                    >
+                      <div>
+                        <span className="text-[10px] font-mono uppercase text-[#22C55E] font-bold block">
+                          {language === 'bn'
+                            ? `নিট প্রফিট (${overallNetMarginPercent.toFixed(1)}% মার্জিন)`
+                            : `Net Profit (${overallNetMarginPercent.toFixed(1)}% Margin)`}
+                        </span>
+                        <span className="text-lg font-black text-[#22C55E] font-mono tabular-nums">
+                          +{formatPrice(totalEstimatedNetProfit)}
+                        </span>
+                      </div>
+                      <span className="px-2.5 py-1.5 rounded-xl bg-[#22C55E]/15 text-[#22C55E] text-[11px] font-extrabold flex items-center gap-1">
+                        <TrendingUp className="w-3.5 h-3.5" />
+                        <span>{language === 'bn' ? 'ফাইন্যান্সিয়াল ইন্টেলিজেন্স' : 'Financial Intelligence'}</span>
+                      </span>
+                    </div>
                   </div>
 
                   {/* 4 Mini Metrics inside Hero */}
@@ -1145,13 +1346,13 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
                   <div className="grid grid-cols-4 gap-2.5">
                     {[
+                      { id: 'finance', label: language === 'bn' ? 'প্রফিট ল্যাব' : 'Profit P&L', icon: TrendingUp, color: 'text-[#22C55E] bg-[#22C55E]/15 border-[#22C55E]/30' },
                       { id: 'providers', label: language === 'bn' ? 'API স্টুডিও' : 'API Studio', icon: Server, color: 'text-indigo-400 bg-indigo-500/15 border-indigo-500/30' },
                       { id: 'orders', label: language === 'bn' ? 'অর্ডারস' : 'Orders', icon: Package, color: 'text-sky-400 bg-sky-500/15 border-sky-500/30' },
                       { id: 'payments', label: language === 'bn' ? 'ডিপোজিট' : 'Deposits', icon: Wallet, color: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30' },
                       { id: 'services', label: language === 'bn' ? 'সার্ভিস' : 'Services', icon: Layers, color: 'text-amber-400 bg-amber-500/15 border-amber-500/30' },
                       { id: 'users', label: language === 'bn' ? 'ইউজার' : 'Users', icon: Users, color: 'text-purple-400 bg-purple-500/15 border-purple-500/30' },
                       { id: 'tickets', label: language === 'bn' ? 'টিকেট' : 'Tickets', icon: MessageSquare, color: 'text-rose-400 bg-rose-500/15 border-rose-500/30' },
-                      { id: 'coupons', label: language === 'bn' ? 'প্রোমো কোড' : 'Coupons', icon: Gift, color: 'text-pink-400 bg-pink-500/15 border-pink-500/30' },
                       { id: 'settings', label: language === 'bn' ? 'সেটিংস' : 'Settings', icon: Settings, color: 'text-teal-400 bg-teal-500/15 border-teal-500/30' },
                     ].map((item) => {
                       const Icon = item.icon;
@@ -1227,6 +1428,23 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* =========================================================
+                SECTION 1.5: CFO FINANCIAL & PROFIT INTELLIGENCE SUITE
+               ========================================================= */}
+            {activeSection === 'finance' && (
+              <AdminFinanceView
+                orders={orders}
+                payments={payments}
+                services={services}
+                providers={providers}
+                users={users}
+                coupons={coupons}
+                siteSettings={siteSettings}
+                onShowToast={onShowToast}
+                onNavigateSection={navigateSection}
+              />
             )}
 
             {/* =========================================================
@@ -1481,10 +1699,70 @@ export const AdminView: React.FC<AdminViewProps> = ({
             )}
 
             {/* =========================================================
-                SECTION 3: PAYMENTS / DEPOSITS VERIFICATION
+                SECTION 3: PAYMENTS / DEPOSITS VERIFICATION + ZINIPAY GATEWAY
                ========================================================= */}
             {activeSection === 'payments' && (
               <div className="space-y-3.5">
+                {/* ZiniPay Automated Payment Gateway Status Bar */}
+                <div className="p-4 rounded-3xl bg-gradient-to-br from-[#0B1120] via-[#11192E] to-[#0B1120] border border-[#22D3EE]/30 space-y-3 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-2xl bg-[#22D3EE]/15 border border-[#22D3EE]/30 flex items-center justify-center text-[#22D3EE] shrink-0">
+                        <Zap className="w-4.5 h-4.5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-extrabold text-white text-sm">ZiniPay Payment Gateway</h4>
+                          <span
+                            className={`px-2 py-0.5 rounded-lg font-mono text-[10px] font-bold uppercase ${
+                              siteSettings.zinipayEnabled !== false
+                                ? siteSettings.zinipayMode === 'live'
+                                  ? 'bg-emerald-500/20 text-emerald-300'
+                                  : 'bg-[#22D3EE]/20 text-[#22D3EE]'
+                                : 'bg-rose-500/20 text-rose-300'
+                            }`}
+                          >
+                            {siteSettings.zinipayEnabled !== false
+                              ? siteSettings.zinipayMode === 'live'
+                                ? 'LIVE PRODUCTION'
+                                : 'SANDBOX READY'
+                              : 'DISABLED'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                          Hosted Checkout (/v1/payment/create) + 2-Step Trx API (/v1/trx/verify)
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => navigateSection('settings')}
+                      className="py-2 px-3 rounded-xl bg-slate-900 border border-[#22D3EE]/30 text-[#22D3EE] font-bold text-[11px] shrink-0 active:scale-95"
+                    >
+                      Configure ZiniPay
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 p-2.5 rounded-2xl bg-slate-950/90 border border-slate-800/80 text-center font-mono text-[11px]">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">Auto-Verified</span>
+                      <strong className="text-emerald-400">
+                        {payments.filter(p => p.status === 'approved' && (p.verificationMode === 'auto_zinipay' || p.gateway === 'ZiniPay')).length} Tx
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">ZiniPay Bonus</span>
+                      <strong className="text-amber-400">+{siteSettings.zinipayBonusPercent ?? 3}%</strong>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">2-Step Trx</span>
+                      <strong className="text-[#22D3EE]">
+                        {siteSettings.zinipayAutoVerifyTrx !== false ? 'ENABLED' : 'MANUAL'}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Filter Toggle: Pending vs All */}
                 <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-[#0B1120] border border-slate-800">
                   <button
@@ -1524,7 +1802,14 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <span className="text-sm font-extrabold text-white">{p.gateway}</span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-extrabold text-white">{p.gateway}</span>
+                              {p.verificationMode === 'auto_zinipay' && (
+                                <span className="px-2 py-0.5 rounded-lg bg-[#22D3EE]/15 text-[#22D3EE] font-mono text-[10px] font-bold">
+                                  ZINIPAY AUTO
+                                </span>
+                              )}
+                            </div>
                             <p className="text-[11px] text-slate-400 mt-0.5">{p.userEmail}</p>
                           </div>
                           <div className="text-right">
@@ -1541,7 +1826,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
                         <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800/80 flex items-center justify-between gap-2 font-mono text-[11px]">
                           <div className="min-w-0">
-                            <p className="text-sky-400 font-bold truncate">TrxID: {p.transactionId}</p>
+                            <p className="text-sky-400 font-bold truncate">
+                              TrxID / Invoice: {p.transactionId}
+                            </p>
                             <p className="text-slate-400 text-[10px] mt-0.5">
                               Sender: {p.senderNumber || 'N/A'} · {new Date(p.createdAt).toLocaleTimeString()}
                             </p>
@@ -1559,25 +1846,38 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         </div>
 
                         {p.status === 'pending' ? (
-                          <div className="grid grid-cols-2 gap-2 pt-1">
-                            <button
-                              type="button"
-                              onClick={() => handleApprovePayment(p)}
-                              disabled={paymentProcessing === p.id}
-                              className="py-3 px-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all"
-                            >
-                              <CheckCircle2 className="w-4 h-4" />
-                              <span>{language === 'bn' ? 'অ্যাপ্রুভ করুন' : 'Approve & Credit'}</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleRejectPayment(p)}
-                              disabled={paymentProcessing === p.id}
-                              className="py-3 px-4 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 font-extrabold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all"
-                            >
-                              <XCircle className="w-4 h-4" />
-                              <span>{language === 'bn' ? 'রিজেক্ট' : 'Reject'}</span>
-                            </button>
+                          <div className="space-y-2 pt-1">
+                            {(p.gateway === 'ZiniPay' || p.zinipayInvoiceId) && (
+                              <button
+                                type="button"
+                                onClick={() => handleAdminVerifyZiniPayment(p)}
+                                disabled={paymentProcessing === p.id}
+                                className="w-full py-2.5 px-4 rounded-2xl bg-[#22D3EE]/15 border border-[#22D3EE]/40 text-[#22D3EE] font-extrabold text-xs flex items-center justify-center gap-1.5 active:scale-95"
+                              >
+                                <RefreshCw className={`w-3.5 h-3.5 ${paymentProcessing === p.id ? 'animate-spin' : ''}`} />
+                                <span>Verify with ZiniPay API (/v1/payment/verify)</span>
+                              </button>
+                            )}
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleApprovePayment(p)}
+                                disabled={paymentProcessing === p.id}
+                                className="py-3 px-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                              >
+                                <CheckCircle2 className="w-4 h-4" />
+                                <span>{language === 'bn' ? 'অ্যাপ্রুভ করুন' : 'Approve & Credit'}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRejectPayment(p)}
+                                disabled={paymentProcessing === p.id}
+                                className="py-3 px-4 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 font-extrabold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                              >
+                                <XCircle className="w-4 h-4" />
+                                <span>{language === 'bn' ? 'রিজেক্ট' : 'Reject'}</span>
+                              </button>
+                            </div>
                           </div>
                         ) : (
                           <div className="flex items-center justify-between pt-1 text-[11px]">
@@ -2835,6 +3135,13 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 <div className="p-4 rounded-3xl bg-[#0B1120] border border-slate-800 space-y-2">
                   {[
                     {
+                      id: 'finance',
+                      title: language === 'bn' ? 'প্রফিট ও ফাইন্যান্সিয়াল ইন্টেলিজেন্স' : 'Financial & Profit Intelligence',
+                      sub: `Net Profit: ${formatPrice(totalEstimatedNetProfit)} · P&L, API Burn, Margin Audit & Simulator`,
+                      icon: TrendingUp,
+                      color: 'text-[#22C55E] bg-[#22C55E]/15'
+                    },
+                    {
                       id: 'services',
                       title: language === 'bn' ? 'সার্ভিস ক্যাটালগ ম্যানেজার' : 'Local Services Catalog',
                       sub: `${services.length} active services in database`,
@@ -3204,129 +3511,404 @@ export const AdminView: React.FC<AdminViewProps> = ({
             )}
 
             {/* =========================================================
-                HUB SUB-SCREEN: GLOBAL SITE & PAYMENT SETTINGS
+                HUB SUB-SCREEN: GLOBAL SITE & ZINIPAY PAYMENT SETTINGS
                ========================================================= */}
             {activeSection === 'settings' && (
-              <form onSubmit={handleSaveGlobalSettings} className="p-4 rounded-3xl bg-[#0B1120] border border-slate-800 space-y-4 text-xs">
-                <div>
-                  <h3 className="text-sm font-extrabold text-white">Payment Gateways & Global Settings</h3>
-                  <p className="text-[11px] text-slate-400">Synced live across all users via Cloud Firestore</p>
+              <form onSubmit={handleSaveGlobalSettings} className="space-y-4 text-xs">
+                {/* 1. ZINIPAY AUTOMATED PAYMENT GATEWAY SUITE */}
+                <div className="p-4 sm:p-5 rounded-3xl bg-[#0B1120] border border-[#22D3EE]/35 space-y-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-2xl bg-[#22D3EE]/15 border border-[#22D3EE]/30 flex items-center justify-center text-[#22D3EE] shrink-0">
+                        <Zap className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-sm font-extrabold text-white">
+                            ZiniPay Automated Payment Gateway
+                          </h3>
+                          <span className="px-2 py-0.5 rounded bg-[#22D3EE]/15 text-[#22D3EE] font-mono text-[10px] font-bold uppercase">
+                            API v1
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                          Hosted Checkout (/v1/payment/create & /verify) + 2-Step Trx Verification (/v1/trx/verify & /confirm)
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSettingsForm({
+                          ...settingsForm,
+                          zinipayEnabled: !(settingsForm.zinipayEnabled !== false)
+                        })
+                      }
+                      className={`px-3 py-1.5 rounded-xl font-mono text-[10px] font-extrabold uppercase border transition-all ${
+                        settingsForm.zinipayEnabled !== false
+                          ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                          : 'bg-slate-900 border-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {settingsForm.zinipayEnabled !== false ? 'ENABLED' : 'DISABLED'}
+                    </button>
+                  </div>
+
+                  {/* Environment Mode Selector: Sandbox vs Live */}
+                  <div className="grid grid-cols-2 gap-2 p-1.5 rounded-2xl bg-slate-950 border border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setSettingsForm({ ...settingsForm, zinipayMode: 'sandbox' })}
+                      className={`py-2.5 rounded-xl font-extrabold text-xs transition-all ${
+                        (settingsForm.zinipayMode || 'sandbox') === 'sandbox'
+                          ? 'bg-[#22D3EE] text-slate-950 shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Sandbox Mode (Testing & Simulator)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSettingsForm({ ...settingsForm, zinipayMode: 'live' })}
+                      className={`py-2.5 rounded-xl font-extrabold text-xs transition-all ${
+                        settingsForm.zinipayMode === 'live'
+                          ? 'bg-emerald-500 text-slate-950 shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Live Production (api.zinipay.com)
+                    </button>
+                  </div>
+
+                  {/* ZiniPay Brand API Key (zini-api-key) */}
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
+                        ZiniPay Brand / Service API Key (zini-api-key)
+                      </label>
+                      <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-2xl pr-2.5">
+                        <input
+                          type={showZiniApiKey ? 'text' : 'password'}
+                          value={settingsForm.zinipayApiKey || ''}
+                          onChange={(e) => setSettingsForm({ ...settingsForm, zinipayApiKey: e.target.value })}
+                          placeholder="Paste your Brand Key from ZiniPay Dashboard -> Main Menu -> Brands"
+                          className="flex-1 bg-transparent p-3 text-emerald-300 font-mono focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowZiniApiKey(!showZiniApiKey)}
+                          className="p-1.5 text-slate-400 hover:text-white"
+                        >
+                          {showZiniApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
+                          Primary ZiniPay API Node (Auto-Failover Enabled)
+                        </label>
+                        <select
+                          value={settingsForm.zinipayBaseUrl || 'https://api.zinipay.com'}
+                          onChange={(e) => setSettingsForm({ ...settingsForm, zinipayBaseUrl: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-sky-300 font-mono font-bold"
+                        >
+                          <option value="https://api.zinipay.com">https://api.zinipay.com (Primary)</option>
+                          <option value="https://api2.zinipay.com">https://api2.zinipay.com (Node 2)</option>
+                          <option value="https://api3.zinipay.com">https://api3.zinipay.com (Node 3)</option>
+                          <option value="https://api4.zinipay.com">https://api4.zinipay.com (Node 4)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
+                          Brand Website Domain (Optional for redirect_url)
+                        </label>
+                        <input
+                          type="text"
+                          value={settingsForm.zinipayBrandDomain || ''}
+                          onChange={(e) => setSettingsForm({ ...settingsForm, zinipayBrandDomain: e.target.value })}
+                          placeholder="e.g. https://yourdomain.com"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
+                          ZiniPay Deposit Bonus (%)
+                        </label>
+                        <input
+                          type="number"
+                          value={settingsForm.zinipayBonusPercent ?? 3}
+                          onChange={(e) =>
+                            setSettingsForm({
+                              ...settingsForm,
+                              zinipayBonusPercent: parseFloat(e.target.value) || 0
+                            })
+                          }
+                          className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
+                          2-Step TrxID Auto-Verification
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSettingsForm({
+                              ...settingsForm,
+                              zinipayAutoVerifyTrx: !(settingsForm.zinipayAutoVerifyTrx !== false)
+                            })
+                          }
+                          className={`w-full p-3 rounded-2xl border font-mono font-bold text-xs flex items-center justify-between ${
+                            settingsForm.zinipayAutoVerifyTrx !== false
+                              ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                              : 'bg-slate-950 border-slate-800 text-slate-400'
+                          }`}
+                        >
+                          <span>/v1/trx/verify + confirm</span>
+                          <span>{settingsForm.zinipayAutoVerifyTrx !== false ? 'ON' : 'OFF'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Webhook Endpoint URL Copy Box */}
+                    <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800/90 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                          ZiniPay Webhook & SMS Automation Callback URL:
+                        </span>
+                        <span className="font-mono text-[11px] text-[#22D3EE] truncate block mt-0.5">
+                          {`${window.location.origin}/api/zinipay/webhook`}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(`${window.location.origin}/api/zinipay/webhook`);
+                          onShowToast('ZiniPay Webhook URL copied!', 'info');
+                        }}
+                        className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white font-bold text-[11px] flex items-center gap-1 shrink-0"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Multi-Node Ping Diagnostics */}
+                  {ziniPingResult && (
+                    <div className="p-3.5 rounded-2xl bg-slate-950 border border-[#22D3EE]/30 space-y-2 font-mono text-[11px]">
+                      <div className="flex items-center justify-between">
+                        <span className="text-emerald-400 font-bold">
+                          ZiniPay Nodes Reachable: {ziniPingResult.reachableNodes}/{ziniPingResult.totalNodes}
+                        </span>
+                        <span className="text-[#22D3EE]">
+                          Primary Latency: {ziniPingResult.primaryLatencyMs}ms
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                        {ziniPingResult.nodes.map((n) => (
+                          <div
+                            key={n.node}
+                            className={`p-2 rounded-xl border text-[10px] ${
+                              n.reachable
+                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                                : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                            }`}
+                          >
+                            <div className="truncate font-bold">{n.node.replace('https://', '')}</div>
+                            <div>{n.reachable ? `${n.latencyMs}ms (HTTP ${n.httpCode})` : 'Offline'}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={testingZiniPay}
+                      onClick={handleTestZiniPayConnection}
+                      className="flex-1 py-3 rounded-2xl bg-slate-900 border border-[#22D3EE]/40 text-[#22D3EE] font-extrabold text-xs flex items-center justify-center gap-1.5 active:scale-95"
+                    >
+                      <Activity className={`w-4 h-4 ${testingZiniPay ? 'animate-spin' : ''}`} />
+                      <span>
+                        {testingZiniPay ? 'Pinging ZiniPay Nodes...' : 'Test ZiniPay Multi-Node Connection'}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={refreshZiniPayLogs}
+                      className="p-3 rounded-2xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white"
+                      title="Refresh ZiniPay Logs"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Live ZiniPay Gateway Event Stream */}
+                  {ziniLogs.length > 0 && (
+                    <div className="space-y-1.5 pt-2 border-t border-slate-800">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                        Recent ZiniPay Gateway & Webhook Events ({ziniLogs.length})
+                      </span>
+                      <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                        {ziniLogs.slice(0, 12).map((lg) => (
+                          <div
+                            key={lg.id}
+                            className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-between gap-2 font-mono text-[10px]"
+                          >
+                            <div className="min-w-0">
+                              <span
+                                className={`px-1.5 py-0.5 rounded mr-1.5 font-bold uppercase ${
+                                  lg.status === 'success'
+                                    ? 'bg-emerald-500/20 text-emerald-300'
+                                    : lg.status === 'pending'
+                                    ? 'bg-amber-500/20 text-amber-300'
+                                    : 'bg-rose-500/20 text-rose-300'
+                                }`}
+                              >
+                                {lg.type}
+                              </span>
+                              <span className="text-slate-200">{lg.summary}</span>
+                            </div>
+                            <span className="text-slate-500 shrink-0">{lg.latencyMs}ms</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div className="space-y-3">
+                {/* 2. MANUAL / DIRECT GATEWAYS & GLOBAL SITE SETTINGS */}
+                <div className="p-4 sm:p-5 rounded-3xl bg-[#0B1120] border border-slate-800 space-y-4">
                   <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">bKash Personal/Merchant Number</label>
-                    <input
-                      type="text"
-                      value={settingsForm.bkashNumber}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, bkashNumber: e.target.value })}
-                      placeholder="01XXXXXXXXX"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                    />
+                    <h3 className="text-sm font-extrabold text-white">Direct MFS Accounts & Global Settings</h3>
+                    <p className="text-[11px] text-slate-400">Synced live across all users via Cloud Firestore</p>
                   </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Nagad Number</label>
-                    <input
-                      type="text"
-                      value={settingsForm.nagadNumber}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, nagadNumber: e.target.value })}
-                      placeholder="01XXXXXXXXX"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
+
+                  <div className="space-y-3">
                     <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Rocket Number</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">bKash Personal/Merchant Number</label>
                       <input
                         type="text"
-                        value={settingsForm.rocketNumber}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, rocketNumber: e.target.value })}
+                        value={settingsForm.bkashNumber}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, bkashNumber: e.target.value })}
                         placeholder="01XXXXXXXXX"
                         className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Upay Number</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Nagad Number</label>
                       <input
                         type="text"
-                        value={settingsForm.upayNumber}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, upayNumber: e.target.value })}
+                        value={settingsForm.nagadNumber}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, nagadNumber: e.target.value })}
                         placeholder="01XXXXXXXXX"
                         className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
                       />
                     </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Rocket Number</label>
+                        <input
+                          type="text"
+                          value={settingsForm.rocketNumber}
+                          onChange={(e) => setSettingsForm({ ...settingsForm, rocketNumber: e.target.value })}
+                          placeholder="01XXXXXXXXX"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Upay Number</label>
+                        <input
+                          type="text"
+                          value={settingsForm.upayNumber}
+                          onChange={(e) => setSettingsForm({ ...settingsForm, upayNumber: e.target.value })}
+                          placeholder="01XXXXXXXXX"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Binance / USDT (TRC-20) Address</label>
+                      <input
+                        type="text"
+                        value={settingsForm.usdtAddress}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, usdtAddress: e.target.value })}
+                        placeholder="T..."
+                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Binance / USDT (TRC-20) Address</label>
-                    <input
-                      type="text"
-                      value={settingsForm.usdtAddress}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, usdtAddress: e.target.value })}
-                      placeholder="T..."
-                      className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                    />
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-slate-800">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">bKash Bonus (%)</label>
-                    <input
-                      type="number"
-                      value={settingsForm.bkashBonusPercent}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, bkashBonusPercent: parseFloat(e.target.value) || 0 })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                    />
+                  <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-slate-800">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">bKash Bonus (%)</label>
+                      <input
+                        type="number"
+                        value={settingsForm.bkashBonusPercent}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, bkashBonusPercent: parseFloat(e.target.value) || 0 })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">USDT Bonus (%)</label>
+                      <input
+                        type="number"
+                        value={settingsForm.usdtBonusPercent}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, usdtBonusPercent: parseFloat(e.target.value) || 0 })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Referral Bonus (%)</label>
+                      <input
+                        type="number"
+                        value={settingsForm.referralCommissionPercent}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, referralCommissionPercent: parseFloat(e.target.value) || 0 })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">1 USD = BDT Rate</label>
+                      <input
+                        type="number"
+                        value={settingsForm.usdToBdtRate || 122}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, usdToBdtRate: parseFloat(e.target.value) || 122 })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">USDT Bonus (%)</label>
-                    <input
-                      type="number"
-                      value={settingsForm.usdtBonusPercent}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, usdtBonusPercent: parseFloat(e.target.value) || 0 })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Referral Bonus (%)</label>
-                    <input
-                      type="number"
-                      value={settingsForm.referralCommissionPercent}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, referralCommissionPercent: parseFloat(e.target.value) || 0 })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">1 USD = BDT Rate</label>
-                    <input
-                      type="number"
-                      value={settingsForm.usdToBdtRate || 122}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, usdToBdtRate: parseFloat(e.target.value) || 122 })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                    />
-                  </div>
-                </div>
 
-                <div className="space-y-2.5 pt-2 border-t border-slate-800">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">WhatsApp Support URL</label>
-                    <input
-                      type="text"
-                      value={settingsForm.whatsappUrl}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, whatsappUrl: e.target.value })}
-                      placeholder="https://wa.me/8801XXXXXXXXX"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Telegram Support URL</label>
-                    <input
-                      type="text"
-                      value={settingsForm.telegramUrl}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, telegramUrl: e.target.value })}
-                      placeholder="https://t.me/..."
-                      className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                    />
+                  <div className="space-y-2.5 pt-2 border-t border-slate-800">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">WhatsApp Support URL</label>
+                      <input
+                        type="text"
+                        value={settingsForm.whatsappUrl}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, whatsappUrl: e.target.value })}
+                        placeholder="https://wa.me/8801XXXXXXXXX"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Telegram Support URL</label>
+                      <input
+                        type="text"
+                        value={settingsForm.telegramUrl}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, telegramUrl: e.target.value })}
+                        placeholder="https://t.me/..."
+                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -3336,7 +3918,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   className="w-full py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
                 >
                   <Save className="w-4 h-4" />
-                  <span>{savingSettings ? 'Saving to Server...' : 'Save Global Settings'}</span>
+                  <span>{savingSettings ? 'Saving ZiniPay & Global Settings...' : 'Save ZiniPay & Global Settings'}</span>
                 </button>
               </form>
             )}
@@ -3347,9 +3929,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
       {/* STANDALONE NATIVE MOBILE ADMIN BOTTOM NAVIGATION DOCK */}
       <nav
         aria-label="Admin Mobile Navigation"
-        className="fixed bottom-0 inset-x-0 z-40 pointer-events-none flex justify-center pb-[max(8px,env(safe-area-inset-bottom))] px-3"
+        className="lg:hidden fixed bottom-0 inset-x-0 z-40 pointer-events-none flex justify-center pb-[max(8px,env(safe-area-inset-bottom))] px-3"
       >
-        <div className="pointer-events-auto w-full max-w-md bg-[#080E1E]/95 backdrop-blur-2xl border border-amber-500/25 rounded-[28px] shadow-[0_16px_50px_rgba(0,0,0,0.9)] p-1.5 flex items-center justify-between">
+        <div className="pointer-events-auto w-full max-w-md bg-[#0D1220]/95 backdrop-blur-2xl border border-[#8B5CF6]/30 rounded-[28px] shadow-[0_16px_50px_rgba(0,0,0,0.9)] p-1.5 flex items-center justify-between">
           {[
             {
               id: 'overview',
@@ -3400,7 +3982,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   <motion.div
                     layoutId="adminBottomNavActivePill"
                     transition={{ type: 'spring', stiffness: 450, damping: 32 }}
-                    className="absolute inset-0 bg-gradient-to-b from-amber-500/20 to-amber-500/5 border border-amber-500/40 rounded-2xl"
+                    className="absolute inset-0 bg-gradient-to-b from-[#8B5CF6]/25 to-[#8B5CF6]/10 border border-[#8B5CF6]/40 rounded-2xl"
                   />
                 )}
 
@@ -3408,18 +3990,18 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   <div className="relative">
                     <Icon
                       className={`w-4.5 h-4.5 transition-colors ${
-                        isActive ? 'text-amber-400 stroke-[2.5]' : 'text-slate-400 stroke-[2]'
+                        isActive ? 'text-[#22D3EE] stroke-[2.5]' : 'text-[#94A3B8] stroke-[2]'
                       }`}
                     />
                     {tab.badge && (
-                      <span className="absolute -top-1.5 -right-2.5 min-w-4 h-4 px-1 rounded-full bg-rose-500 text-white font-black text-[9px] flex items-center justify-center font-mono">
+                      <span className="absolute -top-1.5 -right-2.5 min-w-4 h-4 px-1 rounded-full bg-[#8B5CF6] text-white font-black text-[9px] flex items-center justify-center font-mono">
                         {tab.badge}
                       </span>
                     )}
                   </div>
                   <span
                     className={`text-[10px] mt-0.5 tracking-tight ${
-                      isActive ? 'text-amber-400 font-extrabold' : 'text-slate-400 font-medium'
+                      isActive ? 'text-[#F1F5F9] font-extrabold' : 'text-[#94A3B8] font-medium'
                     }`}
                   >
                     {tab.label}
@@ -3430,6 +4012,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
           })}
         </div>
       </nav>
+      </div>
     </div>
   );
 };

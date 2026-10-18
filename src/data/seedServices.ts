@@ -20,6 +20,15 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   minAffiliatePayout: 100,
   maintenanceMode: false,
   usdToBdtRate: 122,
+  zinipayEnabled: true,
+  zinipayMode: 'sandbox',
+  zinipayApiKey: '',
+  zinipayBaseUrl: 'https://api.zinipay.com',
+  zinipayBrandDomain: '',
+  zinipayBonusPercent: 3,
+  zinipayAutoVerifyTrx: true,
+  zinipayFeePassToUser: false,
+  zinipayFeePercent: 0,
   updatedAt: Date.now()
 };
 

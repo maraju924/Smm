@@ -70,6 +70,7 @@ export interface SMMOrder {
   customComments?: string;
   providerId?: string;
   providerOrderId?: string;
+  providerCost?: number; // Upstream API cost in BDT for net profit tracking
   createdAt: number;
   updatedAt?: number;
 }
@@ -84,7 +85,7 @@ export interface SMMRefill {
   createdAt: number;
 }
 
-export type PaymentGateway = 'bKash' | 'Nagad' | 'Rocket' | 'Upay' | 'Binance_USDT';
+export type PaymentGateway = 'ZiniPay' | 'bKash' | 'Nagad' | 'Rocket' | 'Upay' | 'Binance_USDT';
 
 export interface SMMPayment {
   id: string;
@@ -96,6 +97,11 @@ export interface SMMPayment {
   transactionId: string;
   senderNumber: string;
   status: 'pending' | 'approved' | 'rejected';
+  zinipayInvoiceId?: string;
+  zinipayPaymentUrl?: string;
+  zinipayMethod?: string;
+  verificationMode?: 'auto_zinipay' | 'manual';
+  verifiedAt?: number;
   createdAt: number;
 }
 
@@ -190,22 +196,49 @@ export interface SMMCoupon {
 }
 
 export interface SiteSettings {
+  siteName?: string;
   bkashNumber: string;
   nagadNumber: string;
   rocketNumber: string;
   upayNumber: string;
   usdtAddress: string;
+  binanceId?: string;
   bkashBonusPercent: number;
   nagadBonusPercent: number;
   usdtBonusPercent: number;
+  depositBonusPercent?: number;
   minDepositForBonus: number;
+  minDepositAmount?: number;
   whatsappUrl: string;
   telegramUrl: string;
   referralCommissionPercent: number;
   minAffiliatePayout: number;
   maintenanceMode: boolean;
   usdToBdtRate?: number;
+  // ZiniPay Payment Gateway Configuration
+  zinipayEnabled?: boolean;
+  zinipayMode?: 'sandbox' | 'live';
+  zinipayApiKey?: string;
+  zinipayBaseUrl?: string;
+  zinipayBrandDomain?: string;
+  zinipayBonusPercent?: number;
+  zinipayAutoVerifyTrx?: boolean;
+  zinipayFeePassToUser?: boolean;
+  zinipayFeePercent?: number;
   updatedAt: number;
+}
+
+export interface ZiniPayGatewayLog {
+  id: string;
+  timestamp: number;
+  type: 'create_invoice' | 'verify_invoice' | 'trx_verify' | 'trx_confirm' | 'webhook' | 'ping';
+  mode: 'sandbox' | 'live';
+  status: 'success' | 'error' | 'pending';
+  invoiceId?: string;
+  transactionId?: string;
+  amount?: number;
+  latencyMs: number;
+  summary: string;
 }
 
 export interface ServerHealthStatus {

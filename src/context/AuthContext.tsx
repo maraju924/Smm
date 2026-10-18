@@ -38,6 +38,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   updateUserBalance: (delta: number) => Promise<void>;
   formatPrice: (amountInBDT: number) => string;
+  t: (bn: string, en: string) => string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -279,6 +280,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return `৳${amountInBDT.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
+  const t = (bn: string, en: string): string => (language === 'bn' ? bn : en);
+
   const isAdmin = profile?.role === 'admin' || isSuperAdminEmail(user?.email);
 
   return (
@@ -300,7 +303,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         resetPassword,
         logout,
         updateUserBalance,
-        formatPrice
+        formatPrice,
+        t
       }}
     >
       {children}

@@ -593,11 +593,11 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
   };
 
   const platformsList: { key: PlatformKey; label: string; bnLabel: string; accent: string }[] = [
-    { key: 'All', label: 'All Services', bnLabel: 'সব সার্ভিস', accent: 'from-rose-500 to-pink-600' },
+    { key: 'All', label: 'All Services', bnLabel: 'সব সার্ভিস', accent: 'from-[#8B5CF6] to-[#6D28D9]' },
     { key: 'Facebook', label: 'Facebook', bnLabel: 'Facebook', accent: 'from-blue-600 to-blue-500' },
-    { key: 'Instagram', label: 'Instagram', bnLabel: 'Instagram', accent: 'from-fuchsia-600 to-rose-500' },
+    { key: 'Instagram', label: 'Instagram', bnLabel: 'Instagram', accent: 'from-[#8B5CF6] to-fuchsia-600' },
     { key: 'YouTube', label: 'YouTube', bnLabel: 'YouTube', accent: 'from-red-600 to-rose-600' },
-    { key: 'TikTok', label: 'TikTok', bnLabel: 'TikTok', accent: 'from-cyan-500 to-teal-500' },
+    { key: 'TikTok', label: 'TikTok', bnLabel: 'TikTok', accent: 'from-[#22D3EE] to-teal-500' },
     { key: 'Telegram', label: 'Telegram', bnLabel: 'Telegram', accent: 'from-sky-500 to-blue-500' },
     { key: 'Twitter', label: 'Twitter / X', bnLabel: 'Twitter / X', accent: 'from-slate-600 to-slate-500' },
     { key: 'Other', label: 'More', bnLabel: 'অন্যান্য', accent: 'from-emerald-600 to-teal-600' }
@@ -660,12 +660,12 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
   // ============================================================================
   if (isLoading || (activeServices.length === 0 && isSyncing)) {
     return (
-      <div className="space-y-4 pb-10 w-full max-w-4xl mx-auto overflow-x-hidden animate-in fade-in duration-150">
+      <div className="space-y-4 pb-10 w-full overflow-x-hidden animate-in fade-in duration-150">
         {/* Live API Stream Status Pill */}
-        <div className="p-4 rounded-3xl bg-gradient-to-r from-slate-900 via-slate-900 to-rose-950/30 border border-slate-800/90 flex items-center justify-between gap-3 shadow-lg">
+        <div className="p-4 rounded-3xl bg-[#0D1220] border border-white/[0.08] flex items-center justify-between gap-3 shadow-lg">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center shrink-0">
-              <RefreshCw className="w-5 h-5 text-rose-400 animate-spin" />
+            <div className="w-10 h-10 rounded-2xl bg-[#8B5CF6]/15 border border-[#8B5CF6]/30 flex items-center justify-center shrink-0">
+              <RefreshCw className="w-5 h-5 text-[#22D3EE] animate-spin" />
             </div>
             <div>
               <h2 className="text-sm font-extrabold text-white flex items-center gap-2">
@@ -742,37 +742,37 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
   }
 
   return (
-    <div className="space-y-3.5 pb-12 w-full max-w-4xl mx-auto overflow-x-hidden">
+    <div className="space-y-4 pb-12 w-full overflow-x-hidden">
       {/* Background Sync Non-Blocking Banner */}
       {isSyncing && (
-        <div className="px-3.5 py-2 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-between gap-2 text-[11px] text-sky-300">
+        <div className="px-3.5 py-2 rounded-2xl bg-[#22D3EE]/10 border border-[#22D3EE]/20 flex items-center justify-between gap-2 text-[11px] text-[#22D3EE]">
           <div className="flex items-center gap-2 min-w-0">
-            <RefreshCw className="w-3.5 h-3.5 text-sky-400 animate-spin shrink-0" />
+            <RefreshCw className="w-3.5 h-3.5 text-[#22D3EE] animate-spin shrink-0" />
             <span className="truncate font-semibold">
               {language === 'bn'
                 ? 'সার্ভারে API প্রোভাইডার ক্যাটালগ ও রেট অটো-আপডেট চলছে...'
                 : 'Auto-syncing live API provider catalog & rates in background...'}
             </span>
           </div>
-          <span className="text-[10px] font-mono uppercase tracking-wider text-sky-400 shrink-0">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-[#22D3EE] shrink-0">
             LIVE
           </span>
         </div>
       )}
 
-      {/* Native Mobile App Header Card with Live Metrics */}
-      <div className="rounded-3xl bg-gradient-to-br from-[#0e1526] via-slate-900 to-[#131022] border border-slate-800/90 p-4 shadow-xl space-y-3.5">
+      {/* Native Mobile App & Desktop Header Card with Live Metrics */}
+      <div className="rounded-3xl bg-[#0D1220] border border-white/[0.08] p-4 sm:p-5 shadow-xl space-y-3.5">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center shrink-0">
-                <Layers className="w-4 h-4 text-rose-400" />
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-2xl bg-[#8B5CF6]/15 border border-[#8B5CF6]/30 flex items-center justify-center shrink-0">
+                <Layers className="w-4 h-4 text-[#22D3EE]" />
               </div>
               <div>
-                <h2 className="text-base sm:text-lg font-extrabold text-white tracking-tight leading-none">
+                <h2 className="text-base sm:text-xl font-extrabold text-[#F1F5F9] tracking-tight leading-none">
                   {language === 'bn' ? 'প্রো সার্ভিস এক্সপ্লোরার' : 'Pro Service Explorer'}
                 </h2>
-                <p className="text-[11px] text-slate-400 mt-0.5">
+                <p className="text-[11px] text-[#94A3B8] mt-1">
                   {language === 'bn'
                     ? '১০০% অটোমেটেড API সার্ভিস ও ইনস্ট্যান্ট রেট ক্যালকুলেটর'
                     : 'Real-time API catalog, smart filters & instant order'}
@@ -782,13 +782,13 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
           </div>
 
           {/* View Mode Switcher (Card vs Compact) */}
-          <div className="flex items-center gap-1 bg-slate-950/90 p-1 rounded-2xl border border-slate-800 shrink-0">
+          <div className="flex items-center gap-1 bg-[#080B14] p-1 rounded-2xl border border-white/[0.08] shrink-0">
             <button
               onClick={() => setViewMode('card')}
-              className={`p-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+              className={`p-1.5 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
                 viewMode === 'card'
-                  ? 'bg-rose-600 text-white shadow'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-[#8B5CF6] text-white shadow'
+                  : 'text-[#94A3B8] hover:text-white'
               }`}
               title="App Card View"
             >
@@ -799,10 +799,10 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
             </button>
             <button
               onClick={() => setViewMode('compact')}
-              className={`p-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+              className={`p-1.5 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
                 viewMode === 'compact'
-                  ? 'bg-rose-600 text-white shadow'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-[#8B5CF6] text-white shadow'
+                  : 'text-[#94A3B8] hover:text-white'
               }`}
               title="Compact List View"
             >
@@ -1183,8 +1183,8 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
           })}
         </div>
       ) : (
-        /* RICH NATIVE MOBILE APP CARD MODE */
-        <div className="space-y-2.5">
+        /* RICH NATIVE MOBILE APP & DESKTOP MULTI-COLUMN CARD MODE */
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
           {visibleServices.map(srv => {
             const isFav = favoriteIds.includes(srv.id);
             const isCompared = compareIds.includes(srv.id);
@@ -1195,10 +1195,10 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
               <div
                 key={srv.id}
                 onClick={() => setSelectedServiceModal(srv)}
-                className={`p-4 rounded-3xl bg-[#0e1525] border transition-all shadow-sm space-y-2.5 text-xs cursor-pointer active:scale-[0.995] ${
+                className={`p-4 rounded-3xl bg-[#0D1220] border transition-all shadow-sm space-y-2.5 text-xs cursor-pointer active:scale-[0.995] flex flex-col justify-between ${
                   isCompared
-                    ? 'border-sky-500/60 ring-1 ring-sky-500/30'
-                    : 'border-slate-800/90 hover:border-slate-700'
+                    ? 'border-[#22D3EE]/60 ring-1 ring-[#22D3EE]/30'
+                    : 'border-white/[0.07] hover:border-[#8B5CF6]/40'
                 }`}
               >
                 {/* Top Row: ID + Category + Badges + Rate */}
@@ -1217,7 +1217,7 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
                       )}
                     </button>
 
-                    <span className="text-[11px] font-semibold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-lg truncate max-w-[170px] sm:max-w-[260px]">
+                    <span className="text-[11px] font-semibold text-[#22D3EE] bg-[#22D3EE]/10 border border-[#22D3EE]/20 px-2 py-0.5 rounded-lg truncate max-w-[170px] sm:max-w-[260px]">
                       {srv.category}
                     </span>
 
@@ -1320,7 +1320,7 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
                         e.stopPropagation();
                         onSelectServiceForOrder(srv.id, srv.category);
                       }}
-                      className="py-2 px-3.5 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white font-bold text-xs shadow-md active:scale-95 transition-all flex items-center gap-1"
+                      className="py-2 px-3.5 rounded-xl bg-gradient-to-r from-[#8B5CF6] to-[#6D28D9] hover:from-[#7C3AED] hover:to-[#5B21B6] text-white font-bold text-xs shadow-md shadow-[#8B5CF6]/20 active:scale-95 transition-all flex items-center gap-1"
                     >
                       <Zap className="w-3.5 h-3.5 fill-white" />
                       <span>{language === 'bn' ? 'অর্ডার' : 'Order'}</span>
@@ -2013,7 +2013,7 @@ export const ServicesView: React.FC<ServicesViewProps> = ({
                     setSelectedServiceModal(null);
                     onSelectServiceForOrder(srv.id, srv.category);
                   }}
-                  className="py-3.5 px-3 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                  className="py-3.5 px-3 rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#6D28D9] text-white font-bold text-xs shadow-lg active:scale-95 transition-all flex items-center justify-center gap-1.5"
                 >
                   <span>{language === 'bn' ? 'অর্ডার ফর্মে যান' : 'Open Order Form'}</span>
                   <ChevronRight className="w-4 h-4" />

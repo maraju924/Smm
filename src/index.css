@@ -4,6 +4,20 @@
   :root {
     --safe-bottom: env(safe-area-inset-bottom, 16px);
     --safe-top: env(safe-area-inset-top, 0px);
+
+    /* Hybrid Glass Premium Design Tokens */
+    --bg-deep: #080B14;
+    --bg-secondary: #0D1220;
+    --surface-elevated: #141B2B;
+    --surface-solid: #192337;
+    --accent-violet: #8B5CF6;
+    --accent-deep-violet: #6D28D9;
+    --accent-cyan: #22D3EE;
+    --text-primary: #F1F5F9;
+    --text-muted: #94A3B8;
+    --status-success: #22C55E;
+    --status-warning: #F59E0B;
+    --status-error: #F87171;
   }
 
   *, *::before, *::after {
@@ -16,20 +30,24 @@
     width: 100% !important;
     touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
+    background-color: #080B14;
+    color-scheme: dark;
   }
 
   body {
-    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Inter', 'Noto Sans Bengali', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     -webkit-tap-highlight-color: transparent;
     user-select: none;
     -webkit-user-select: none;
-    background-color: #090d16;
-    color: #f1f5f9;
+    background-color: #080B14;
+    color: #F1F5F9;
     overflow-x: hidden !important;
     max-width: 100vw !important;
     width: 100% !important;
     position: relative;
     touch-action: pan-y;
+    line-height: 1.5;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
   #root {
@@ -39,7 +57,7 @@
     min-height: 100vh;
   }
 
-  input, textarea {
+  input, textarea, select {
     font-family: inherit;
     user-select: text;
     -webkit-user-select: text;
@@ -47,16 +65,91 @@
 
   code, pre, .font-mono {
     font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
   }
 }
 
-/* Hide scrollbar for Chrome, Safari and Opera */
+/* Hybrid Glassmorphism & Solid Operational Surfaces */
+.glass-panel {
+  background: linear-gradient(145deg, rgba(20, 27, 43, 0.78) 0%, rgba(13, 18, 32, 0.86) 100%);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  box-shadow:
+    0 14px 36px -10px rgba(4, 6, 14, 0.75),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
+}
+
+.glass-hero {
+  background:
+    radial-gradient(120% 110% at 95% 0%, rgba(139, 92, 246, 0.18) 0%, transparent 55%),
+    radial-gradient(90% 90% at 5% 100%, rgba(34, 211, 238, 0.12) 0%, transparent 55%),
+    linear-gradient(160deg, rgba(20, 27, 43, 0.9) 0%, rgba(13, 18, 32, 0.95) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(139, 92, 246, 0.24);
+  box-shadow:
+    0 20px 48px -12px rgba(5, 8, 18, 0.85),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+}
+
+.solid-panel {
+  background-color: #0D1220;
+  border: 1px solid rgba(148, 163, 184, 0.11);
+  box-shadow: 0 8px 24px -8px rgba(3, 6, 14, 0.65);
+}
+
+.elevated-panel {
+  background-color: #141B2B;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.input-surface {
+  background-color: #080B14;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  color: #F1F5F9;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+.input-surface:focus {
+  outline: none;
+  border-color: #8B5CF6;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.16);
+}
+
+/* Hide scrollbar for horizontal pill bars */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
-/* Hide scrollbar for IE, Edge and Firefox */
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
 
+/* Subtle custom scrollbar for desktop tables & drawers */
+@media (min-width: 1024px) {
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #080B14;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #192337;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #8B5CF6;
+  }
+}
+
+/* Reduced Motion Accessibility Support */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

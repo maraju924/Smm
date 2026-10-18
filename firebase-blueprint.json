@@ -92,22 +92,27 @@
     },
     "Payment": {
       "title": "Payment",
-      "description": "Deposit transaction via bKash, Nagad, Crypto or Card",
+      "description": "Deposit transaction via ZiniPay, bKash, Nagad, Crypto or Card",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
         "userId": { "type": "string" },
         "userEmail": { "type": "string" },
-        "method": { "type": "string" },
+        "gateway": { "type": "string", "enum": ["ZiniPay", "bKash", "Nagad", "Rocket", "Upay", "Binance_USDT"] },
         "amount": { "type": "number" },
         "currency": { "type": "string" },
         "transactionId": { "type": "string" },
         "senderNumber": { "type": "string" },
         "bonus": { "type": "number" },
         "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "zinipayInvoiceId": { "type": "string" },
+        "zinipayPaymentUrl": { "type": "string" },
+        "zinipayMethod": { "type": "string" },
+        "verificationMode": { "type": "string", "enum": ["auto_zinipay", "manual"] },
+        "verifiedAt": { "type": "number" },
         "createdAt": { "type": "number" }
       },
-      "required": ["id", "userId", "method", "amount", "transactionId", "status"]
+      "required": ["id", "userId", "gateway", "amount", "transactionId", "status"]
     },
     "Ticket": {
       "title": "Ticket",
@@ -178,26 +183,35 @@
     },
     "SiteSettings": {
       "title": "SiteSettings",
-      "description": "Global payment gateways, bonus rates, and support configuration",
+      "description": "Global payment gateways, ZiniPay automated checkout, bonus rates, and support configuration",
       "type": "object",
       "properties": {
-        "bKashNumber": { "type": "string" },
+        "bkashNumber": { "type": "string" },
         "nagadNumber": { "type": "string" },
         "rocketNumber": { "type": "string" },
         "upayNumber": { "type": "string" },
         "usdtAddress": { "type": "string" },
         "bkashBonusPercent": { "type": "number" },
-        "cryptoBonusPercent": { "type": "number" },
+        "nagadBonusPercent": { "type": "number" },
+        "usdtBonusPercent": { "type": "number" },
         "minDepositForBonus": { "type": "number" },
         "usdToBdtRate": { "type": "number" },
         "referralCommissionPercent": { "type": "number" },
         "minAffiliatePayout": { "type": "number" },
-        "whatsappNumber": { "type": "string" },
+        "whatsappUrl": { "type": "string" },
         "telegramUrl": { "type": "string" },
-        "supportHours": { "type": "string" },
+        "zinipayEnabled": { "type": "boolean" },
+        "zinipayMode": { "type": "string", "enum": ["sandbox", "live"] },
+        "zinipayApiKey": { "type": "string" },
+        "zinipayBaseUrl": { "type": "string" },
+        "zinipayBrandDomain": { "type": "string" },
+        "zinipayBonusPercent": { "type": "number" },
+        "zinipayAutoVerifyTrx": { "type": "boolean" },
+        "zinipayFeePassToUser": { "type": "boolean" },
+        "zinipayFeePercent": { "type": "number" },
         "updatedAt": { "type": "number" }
       },
-      "required": ["bKashNumber", "nagadNumber", "usdToBdtRate"]
+      "required": ["usdToBdtRate"]
     }
   },
   "firestore": {

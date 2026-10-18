@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import { 
-  User, 
-  Wallet, 
-  Globe, 
-  Moon, 
-  Sun, 
-  Key, 
-  LogOut, 
+import {
+  User,
+  Mail,
+  KeyRound,
   Copy,
+  Check,
   RefreshCw,
-  Server
+  Globe,
+  LogOut,
+  Lock,
+  Bell,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { regenerateUserApiKeyOnServer } from '../../services/db';
@@ -19,227 +21,376 @@ interface ProfileViewProps {
   onOpenAuth: () => void;
 }
 
-export const ProfileView: React.FC<ProfileViewProps> = ({
-  onShowToast,
-  onOpenAuth
-}) => {
-  const { 
-    profile, 
-    currency, 
-    setCurrency, 
-    language, 
-    setLanguage, 
-    darkMode, 
-    setDarkMode, 
-    logout, 
-    formatPrice, 
-    isAdmin 
+export const ProfileView: React.FC<ProfileViewProps> = ({ onShowToast, onOpenAuth }) => {
+  const {
+    user,
+    profile,
+    logout,
+    resetPassword,
+    currency,
+    setCurrency,
+    language,
+    setLanguage,
+    formatPrice,
+    t
   } = useAuth();
-  const [rotatingKey, setRotatingKey] = useState(false);
 
-  if (!profile) {
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [confirmRegenerate, setConfirmRegenerate] = useState(false);
+  const [confirmLogout, setConfirmLogout] = useState(false);
+  const [sendingReset, setSendingReset] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+
+  if (!user || !profile) {
     return (
-      <div className="p-10 text-center bg-slate-900 border border-slate-800 rounded-3xl space-y-4 max-w-md mx-auto my-8">
-        <User className="w-12 h-12 text-slate-600 mx-auto" />
-        <h3 className="text-base font-extrabold text-white">
-          {language === 'bn' ? 'প্রোফাইল দেখতে লগইন করুন' : 'Sign in to view your profile'}
-        </h3>
-        <p className="text-xs text-slate-400">
-          {language === 'bn' ? 'ক্লাউড সার্ভার ওয়ালেট ও অর্ডার হিস্টোরি অ্যাক্সেস করতে সাইন ইন করুন' : 'Access your cloud wallet, orders and server-synced settings'}
+      <div className="rounded-3xl bg-[#0D1220] border border-white/[0.07] p-10 text-center max-w-md mx-auto my-8">
+        <div className="w-14 h-14 rounded-2xl bg-[#141B2B] border border-white/[0.08] flex items-center justify-center mx-auto mb-4 text-[#8B5CF6]">
+          <User className="w-6 h-6" />
+        </div>
+        <h2 className="text-lg font-bold text-[#F1F5F9] mb-1">
+          {t('লগইন প্রয়োজন', 'Sign In Required')}
+        </h2>
+        <p className="text-xs text-[#94A3B8] mb-5">
+          {t('আপনার প্রোফাইল, এপিআই কী এবং সিকিউরিটি সেটিংস দেখতে লগইন করুন।', 'Sign in to manage your account settings, API keys, and preferences.')}
         </p>
         <button
           onClick={onOpenAuth}
-          className="py-3 px-6 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg active:scale-95 transition-all"
+          className="px-6 py-3 rounded-xl bg-gradient-to-r from-[#8B5CF6] to-[#6D28D9] text-white text-xs font-bold shadow-lg shadow-[#8B5CF6]/25"
         >
-          {language === 'bn' ? 'লগইন করুন' : 'Sign In Now'}
+          {t('লগইন / রেজিস্টার করুন', 'Sign In / Create Account')}
         </button>
       </div>
     );
   }
 
-  const handleCopy = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    onShowToast(`${label} copied!`, 'info');
+  const maskedApiKey = profile.apiKey
+    ? `${profile.apiKey.slice(0, 7)}••••••••••••••••••••${profile.apiKey.slice(-4)}`
+    : 'No API Key Generated';
+
+  const handleCopyKey = () => {
+    if (!profile.apiKey) return;
+    navigator.clipboard.writeText(profile.apiKey);
+    setCopiedKey(true);
+    onShowToast(t('API Key কপি করা হয়েছে!', 'API Key copied to clipboard!'), 'info');
+    setTimeout(() => setCopiedKey(false), 2000);
   };
 
-  const handleRotateApiKey = async () => {
-    setRotatingKey(true);
+  const handleRegenerateKey = async () => {
+    setIsRegenerating(true);
     try {
-      await regenerateUserApiKeyOnServer(profile.uid);
+      await regenerateUserApiKeyOnServer(user.uid, profile.apiKey);
+      setConfirmRegenerate(false);
+      setShowApiKey(true);
+      onShowToast(t('নতুন API Key তৈরি করা হয়েছে!', 'New API Key generated!'), 'success');
+    } catch (err: any) {
+      onShowToast(err.message || t('API Key তৈরি ব্যর্থ হয়েছে', 'Failed to regenerate API key'), 'error');
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    if (!user.email) return;
+    setSendingReset(true);
+    try {
+      await resetPassword(user.email);
       onShowToast(
-        language === 'bn' ? 'নতুন API Key সার্ভারে সংরক্ষিত হয়েছে!' : 'New API Key saved to cloud server!',
+        t(`পাসওয়ার্ড রিসেট লিংক ${user.email}-এ পাঠানো হয়েছে!`, `Password reset email sent to ${user.email}`),
         'success'
       );
     } catch (err: any) {
-      onShowToast(err?.message || 'Failed to rotate key', 'error');
+      onShowToast(err.message || t('রিসেট ইমেইল পাঠানো যায়নি', 'Failed to send password reset email'), 'error');
     } finally {
-      setRotatingKey(false);
+      setSendingReset(false);
     }
   };
 
   return (
-    <div className="w-full max-w-xl mx-auto space-y-5 pb-8 overflow-x-hidden">
-      {/* Profile Header Card */}
-      <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 flex items-center gap-4 shadow-xl">
-        <div className="w-16 h-16 rounded-2xl bg-rose-600 text-white flex items-center justify-center font-extrabold text-2xl shadow-lg shrink-0">
-          {profile.displayName ? profile.displayName.charAt(0).toUpperCase() : 'U'}
+    <div className="space-y-6 pb-10">
+      {/* Header */}
+      <div>
+        <h1 className="text-xl sm:text-2xl font-bold text-[#F1F5F9] tracking-tight">
+          {t('প্রোফাইল ও অ্যাকাউন্ট সেটিংস', 'Profile & Account Settings')}
+        </h1>
+        <p className="text-xs text-[#94A3B8] mt-0.5">
+          {t('আপনার ব্যক্তিগত তথ্য, সিকিউরিটি, ভাষা এবং ডেভেলপার এপিআই কী পরিচালনা করুন', 'Manage your identity, security credentials, workspace preferences, and API access')}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left Column: Account Identity & Preferences (6 cols) */}
+        <div className="lg:col-span-6 space-y-5">
+          {/* Identity Card */}
+          <div className="rounded-3xl bg-[#0D1220] border border-white/[0.07] p-5 sm:p-6 space-y-5">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#8B5CF6] to-[#22D3EE] p-[1px] shrink-0">
+                <div className="w-full h-full rounded-[15px] bg-[#0D1220] flex items-center justify-center text-xl font-extrabold text-[#F1F5F9]">
+                  {(profile.displayName || profile.email || 'U')[0].toUpperCase()}
+                </div>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-base sm:text-lg font-bold text-[#F1F5F9] truncate">
+                    {profile.displayName || 'SMM Member'}
+                  </h2>
+                  <span className="px-2.5 py-0.5 rounded-lg bg-[#22C55E]/10 border border-[#22C55E]/25 text-[#22C55E] text-[10px] font-semibold">
+                    {profile.role === 'admin' ? 'Administrator' : 'Verified Member'}
+                  </span>
+                </div>
+                <p className="text-xs text-[#94A3B8] truncate flex items-center gap-1.5 mt-1">
+                  <Mail className="w-3.5 h-3.5 text-[#64748B]" />
+                  {profile.email}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-4 border-t border-white/[0.06]">
+              <div className="p-3.5 rounded-2xl bg-[#141B2B]/70 border border-white/[0.05]">
+                <span className="text-[11px] text-[#94A3B8] block">{t('বর্তমান ব্যালেন্স', 'Available Balance')}</span>
+                <span className="font-mono text-base font-bold text-[#22D3EE] mt-0.5 block">
+                  {formatPrice(profile.balance || 0)}
+                </span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-[#141B2B]/70 border border-white/[0.05]">
+                <span className="text-[11px] text-[#94A3B8] block">{t('রেফারেল আয়', 'Affiliate Earnings')}</span>
+                <span className="font-mono text-base font-bold text-[#F1F5F9] mt-0.5 block">
+                  {formatPrice(profile.referralEarnings || 0)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Workspace Preferences */}
+          <div className="rounded-3xl bg-[#0D1220] border border-white/[0.07] p-5 sm:p-6 space-y-4">
+            <h3 className="text-sm font-bold text-[#F1F5F9] flex items-center gap-2">
+              <Globe className="w-4 h-4 text-[#22D3EE]" />
+              {t('ভাষা ও কারেন্সি সেটিংস', 'Language & Currency Preferences')}
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="p-3.5 rounded-2xl bg-[#141B2B]/70 border border-white/[0.06]">
+                <span className="text-xs font-semibold text-[#94A3B8] block mb-2">
+                  {t('ইন্টারফেস ভাষা (Language)', 'Interface Language')}
+                </span>
+                <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-[#080B14]">
+                  <button
+                    type="button"
+                    onClick={() => setLanguage('bn')}
+                    className={`py-2 rounded-lg text-xs font-bold transition-all ${
+                      language === 'bn' ? 'bg-[#8B5CF6] text-white' : 'text-[#94A3B8]'
+                    }`}
+                  >
+                    বাংলা
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLanguage('en')}
+                    className={`py-2 rounded-lg text-xs font-bold transition-all ${
+                      language === 'en' ? 'bg-[#8B5CF6] text-white' : 'text-[#94A3B8]'
+                    }`}
+                  >
+                    English
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-[#141B2B]/70 border border-white/[0.06]">
+                <span className="text-xs font-semibold text-[#94A3B8] block mb-2">
+                  {t('প্রদর্শিত কারেন্সি (Currency)', 'Display Currency')}
+                </span>
+                <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-[#080B14]">
+                  <button
+                    type="button"
+                    onClick={() => setCurrency('BDT')}
+                    className={`py-2 rounded-lg text-xs font-mono font-bold transition-all ${
+                      currency === 'BDT' ? 'bg-[#8B5CF6] text-white' : 'text-[#94A3B8]'
+                    }`}
+                  >
+                    ৳ BDT
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrency('USD')}
+                    className={`py-2 rounded-lg text-xs font-mono font-bold transition-all ${
+                      currency === 'USD' ? 'bg-[#8B5CF6] text-white' : 'text-[#94A3B8]'
+                    }`}
+                  >
+                    $ USD
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-[#141B2B]/70 border border-white/[0.06] flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Bell className="w-4 h-4 text-[#8B5CF6]" />
+                <div>
+                  <p className="text-xs font-semibold text-[#F1F5F9]">
+                    {t('অর্ডার স্ট্যাটাস নোটিফিকেশন', 'Order Status Notifications')}
+                  </p>
+                  <p className="text-[11px] text-[#94A3B8]">
+                    {t('অর্ডার সম্পন্ন বা রিফিল আপডেট হলে তাৎক্ষণিক অ্যালার্ট', 'Receive live updates when orders complete')}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setNotificationsEnabled(!notificationsEnabled)}
+                className={`w-11 h-6 rounded-full transition-colors p-0.5 ${
+                  notificationsEnabled ? 'bg-[#8B5CF6]' : 'bg-[#080B14] border border-white/[0.1]'
+                }`}
+              >
+                <div
+                  className={`w-5 h-5 rounded-full bg-white transition-transform ${
+                    notificationsEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h2 className="text-base sm:text-lg font-bold text-white truncate">
-              {profile.displayName}
-            </h2>
-            {isAdmin && (
-              <span className="py-0.5 px-2 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-extrabold uppercase">
-                Admin
+        {/* Right Column: Developer API Key & Security (6 cols) */}
+        <div className="lg:col-span-6 space-y-5">
+          {/* API Key Section */}
+          <div className="rounded-3xl bg-[#0D1220] border border-white/[0.07] p-5 sm:p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-[#F1F5F9] flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-[#22D3EE]" />
+                {t('ডেভেলপার API Key (v2)', 'Developer API Key (REST v2)')}
+              </h3>
+              <span className="text-[10px] font-mono text-[#22C55E]">ACTIVE</span>
+            </div>
+
+            <p className="text-xs text-[#94A3B8] leading-relaxed">
+              {t(
+                'অন্যান্য প্যানেল বা নিজস্ব ওয়েবসাইটের সাথে আমাদের সার্ভিস সংযুক্ত করতে নিচের সিক্রেট API Key ব্যবহার করুন।',
+                'Use this secret key to authenticate automated order requests from external panels or scripts.'
+              )}
+            </p>
+
+            <div className="p-3.5 rounded-2xl bg-[#141B2B] border border-white/[0.08] flex items-center justify-between gap-2">
+              <span className="font-mono text-xs text-[#F1F5F9] truncate select-all">
+                {showApiKey ? profile.apiKey : maskedApiKey}
               </span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="p-2 rounded-xl bg-[#192337] text-[#94A3B8] hover:text-white"
+                  title={showApiKey ? 'Hide Key' : 'Show Key'}
+                >
+                  {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyKey}
+                  className="px-3 py-2 rounded-xl bg-[#192337] hover:bg-[#8B5CF6] text-[#F1F5F9] hover:text-white text-xs font-semibold flex items-center gap-1 transition-colors"
+                >
+                  {copiedKey ? <Check className="w-3.5 h-3.5 text-[#22C55E]" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copiedKey ? t('কপি হয়েছে', 'Copied') : t('কপি', 'Copy')}
+                </button>
+              </div>
+            </div>
+
+            {!confirmRegenerate ? (
+              <button
+                type="button"
+                onClick={() => setConfirmRegenerate(true)}
+                className="text-xs font-semibold text-[#94A3B8] hover:text-[#F1F5F9] flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-[#8B5CF6]" />
+                {t('নতুন API Key জেনারেট করুন', 'Regenerate API Key')}
+              </button>
+            ) : (
+              <div className="p-3.5 rounded-2xl bg-[#F59E0B]/10 border border-[#F59E0B]/30 space-y-2.5">
+                <p className="text-xs text-[#F59E0B] font-medium">
+                  {t('সতর্কতা: নতুন কী তৈরি করলে আগের API Key আর কাজ করবে না।', 'Warning: Regenerating will immediately invalidate your current API key.')}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isRegenerating}
+                    onClick={handleRegenerateKey}
+                    className="px-3.5 py-1.5 rounded-xl bg-[#F59E0B] text-slate-950 font-bold text-xs"
+                  >
+                    {isRegenerating ? t('তৈরি হচ্ছে...', 'Generating...') : t('হ্যাঁ, পরিবর্তন করুন', 'Confirm Regenerate')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmRegenerate(false)}
+                    className="px-3.5 py-1.5 rounded-xl bg-[#141B2B] text-[#94A3B8] text-xs font-semibold"
+                  >
+                    {t('বাতিল', 'Cancel')}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
-          <p className="text-xs text-slate-400 truncate">{profile.email}</p>
-          <div className="flex items-center gap-3 mt-2 text-xs">
-            <span className="text-emerald-400 font-bold font-mono">
-              {language === 'bn' ? 'ব্যালেন্স' : 'Balance'}: {formatPrice(profile.balance)}
-            </span>
-            <span className="text-slate-600">•</span>
-            <span className="text-slate-400 font-mono">
-              {language === 'bn' ? 'খরচ' : 'Spent'}: {formatPrice(profile.totalSpent)}
-            </span>
+
+          {/* Security & Session Card */}
+          <div className="rounded-3xl bg-[#0D1220] border border-white/[0.07] p-5 sm:p-6 space-y-4">
+            <h3 className="text-sm font-bold text-[#F1F5F9] flex items-center gap-2">
+              <Lock className="w-4 h-4 text-[#8B5CF6]" />
+              {t('সিকিউরিটি ও সেশন কন্ট্রোল', 'Security & Session Controls')}
+            </h3>
+
+            <div className="p-3.5 rounded-2xl bg-[#141B2B]/70 border border-white/[0.06] flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold text-[#F1F5F9]">
+                  {t('পাসওয়ার্ড পরিবর্তন / রিসেট', 'Reset Account Password')}
+                </p>
+                <p className="text-[11px] text-[#94A3B8]">
+                  {t('আপনার ইমেইলে নিরাপদ পাসওয়ার্ড রিসেট লিংক পাঠান', 'Send an official password reset link to your email')}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={sendingReset}
+                onClick={handlePasswordReset}
+                className="px-3.5 py-2 rounded-xl bg-[#192337] hover:bg-[#8B5CF6] text-[#F1F5F9] hover:text-white text-xs font-semibold border border-white/[0.08] shrink-0 transition-colors"
+              >
+                {sendingReset ? t('পাঠানো হচ্ছে...', 'Sending...') : t('রিসেট লিংক পাঠান', 'Send Reset Link')}
+              </button>
+            </div>
+
+            {!confirmLogout ? (
+              <button
+                type="button"
+                onClick={() => setConfirmLogout(true)}
+                className="w-full py-3 rounded-2xl bg-[#F87171]/10 hover:bg-[#F87171]/20 text-[#F87171] font-bold text-xs border border-[#F87171]/25 flex items-center justify-center gap-2 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                {t('অ্যাকাউন্ট থেকে লগআউট করুন', 'Sign Out of Account')}
+              </button>
+            ) : (
+              <div className="p-4 rounded-2xl bg-[#F87171]/10 border border-[#F87171]/30 space-y-3">
+                <p className="text-xs text-[#F87171] font-semibold">
+                  {t('আপনি কি নিশ্চিতভাবে লগআউট করতে চান?', 'Are you sure you want to sign out of your session?')}
+                </p>
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={logout}
+                    className="px-4 py-2 rounded-xl bg-[#F87171] text-white font-bold text-xs"
+                  >
+                    {t('হ্যাঁ, লগআউট করুন', 'Yes, Sign Out')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmLogout(false)}
+                    className="px-4 py-2 rounded-xl bg-[#141B2B] text-[#94A3B8] font-semibold text-xs"
+                  >
+                    {t('না, থাকুক', 'Cancel')}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
-
-      {/* Server-Synced Preferences Section */}
-      <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-lg">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-            {language === 'bn' ? 'ক্লাউড সার্ভার প্রিফারেন্স' : 'Cloud Server Preferences'}
-          </h3>
-          <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-semibold">
-            <Server className="w-3 h-3" /> Synced to Server
-          </span>
-        </div>
-
-        {/* Currency Switch */}
-        <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-950 border border-slate-800">
-          <div className="flex items-center gap-2.5">
-            <Wallet className="w-4 h-4 text-emerald-400" />
-            <div>
-              <p className="text-xs font-bold text-white">
-                {language === 'bn' ? 'কারেন্সি (Currency)' : 'Display Currency'}
-              </p>
-              <p className="text-[10px] text-slate-400">Saved in your cloud profile</p>
-            </div>
-          </div>
-          <div className="flex gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
-            <button
-              onClick={() => setCurrency('BDT')}
-              className={`py-1 px-3 rounded-lg text-xs font-bold transition-all ${
-                currency === 'BDT' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400'
-              }`}
-            >
-              ৳ BDT
-            </button>
-            <button
-              onClick={() => setCurrency('USD')}
-              className={`py-1 px-3 rounded-lg text-xs font-bold transition-all ${
-                currency === 'USD' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400'
-              }`}
-            >
-              $ USD
-            </button>
-          </div>
-        </div>
-
-        {/* Language Switch */}
-        <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-950 border border-slate-800">
-          <div className="flex items-center gap-2.5">
-            <Globe className="w-4 h-4 text-sky-400" />
-            <div>
-              <p className="text-xs font-bold text-white">
-                {language === 'bn' ? 'ভাষা (Language)' : 'App Language'}
-              </p>
-              <p className="text-[10px] text-slate-400">English or বাংলা</p>
-            </div>
-          </div>
-          <div className="flex gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
-            <button
-              onClick={() => setLanguage('bn')}
-              className={`py-1 px-3 rounded-lg text-xs font-bold transition-all ${
-                language === 'bn' ? 'bg-sky-500 text-slate-950 shadow' : 'text-slate-400'
-              }`}
-            >
-              বাংলা
-            </button>
-            <button
-              onClick={() => setLanguage('en')}
-              className={`py-1 px-3 rounded-lg text-xs font-bold transition-all ${
-                language === 'en' ? 'bg-sky-500 text-slate-950 shadow' : 'text-slate-400'
-              }`}
-            >
-              English
-            </button>
-          </div>
-        </div>
-
-        {/* Dark Mode Switch */}
-        <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-950 border border-slate-800">
-          <div className="flex items-center gap-2.5">
-            {darkMode ? <Moon className="w-4 h-4 text-indigo-400" /> : <Sun className="w-4 h-4 text-amber-400" />}
-            <div>
-              <p className="text-xs font-bold text-white">
-                {language === 'bn' ? 'ডার্ক মোড (Dark Theme)' : 'Dark Theme'}
-              </p>
-              <p className="text-[10px] text-slate-400">AMOLED high-contrast mode</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setDarkMode(!darkMode)}
-            className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors ${
-              darkMode ? 'bg-indigo-600 justify-end' : 'bg-slate-800 justify-start'
-            }`}
-          >
-            <div className="w-4 h-4 rounded-full bg-white shadow-md transform transition-transform" />
-          </button>
-        </div>
-      </div>
-
-      {/* API Key Box */}
-      <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-3 shadow-lg">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-            <Key className="w-3.5 h-3.5 text-amber-400" />
-            Server API v2 Credentials
-          </h3>
-          <button
-            onClick={handleRotateApiKey}
-            disabled={rotatingKey}
-            className="text-[11px] font-bold text-rose-400 hover:text-rose-300 flex items-center gap-1"
-          >
-            <RefreshCw className={`w-3 h-3 ${rotatingKey ? 'animate-spin' : ''}`} />
-            <span>{language === 'bn' ? 'নতুন কি তৈরি করুন' : 'Regenerate Key'}</span>
-          </button>
-        </div>
-        <div className="flex items-center justify-between gap-2 p-2.5 bg-slate-950 rounded-2xl border border-slate-800 text-xs font-mono">
-          <span className="truncate text-emerald-400 font-bold select-all">{profile.apiKey}</span>
-          <button
-            onClick={() => handleCopy(profile.apiKey, 'API Key')}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg bg-slate-800"
-            title="Copy"
-          >
-            <Copy className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Logout button */}
-      <button
-        onClick={logout}
-        className="w-full py-3.5 px-4 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
-      >
-        <LogOut className="w-4 h-4" />
-        <span>{language === 'bn' ? 'লগআউট করুন' : 'Sign Out of Account'}</span>
-      </button>
     </div>
   );
 };

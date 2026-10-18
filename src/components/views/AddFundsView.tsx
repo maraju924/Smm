@@ -1,446 +1,616 @@
-import React, { useState } from 'react';
-import { 
-  Wallet, 
-  Copy, 
-  CheckCircle2, 
-  AlertCircle, 
-  ShieldCheck, 
-  Gift 
+import React, { useState, useEffect } from 'react';
+import {
+  Wallet,
+  ArrowRight,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  ShieldCheck,
+  RefreshCw,
+  Lock,
+  ExternalLink,
+  X,
+  Plus
 } from 'lucide-react';
+import { SMMPayment, SiteSettings, SMMCoupon } from '../../types';
 import { useAuth } from '../../context/AuthContext';
-import { SMMPayment, SiteSettings, SMMCoupon, PaymentGateway } from '../../types';
-import { submitDepositPayment, redeemCouponCode } from '../../services/db';
-import { DEFAULT_SITE_SETTINGS } from '../../data/seedServices';
+import {
+  createZiniPayCheckoutInvoice,
+  completeZiniPaySandboxSession,
+  verifyAndCreditZiniPayInvoice
+} from '../../services/db';
 
 interface AddFundsViewProps {
   payments: SMMPayment[];
-  siteSettings?: SiteSettings;
-  coupons?: SMMCoupon[];
+  siteSettings: SiteSettings;
+  coupons: SMMCoupon[];
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   onOpenAuth: () => void;
 }
 
 export const AddFundsView: React.FC<AddFundsViewProps> = ({
   payments,
-  siteSettings = DEFAULT_SITE_SETTINGS,
-  coupons = [],
+  siteSettings,
   onShowToast,
   onOpenAuth
 }) => {
-  const { profile, language, formatPrice } = useAuth();
+  const { user, profile, formatPrice, t } = useAuth();
 
-  const methods: {
-    id: PaymentGateway;
-    name: string;
-    type: string;
-    number: string;
-    bonus: string;
-    bonusPct: number;
-    instruction: string;
-  }[] = [
-    {
-      id: 'bKash',
-      name: 'bKash (বিকাশ)',
-      type: 'Personal / Merchant',
-      number: siteSettings.bkashNumber || '',
-      bonus: siteSettings.bkashBonusPercent > 0
-        ? `${siteSettings.bkashBonusPercent}% Bonus (৳${siteSettings.minDepositForBonus}+)`
-        : 'Instant Credit',
-      bonusPct: siteSettings.bkashBonusPercent || 0,
-      instruction: 'বিকাশ অ্যাপ বা *247# দিয়ে নম্বরটিতে টাকা পাঠান এবং প্রাপ্ত TrxID নিচে দিন।'
-    },
-    {
-      id: 'Nagad',
-      name: 'Nagad (নগদ)',
-      type: 'Personal / Merchant',
-      number: siteSettings.nagadNumber || '',
-      bonus: siteSettings.nagadBonusPercent > 0
-        ? `${siteSettings.nagadBonusPercent}% Bonus (৳${siteSettings.minDepositForBonus}+)`
-        : 'Instant Credit',
-      bonusPct: siteSettings.nagadBonusPercent || 0,
-      instruction: 'নগদ অ্যাপ বা *167# দিয়ে নম্বরটিতে টাকা পাঠান এবং TrxID সাবমিট করুন।'
-    },
-    {
-      id: 'Rocket',
-      name: 'Rocket (রকেট)',
-      type: 'Personal Send Money',
-      number: siteSettings.rocketNumber || '',
-      bonus: 'Instant Credit',
-      bonusPct: 0,
-      instruction: 'রকেট নম্বরে Send Money করে আপনার TrxID জমা দিন।'
-    },
-    {
-      id: 'Upay',
-      name: 'Upay (উপায়)',
-      type: 'Personal Send Money',
-      number: siteSettings.upayNumber || '',
-      bonus: 'Instant Credit',
-      bonusPct: 0,
-      instruction: 'উপায় নম্বরে Send Money করে TrxID সাবমিট করুন।'
-    },
-    {
-      id: 'Binance_USDT',
-      name: 'Binance / Crypto (USDT)',
-      type: 'TRC-20 / BEP-20',
-      number: siteSettings.usdtAddress || '',
-      bonus: siteSettings.usdtBonusPercent > 0
-        ? `${siteSettings.usdtBonusPercent}% Bonus`
-        : 'Global Crypto',
-      bonusPct: siteSettings.usdtBonusPercent || 0,
-      instruction: `Send USDT to the wallet address above. 1 USD = ${siteSettings.usdToBdtRate || 122} BDT.`
-    }
-  ];
+  // Step 1: Deposit button toggle -> opens amount input field
+  const [isDepositOpen, setIsDepositOpen] = useState(false);
+  const [amount, setAmount] = useState<string>('');
+  const [isLaunchingGateway, setIsLaunchingGateway] = useState(false);
+  const [verifyingPaymentId, setVerifyingPaymentId] = useState<string | null>(null);
 
-  const [selectedMethodId, setSelectedMethodId] = useState<PaymentGateway>('bKash');
-  const [amount, setAmount] = useState<number>(500);
-  const [senderNumber, setSenderNumber] = useState('');
-  const [transactionId, setTransactionId] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // ZiniPay Hosted Gateway Overlay (used when Sandbox mode is active or inside iframe preview)
+  const [activeGatewaySession, setActiveGatewaySession] = useState<{
+    paymentId: string;
+    invoiceId: string;
+    paymentUrl: string;
+    amount: number;
+    bonus: number;
+    mode: 'sandbox' | 'live';
+    sandboxSimulation: boolean;
+  } | null>(null);
 
-  // Quick Promo Code state
-  const [couponInput, setCouponInput] = useState('');
-  const [couponLoading, setCouponLoading] = useState(false);
+  const [gatewayMethod, setGatewayMethod] = useState<'bKash' | 'Nagad' | 'Rocket' | 'Upay'>('bKash');
+  const [gatewayPhone, setGatewayPhone] = useState('01712345678');
+  const [gatewayOtp, setGatewayOtp] = useState('123456');
+  const [gatewayPin, setGatewayPin] = useState('12121');
+  const [isCompletingGateway, setIsCompletingGateway] = useState(false);
 
-  const selectedMethod = methods.find(m => m.id === selectedMethodId) || methods[0];
+  const bonusPercent = siteSettings.zinipayBonusPercent ?? 0;
+  const minDepositForBonus = siteSettings.minDepositForBonus || 500;
+  const numericAmount = parseFloat(amount) || 0;
+  const calculatedBonus =
+    bonusPercent > 0 && numericAmount >= minDepositForBonus
+      ? Math.floor((numericAmount * bonusPercent) / 100)
+      : 0;
 
-  const minForBonus = siteSettings.minDepositForBonus || 500;
-  const bonusAmount = amount >= minForBonus && selectedMethod.bonusPct > 0
-    ? Math.round(amount * (selectedMethod.bonusPct / 100))
-    : 0;
+  // Auto-detect redirect callback from ZiniPay (?zinipay_status=success&payment_id=...)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ziniStatus = params.get('zinipay_status');
+    const returnedPaymentId = params.get('payment_id');
+    if (!ziniStatus || !returnedPaymentId || payments.length === 0) return;
 
-  const handleCopyNumber = () => {
-    if (!selectedMethod.number) return;
-    navigator.clipboard.writeText(selectedMethod.number);
-    onShowToast(language === 'bn' ? 'নম্বর কপি করা হয়েছে!' : 'Account copied!', 'success');
-  };
+    const targetPayment = payments.find((p) => p.id === returnedPaymentId);
+    if (!targetPayment || targetPayment.status !== 'pending') return;
 
-  const handleRedeemQuickCoupon = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!profile) {
-      onOpenAuth();
-      return;
-    }
-    if (!couponInput.trim()) return;
-    setCouponLoading(true);
-    try {
-      const reward = await redeemCouponCode(couponInput, profile, coupons);
+    const cleanUrl = window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+
+    if (ziniStatus === 'success') {
+      handleVerifyZiniPayment(targetPayment);
+    } else if (ziniStatus === 'cancel') {
       onShowToast(
-        language === 'bn'
-          ? `প্রোমো কোড সফল! ৳${reward} আপনার ওয়ালেটে যুক্ত হয়েছে!`
-          : `Coupon redeemed! ৳${reward} added to your balance!`,
-        'success'
+        t('জিনিপে পেমেন্ট বাতিল করা হয়েছে।', 'ZiniPay payment was canceled.'),
+        'info'
       );
-      setCouponInput('');
-    } catch (err: any) {
-      onShowToast(err?.message || 'Failed to redeem promo code', 'error');
-    } finally {
-      setCouponLoading(false);
     }
-  };
+  }, [payments]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Direct ZiniPay Gateway Launch after entering amount
+  const handleProceedToZiniPay = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-
-    if (!profile) {
+    if (!user) {
       onOpenAuth();
       return;
     }
 
-    if (!selectedMethod.number) {
-      setError(
-        language === 'bn'
-          ? 'এই পেমেন্ট মেথডটির নম্বর এখনো অ্যাডমিন সেটিংস থেকে যুক্ত করা হয়নি।'
-          : 'This payment gateway account has not been configured by the administrator yet.'
+    if (!numericAmount || numericAmount < 10) {
+      onShowToast(
+        t('সর্বনিম্ন ১০ টাকা ডিপোজিট পরিমাণ লিখুন।', 'Please enter at least ৳10 to deposit.'),
+        'error'
       );
       return;
     }
 
-    if (amount < 50) {
-      setError(language === 'bn' ? 'সর্বনিম্ন ডিপোজিট ৫০ টাকা' : 'Minimum deposit is ৳50');
-      return;
-    }
-
-    if (!transactionId.trim()) {
-      setError(language === 'bn' ? 'ট্রানজেকশন আইডি (TrxID) দিন' : 'Please provide Transaction ID');
-      return;
-    }
-
-    setLoading(true);
+    setIsLaunchingGateway(true);
     try {
-      await submitDepositPayment({
-        userId: profile.uid,
-        userEmail: profile.email,
-        gateway: selectedMethod.id,
-        amount,
-        senderNumber: selectedMethod.id === 'Binance_USDT' ? 'USDT-WALLET' : senderNumber.trim(),
-        transactionId: transactionId.trim().toUpperCase(),
-        bonus: bonusAmount
+      const res = await createZiniPayCheckoutInvoice({
+        userId: user.uid,
+        userEmail: user.email || '',
+        cusName: profile?.displayName || (user.email ? user.email.split('@')[0] : 'Customer'),
+        amount: numericAmount,
+        bonus: calculatedBonus,
+        preferredMethod: 'bKash'
       });
 
-      onShowToast(
-        language === 'bn' 
-          ? 'ডিপোজিট রিকোয়েস্ট সার্ভারে সফলভাবে জমা হয়েছে!' 
-          : 'Deposit request submitted to server for verification.',
-        'success'
-      );
+      // If Live ZiniPay returned a real external payment_url, redirect directly to ZiniPay Gateway
+      if (!res.sandboxSimulation && res.paymentUrl && res.paymentUrl.startsWith('http')) {
+        onShowToast(
+          t('জিনিপে পেমেন্ট গেটওয়েতে নিয়ে যাওয়া হচ্ছে...', 'Redirecting to ZiniPay Payment Gateway...'),
+          'info'
+        );
+        window.location.href = res.paymentUrl;
+        return;
+      }
 
-      setSenderNumber('');
-      setTransactionId('');
+      // Otherwise open the ZiniPay Gateway Checkout Terminal directly
+      setActiveGatewaySession({
+        paymentId: res.paymentId,
+        invoiceId: res.invoiceId,
+        paymentUrl: res.paymentUrl,
+        amount: numericAmount,
+        bonus: calculatedBonus,
+        mode: res.mode,
+        sandboxSimulation: res.sandboxSimulation
+      });
     } catch (err: any) {
-      console.error(err);
-      setError(err?.message || 'Deposit submission failed');
+      onShowToast(
+        err?.message || t('জিনিপে পেমেন্ট শুরু করতে সমস্যা হয়েছে।', 'Failed to launch ZiniPay gateway.'),
+        'error'
+      );
     } finally {
-      setLoading(false);
+      setIsLaunchingGateway(false);
+    }
+  };
+
+  // Complete ZiniPay Gateway Checkout (Sandbox / Integrated Gateway Flow)
+  const handleCompleteZiniPayGateway = async () => {
+    if (!activeGatewaySession || !user) return;
+    setIsCompletingGateway(true);
+    try {
+      const sbxRes = await completeZiniPaySandboxSession({
+        invoiceId: activeGatewaySession.invoiceId,
+        paymentMethod: gatewayMethod,
+        senderNumber: gatewayPhone,
+        action: 'complete'
+      });
+
+      const targetPayment: SMMPayment = payments.find(
+        (p) => p.id === activeGatewaySession.paymentId
+      ) || {
+        id: activeGatewaySession.paymentId,
+        userId: user.uid,
+        userEmail: user.email || '',
+        gateway: 'ZiniPay',
+        amount: activeGatewaySession.amount,
+        bonus: activeGatewaySession.bonus,
+        transactionId: activeGatewaySession.invoiceId,
+        senderNumber: gatewayPhone,
+        status: 'pending',
+        zinipayInvoiceId: activeGatewaySession.invoiceId,
+        zinipayPaymentUrl: activeGatewaySession.paymentUrl,
+        zinipayMethod: gatewayMethod,
+        verificationMode: 'auto_zinipay',
+        createdAt: Date.now()
+      };
+
+      const verifyRes = await verifyAndCreditZiniPayInvoice({
+        payment: targetPayment,
+        referralCommissionPercent: siteSettings.referralCommissionPercent
+      });
+
+      if (verifyRes.verified) {
+        onShowToast(
+          t(
+            `পেমেন্ট সফল! ৳${activeGatewaySession.amount + activeGatewaySession.bonus} আপনার ওয়ালেটে যোগ হয়েছে (TrxID: ${sbxRes.transactionId || verifyRes.transactionId})`,
+            `Payment Successful! ৳${activeGatewaySession.amount + activeGatewaySession.bonus} added to your wallet (TrxID: ${sbxRes.transactionId || verifyRes.transactionId})`
+          ),
+          'success'
+        );
+        setActiveGatewaySession(null);
+        setIsDepositOpen(false);
+        setAmount('');
+      } else {
+        onShowToast(
+          t(`পেমেন্ট স্ট্যাটাস: ${verifyRes.status}`, `Payment status: ${verifyRes.status}`),
+          'info'
+        );
+      }
+    } catch (err: any) {
+      onShowToast(err?.message || 'ZiniPay payment failed', 'error');
+    } finally {
+      setIsCompletingGateway(false);
+    }
+  };
+
+  // Verify any pending ZiniPay deposit
+  const handleVerifyZiniPayment = async (payment: SMMPayment) => {
+    if (!user) return;
+    const invId = payment.zinipayInvoiceId || payment.transactionId;
+    if (!invId) return;
+
+    setVerifyingPaymentId(payment.id);
+    try {
+      const res = await verifyAndCreditZiniPayInvoice({
+        payment,
+        referralCommissionPercent: siteSettings.referralCommissionPercent
+      });
+
+      if (res.verified) {
+        onShowToast(
+          t(
+            `জিনিপে পেমেন্ট ভেরিফাইড! ৳${payment.amount + (payment.bonus || 0)} আপনার ব্যালেন্সে যোগ হয়েছে।`,
+            `ZiniPay payment verified! ৳${payment.amount + (payment.bonus || 0)} credited to your balance.`
+          ),
+          'success'
+        );
+      } else {
+        onShowToast(
+          t(
+            `পেমেন্ট এখনো সম্পন্ন হয়নি (${res.status})।`,
+            `Payment not completed yet (${res.status}).`
+          ),
+          'info'
+        );
+      }
+    } catch (err: any) {
+      onShowToast(err?.message || 'Verification failed', 'error');
+    } finally {
+      setVerifyingPaymentId(null);
     }
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-4 pb-8">
-      {/* Wallet Balance Hero */}
-      <div className="p-5 rounded-3xl bg-[#0d1322] border border-slate-800 shadow-xl flex items-center justify-between">
-        <div>
-          <span className="text-xs text-slate-400 block">
-            {language === 'bn' ? 'বর্তমান ওয়ালেট ব্যালেন্স' : 'Current Wallet Balance'}
-          </span>
-          <h2 className="text-3xl font-extrabold text-white mt-0.5 font-mono tabular-nums">
-            {profile ? formatPrice(profile.balance) : '৳০.০০'}
-          </h2>
-          <p className="text-xs text-emerald-400 mt-1 font-semibold flex items-center gap-1">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            {language === 'bn' ? 'ক্লাউড সার্ভার অ্যাটমিক ডিপোজিট ভেরিফিকেশন' : 'Server-verified atomic balance credit'}
-          </p>
-        </div>
-        <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
-          <Wallet className="w-6 h-6 stroke-[2.5]" />
-        </div>
-      </div>
+    <div className="max-w-xl mx-auto py-4 sm:py-8 px-2 sm:px-0 space-y-6">
+      {/* =====================================================================
+          CLEAN WALLET CARD: TOP BALANCE + DEPOSIT BUTTON -> AMOUNT INPUT
+         ===================================================================== */}
+      <div className="relative rounded-3xl bg-[#0D1220]/90 border border-white/[0.08] p-6 sm:p-9 shadow-[0_24px_60px_rgba(0,0,0,0.65)] backdrop-blur-2xl overflow-hidden">
+        <div className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 w-80 h-80 rounded-full bg-violet-600/15 blur-3xl" />
 
-      {/* Quick Promo / Gift Coupon Bar */}
-      <form onSubmit={handleRedeemQuickCoupon} className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 flex items-center gap-2">
-        <Gift className="w-4 h-4 text-rose-400 shrink-0 ml-1" />
-        <input
-          type="text"
-          value={couponInput}
-          onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-          placeholder={language === 'bn' ? 'প্রোমো বা গিফট কোড লিখুন...' : 'Enter Promo / Gift Code...'}
-          className="flex-1 bg-transparent text-xs font-mono text-white placeholder-slate-500 focus:outline-none min-w-0 uppercase"
-        />
-        <button
-          type="submit"
-          disabled={couponLoading || !couponInput.trim()}
-          className="py-1.5 px-3.5 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white font-bold text-xs whitespace-nowrap shrink-0 transition-all"
-        >
-          {couponLoading ? '...' : (language === 'bn' ? 'রিডিম' : 'Redeem')}
-        </button>
-      </form>
-
-      {/* Select Gateway */}
-      <div className="space-y-1.5">
-        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-          {language === 'bn' ? '১. পেমেন্ট মেথড নির্বাচন করুন' : '1. Select Gateway'}
-        </label>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {methods.map((m) => {
-            const isSelected = selectedMethodId === m.id;
-            return (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => setSelectedMethodId(m.id)}
-                className={`p-3 rounded-2xl border text-left transition-all active:scale-95 ${
-                  isSelected
-                    ? 'bg-rose-950/20 border-rose-500 shadow-sm'
-                    : 'bg-slate-900 border-slate-800 hover:border-slate-700'
-                }`}
-              >
-                <h4 className="text-xs font-bold text-white truncate">{m.name}</h4>
-                <p className="text-[10px] text-slate-400 truncate mt-0.5">{m.type}</p>
-                <span className="text-[10px] font-bold text-emerald-400 block mt-1">
-                  {m.bonus}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Instructions & Form */}
-      <form onSubmit={handleSubmit} className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl text-xs">
-        <div className="pb-3 border-b border-slate-800 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="font-bold text-white text-sm">
-              {selectedMethod.name}
-            </span>
-            <span className="text-[10px] font-semibold text-slate-400">
-              {selectedMethod.type}
-            </span>
+        <div className="relative z-10 flex flex-col items-center text-center">
+          {/* Subtle Label */}
+          <div className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.2em] text-slate-400 mb-3">
+            <Wallet className="w-3.5 h-3.5 text-cyan-400" />
+            <span>{t('ওয়ালেট ব্যালেন্স', 'Available Wallet Balance')}</span>
           </div>
 
-          {/* Copyable Account Box */}
-          <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <span className="text-[10px] text-slate-500 uppercase font-bold block">
-                {selectedMethod.id === 'Binance_USDT' ? 'USDT Wallet Address' : 'Merchant / Personal Account'}
-              </span>
-              {selectedMethod.number ? (
-                <span className="font-mono text-sm sm:text-base font-bold text-emerald-400 select-all break-all">
-                  {selectedMethod.number}
-                </span>
-              ) : (
-                <span className="text-xs text-amber-400 font-semibold">
-                  {language === 'bn'
-                    ? 'অ্যাডমিন প্যানেল (Settings) থেকে নম্বর সেট করুন'
-                    : 'Configure account number in Admin Settings'}
-                </span>
-              )}
-            </div>
-            {selectedMethod.number && (
-              <button
-                type="button"
-                onClick={handleCopyNumber}
-                className="py-1.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-750 text-white font-bold text-xs flex items-center gap-1 shrink-0"
-              >
-                <Copy className="w-3.5 h-3.5 text-sky-400" />
-                <span>{language === 'bn' ? 'কপি' : 'Copy'}</span>
-              </button>
+          {/* Main Balance Display */}
+          <div className="text-4xl sm:text-5xl font-display font-bold text-white font-mono tabular-nums tracking-tight my-1">
+            {formatPrice(profile?.balance || 0)}
+          </div>
+
+          <p className="text-xs text-slate-400 mt-1.5">
+            {t(
+              'জিনিপে অটোমেটিক পেমেন্ট গেটওয়ের মাধ্যমে তাৎক্ষণিক ফান্ড অ্যাড করুন',
+              'Instant automated wallet top-up powered by ZiniPay Gateway'
             )}
-          </div>
-
-          <p className="text-[11px] text-slate-400 leading-relaxed">
-            {selectedMethod.instruction}
           </p>
-        </div>
 
-        {/* Amount Input */}
-        <div className="space-y-1">
-          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-            {language === 'bn' ? 'টাকার পরিমাণ (BDT)' : 'Deposit Amount (BDT)'}
-          </label>
-          <input
-            type="number"
-            min={50}
-            max={100000}
-            required
-            value={amount}
-            onChange={(e) => setAmount(parseInt(e.target.value) || 0)}
-            className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500 rounded-2xl p-3 text-sm font-mono font-bold text-white focus:outline-none tabular-nums"
-          />
+          {/* Deposit Button (when input is closed) */}
+          {!isDepositOpen ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (!user) {
+                  onOpenAuth();
+                  return;
+                }
+                setIsDepositOpen(true);
+              }}
+              className="mt-7 w-full sm:w-auto min-w-[220px] inline-flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 text-white font-display font-bold text-sm tracking-wide shadow-[0_12px_32px_rgba(139,92,246,0.35)] transition-all active:scale-[0.99] cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>{t('ডিপোজিট করুন', 'Deposit Funds')}</span>
+            </button>
+          ) : (
+            /* Expandable Deposit Input Field */
+            <form
+              onSubmit={handleProceedToZiniPay}
+              className="w-full mt-7 pt-6 border-t border-white/[0.08] text-left space-y-4 animate-in fade-in slide-in-from-top-2 duration-200"
+            >
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                  {t('ডিপোজিট টাকার পরিমাণ লিখুন (৳)', 'Enter Deposit Amount (BDT)')}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsDepositOpen(false)}
+                  className="text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  {t('বন্ধ করুন', 'Cancel')}
+                </button>
+              </div>
 
-          {/* Presets */}
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            {[100, 300, 500, 1000, 2000, 5000].map(val => (
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-mono font-bold text-cyan-400">
+                  ৳
+                </span>
+                <input
+                  type="number"
+                  min="10"
+                  step="any"
+                  autoFocus
+                  required
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder={t('টাকার পরিমাণ লিখুন (যেমন: 500)', 'Enter amount (e.g. 500)')}
+                  className="w-full pl-11 pr-4 py-4 rounded-2xl bg-[#080B14] border border-white/15 focus:border-cyan-400/60 text-xl font-mono font-bold text-white placeholder:text-slate-600 placeholder:text-sm placeholder:font-sans focus:outline-none transition-colors tabular-nums"
+                />
+              </div>
+
+              {/* Quick Amount Chips */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {[100, 300, 500, 1000, 2000].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setAmount(String(preset))}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-mono font-semibold border transition-all cursor-pointer ${
+                      Number(amount) === preset
+                        ? 'bg-cyan-500/15 border-cyan-400/50 text-cyan-300'
+                        : 'bg-[#080B14]/70 border-white/[0.07] text-slate-400 hover:text-white hover:border-white/20'
+                    }`}
+                  >
+                    ৳{preset}
+                  </button>
+                ))}
+              </div>
+
+              {calculatedBonus > 0 && (
+                <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300">
+                  <span>{t('ডিপোজিট বোনাস যোগ হবে', 'Bonus Included')}</span>
+                  <span className="font-mono font-bold">+৳{calculatedBonus}</span>
+                </div>
+              )}
+
               <button
-                key={val}
-                type="button"
-                onClick={() => setAmount(val)}
-                className="py-1 px-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-xs font-bold text-slate-300 active:scale-95 transition-all"
+                type="submit"
+                disabled={isLaunchingGateway}
+                className="w-full py-4 rounded-2xl bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 disabled:opacity-50 text-white font-display font-bold text-sm tracking-wide shadow-[0_12px_32px_rgba(34,211,238,0.25)] transition-all flex items-center justify-center gap-2.5 cursor-pointer"
               >
-                ৳{val}
+                {isLaunchingGateway ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>{t('জিনিপে গেটওয়ে ওপেন হচ্ছে...', 'Connecting to ZiniPay...')}</span>
+                  </>
+                ) : (
+                  <>
+                    <span>{t('জিনিপে পেমেন্ট গেটওয়েতে যান', 'Proceed to ZiniPay Gateway')}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
-            ))}
-          </div>
-
-          {bonusAmount > 0 && (
-            <p className="text-[11px] text-emerald-400 font-semibold pt-1">
-              +৳{bonusAmount} ক্যাশব্যাক বোনাস সহ মোট ক্রেডিট: ৳{amount + bonusAmount}
-            </p>
+            </form>
           )}
         </div>
+      </div>
 
-        {/* Sender Number */}
-        {selectedMethod.id !== 'Binance_USDT' && (
-          <div className="space-y-1">
-            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-              {language === 'bn' ? 'যে নম্বর থেকে টাকা পাঠিয়েছেন' : 'Your Sender Number'}
-            </label>
-            <input
-              type="text"
-              required
-              placeholder="01XXXXXXXXX"
-              value={senderNumber}
-              onChange={(e) => setSenderNumber(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500 rounded-2xl p-3 text-xs text-white focus:outline-none"
-            />
+      {/* =====================================================================
+          MINIMAL RECENT DEPOSITS LIST
+         ===================================================================== */}
+      {payments.length > 0 && (
+        <div className="rounded-3xl bg-[#0D1220]/75 border border-white/[0.07] p-5 sm:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-display font-bold text-white">
+              {t('সাম্প্রতিক ডিপোজিট', 'Recent Deposits')}
+            </h3>
+            <span className="text-xs text-slate-500 font-mono tabular-nums">
+              {payments.length} {t('টি লেনদেন', 'transactions')}
+            </span>
           </div>
-        )}
 
-        {/* TrxID */}
-        <div className="space-y-1">
-          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-            {language === 'bn' ? 'ট্রানজেকশন আইডি (TrxID)' : 'Transaction ID (TrxID)'}
-          </label>
-          <input
-            type="text"
-            required
-            placeholder="e.g. BIK9283K9X"
-            value={transactionId}
-            onChange={(e) => setTransactionId(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500 rounded-2xl p-3 text-xs font-mono text-white placeholder-slate-600 focus:outline-none"
-          />
+          <div className="divide-y divide-white/[0.06]">
+            {payments.slice(0, 6).map((p) => {
+              const isPendingZini =
+                p.status === 'pending' && (p.gateway === 'ZiniPay' || Boolean(p.zinipayInvoiceId));
+              return (
+                <div
+                  key={p.id}
+                  className="py-3 first:pt-0 last:pb-0 flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-mono font-bold text-white tabular-nums">
+                        ৳{p.amount.toLocaleString()}
+                      </span>
+                      {p.bonus && p.bonus > 0 ? (
+                        <span className="text-xs font-mono text-emerald-400">+৳{p.bonus}</span>
+                      ) : null}
+                      <span className="text-xs text-slate-500">·</span>
+                      <span className="text-xs text-slate-400">{p.gateway}</span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-mono truncate mt-0.5">
+                      {p.transactionId} · {new Date(p.createdAt).toLocaleDateString()}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {isPendingZini && (
+                      <button
+                        type="button"
+                        disabled={verifyingPaymentId === p.id}
+                        onClick={() => handleVerifyZiniPayment(p)}
+                        className="px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/30 text-[11px] font-semibold text-cyan-300 flex items-center gap-1 cursor-pointer"
+                      >
+                        <RefreshCw
+                          className={`w-3 h-3 ${verifyingPaymentId === p.id ? 'animate-spin' : ''}`}
+                        />
+                        <span>{t('ভেরিফাই', 'Verify')}</span>
+                      </button>
+                    )}
+
+                    {p.status === 'approved' ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-400">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>{t('সম্পন্ন', 'Completed')}</span>
+                      </span>
+                    ) : p.status === 'rejected' ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-rose-400">
+                        <XCircle className="w-3.5 h-3.5" />
+                        <span>{t('বাতিল', 'Canceled')}</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-400">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>{t('পেন্ডিং', 'Pending')}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
+      )}
 
-        {error && (
-          <div className="p-3 rounded-2xl bg-rose-950/60 border border-rose-800 text-rose-200 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full py-4 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-extrabold text-sm shadow-xl active:scale-98 transition-all flex items-center justify-center gap-2 min-h-[48px] disabled:opacity-50"
-        >
-          <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
-          <span>{loading ? 'সার্ভারে জমা হচ্ছে...' : (language === 'bn' ? 'পেমেন্ট জমা দিন' : 'Submit Deposit')}</span>
-        </button>
-      </form>
-
-      {/* History */}
-      <div className="p-4 rounded-3xl bg-slate-900 border border-slate-800 space-y-2.5">
-        <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-          {language === 'bn' ? 'ডিপোজিট হিস্টোরি' : 'Deposit Records'}
-        </h3>
-
-        {payments.length === 0 ? (
-          <p className="text-xs text-slate-500 text-center py-4">
-            {language === 'bn' ? 'কোনো ডিপোজিট রেকর্ড নেই' : 'No deposits on record yet'}
-          </p>
-        ) : (
-          <div className="space-y-2 max-h-56 overflow-y-auto no-scrollbar">
-            {payments.map((p) => (
-              <div
-                key={p.id}
-                className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs"
-              >
+      {/* =====================================================================
+          ZINIPAY PAYMENT GATEWAY CHECKOUT SCREEN (OPENS DIRECTLY ON PROCEED)
+         ===================================================================== */}
+      {activeGatewaySession && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md rounded-3xl bg-[#0D1220] border border-cyan-500/30 shadow-[0_25px_70px_rgba(0,0,0,0.85)] overflow-hidden">
+            {/* ZiniPay Gateway Header */}
+            <div className="bg-gradient-to-r from-[#141B2B] via-[#192337] to-[#141B2B] px-6 py-5 border-b border-white/[0.08] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-violet-600 flex items-center justify-center text-white font-display font-bold text-lg shadow-md">
+                  Z
+                </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-white">{p.gateway}</span>
-                    <span className="text-[10px] font-mono text-slate-400">Trx: {p.transactionId}</span>
+                    <h4 className="text-sm font-display font-bold text-white">ZiniPay Checkout</h4>
+                    <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                      {activeGatewaySession.mode === 'live' ? 'LIVE' : 'GATEWAY'}
+                    </span>
                   </div>
-                  <p className="text-[10px] text-slate-500 mt-0.5">
-                    {new Date(p.createdAt).toLocaleString()}
+                  <p className="text-[11px] text-slate-400 font-mono">
+                    Invoice: {activeGatewaySession.invoiceId}
                   </p>
                 </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveGatewaySession(null)}
+                className="p-1.5 rounded-xl bg-white/[0.05] text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-                <div className="text-right">
-                  <span className="font-bold text-emerald-400 block font-mono tabular-nums">
-                    ৳{p.amount.toLocaleString()}
-                  </span>
-                  <span className={`capitalize font-bold text-[10px] ${
-                    p.status === 'approved' ? 'text-emerald-400' :
-                    p.status === 'rejected' ? 'text-rose-400' : 'text-amber-400'
-                  }`}>
-                    {p.status}
-                  </span>
+            <div className="p-6 space-y-5">
+              {/* Payable Total Banner */}
+              <div className="flex items-center justify-between px-4 py-3.5 rounded-2xl bg-[#080B14] border border-white/[0.07]">
+                <div>
+                  <div className="text-[11px] text-slate-400">
+                    {t('পরিশোধযোগ্য পরিমাণ', 'Payable Amount')}
+                  </div>
+                  <div className="text-xs text-slate-500 font-mono mt-0.5">
+                    {siteSettings.siteName || 'AmarTrend SMM'}
+                  </div>
+                </div>
+                <div className="text-2xl font-display font-bold text-cyan-400 font-mono tabular-nums">
+                  ৳{activeGatewaySession.amount.toLocaleString()}
                 </div>
               </div>
-            ))}
+
+              {!activeGatewaySession.sandboxSimulation ? (
+                <div className="space-y-4 text-center py-3">
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    {t(
+                      'নিচের বাটনে ক্লিক করে জিনিপে পেমেন্ট সম্পন্ন করুন। পেমেন্ট শেষ হলে অটোমেটিক আপনার ব্যালেন্স যোগ হবে।',
+                      'Complete your payment on ZiniPay. Your balance will be credited automatically.'
+                    )}
+                  </p>
+                  <a
+                    href={activeGatewaySession.paymentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-violet-600 text-white font-display font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg"
+                  >
+                    <span>{t('জিনিপে পেমেন্ট পেজ খুলুন', 'Open ZiniPay Checkout')}</span>
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                </div>
+              ) : (
+                /* ZiniPay Gateway Method & Instant Checkout Flow */
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                      {t('পেমেন্ট মেথড নির্বাচন করুন', 'Select Mobile Banking')}
+                    </label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {(['bKash', 'Nagad', 'Rocket', 'Upay'] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setGatewayMethod(m)}
+                          className={`py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                            gatewayMethod === m
+                              ? 'bg-cyan-500/20 border-cyan-400 text-white'
+                              : 'bg-[#080B14] border-white/[0.08] text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-[11px] text-slate-400 mb-1">
+                        {gatewayMethod} {t('অ্যাকাউন্ট নম্বর', 'Account Number')}
+                      </label>
+                      <input
+                        type="text"
+                        value={gatewayPhone}
+                        onChange={(e) => setGatewayPhone(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#080B14] border border-white/10 text-sm font-mono text-white focus:outline-none focus:border-cyan-400/50"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">OTP</label>
+                        <input
+                          type="text"
+                          value={gatewayOtp}
+                          onChange={(e) => setGatewayOtp(e.target.value)}
+                          className="w-full px-3.5 py-2 rounded-xl bg-[#080B14] border border-white/10 text-xs font-mono text-white focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">PIN</label>
+                        <input
+                          type="password"
+                          value={gatewayPin}
+                          onChange={(e) => setGatewayPin(e.target.value)}
+                          className="w-full px-3.5 py-2 rounded-xl bg-[#080B14] border border-white/10 text-xs font-mono text-white focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isCompletingGateway}
+                    onClick={handleCompleteZiniPayGateway}
+                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 disabled:opacity-50 text-slate-950 font-display font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+                  >
+                    {isCompletingGateway ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>{t('পেমেন্ট প্রসেস হচ্ছে...', 'Processing Payment...')}</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>
+                          {t(
+                            `পেমেন্ট সম্পন্ন করুন (৳${activeGatewaySession.amount})`,
+                            `Confirm Payment (৳${activeGatewaySession.amount})`
+                          )}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between text-[11px] text-slate-500">
+                <span className="inline-flex items-center gap-1">
+                  <Lock className="w-3 h-3 text-emerald-400" />
+                  <span>Secured by ZiniPay Gateway</span>
+                </span>
+                <span className="font-mono">SSL 256-Bit</span>
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };
