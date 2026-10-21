@@ -70,10 +70,13 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
 
     const keywords = siteSettings.seoKeywords?.trim() || DEFAULT_BD_SEO_KEYWORDS_STRING;
 
-    // Route-aware title, description, and canonical path
+    // Route-aware title, description, breadcrumb name, robots policy, and canonical URL
     let pageTitle = baseTitle;
     let pageDescription = baseDescription;
     let canonicalUrl = `${baseOrigin}/`;
+    let breadcrumbLabel = 'Home';
+    let robotsDirective = 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
+    let pageSchemaType = 'WebPage';
 
     const activeCategory = navParams?.category ? String(navParams.category).trim() : '';
 
@@ -82,23 +85,77 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
         pageTitle = `Buy ${activeCategory} Services in Bangladesh (bKash/Nagad) | ${brandName}`;
         pageDescription = `বাংলাদেশে সবচেয়ে কম দামে ${activeCategory} Followers, Views, Watchtime ও Monetization সার্ভিস নিন। বিকাশ ও নগদে অটোমেটিক পেমেন্ট ও ইনস্ট্যান্ট ডেলিভারি।`;
         canonicalUrl = `${baseOrigin}/?tab=services&category=${encodeURIComponent(activeCategory)}`;
+        breadcrumbLabel = `${activeCategory} SMM Services BD`;
       } else {
         pageTitle = `SMM Services & BDT Price List Bangladesh (bKash/Nagad) | ${brandName}`;
         pageDescription = `লাইভ SMM সার্ভিস ক্যাটালগ ও বাংলাদেশের সর্বনিম্ন রেট লিস্ট (BDT)। Facebook Monetization, YouTube 4000h Watchtime, TikTok Views ও Instagram Followers।`;
         canonicalUrl = `${baseOrigin}/?tab=services`;
+        breadcrumbLabel = 'Services & Price List';
       }
     } else if (currentTab === 'api' || currentTab === 'api-docs') {
       pageTitle = `Wholesale SMM Reseller API v2 Provider Bangladesh | ${brandName}`;
       pageDescription = `বাংলাদেশের রিসেলার ও এজেন্সিগুলোর জন্য হাই-স্পিড SMM REST API v2। অটোমেটিক অর্ডার ডিসপ্যাচ, রিফিল ও বিকাশ/নগদ ওয়ালেট গেটওয়ে।`;
       canonicalUrl = `${baseOrigin}/?tab=api`;
-    } else if (currentTab === 'track') {
+      breadcrumbLabel = 'Developer API v2';
+    } else if (currentTab === 'track' || currentTab === 'track-order') {
       pageTitle = `Live SMM Order Tracker Bangladesh | ${brandName}`;
       pageDescription = `আপনার অর্ডার আইডি দিয়ে রিয়েল-টাইম স্টার্ট কাউন্ট, ডেলিভারি প্রগ্রেস এবং রিমেইনস স্ট্যাটাস ট্র্যাক করুন।`;
       canonicalUrl = `${baseOrigin}/?tab=track`;
+      breadcrumbLabel = 'Live Order Tracker';
     } else if (currentTab === 'add-funds') {
-      pageTitle = `Instant bKash & Nagad Auto Deposit Wallet | ${brandName}`;
+      pageTitle = `Instant bKash & Nagad Auto Deposit Wallet (ZiniPay) | ${brandName}`;
       pageDescription = `ZiniPay অটোমেটিক পেমেন্ট গেটওয়ের মাধ্যমে বিকাশ, নগদ, রকেট ও উপায়ে ১ ক্লিকে তাৎক্ষণিক ওয়ালেট ডিপোজিট করুন।`;
       canonicalUrl = `${baseOrigin}/?tab=add-funds`;
+      breadcrumbLabel = 'bKash & Nagad Auto Deposit';
+    } else if (currentTab === 'new-order') {
+      pageTitle = `Place Instant SMM Order in Bangladesh (bKash/Nagad) | ${brandName}`;
+      pageDescription = `ফেসবুক মনিটাইজেশন, ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম ও টিকটক ভিউ অর্ডার করুন তাৎক্ষণিক অটোমেটিক ডেলিভারিতে।`;
+      canonicalUrl = `${baseOrigin}/?tab=new-order`;
+      breadcrumbLabel = 'New Order';
+    } else if (currentTab === 'affiliates') {
+      pageTitle = `SMM Reseller Affiliate Program & Promo Vouchers BD | ${brandName}`;
+      pageDescription = `বন্ধুদের রেফার করে আজীবন কমিশন আয় করুন এবং ফ্রি প্রোমো ভাউচার কোড রিডিম করে ওয়ালেট ব্যালেন্স নিন।`;
+      canonicalUrl = `${baseOrigin}/?tab=affiliates`;
+      breadcrumbLabel = 'Affiliates & Vouchers';
+    } else if (currentTab === 'about') {
+      pageTitle = `About ${brandName} – #1 Automated bKash Nagad SMM Panel Bangladesh`;
+      pageDescription = `${brandName} সম্পর্কে জানুন — বাংলাদেশের ১ নম্বর অটোমেটিক SMM ও মনিটাইজেশন ইনফ্রাস্ট্রাকচার। ZiniPay ইনস্ট্যান্ট পেমেন্ট ও ক্লাউড API v2।`;
+      canonicalUrl = `${baseOrigin}/?tab=about`;
+      breadcrumbLabel = 'About Us';
+      pageSchemaType = 'AboutPage';
+    } else if (currentTab === 'contact') {
+      pageTitle = `Contact Us & 24/7 Bangladesh Help Center | ${brandName}`;
+      pageDescription = `অর্ডার রিফিল, ZiniPay বিকাশ/নগদ পেমেন্ট অথবা রিসেলার API v2 সাপোর্টের জন্য আমাদের ২৪/৭ বাংলাদেশ কাস্টমার হেল্প সেন্টারে যোগাযোগ করুন।`;
+      canonicalUrl = `${baseOrigin}/?tab=contact`;
+      breadcrumbLabel = 'Contact & Help Center';
+      pageSchemaType = 'ContactPage';
+    } else if (currentTab === 'terms') {
+      pageTitle = `Terms of Service & Usage Rules | ${brandName} Bangladesh`;
+      pageDescription = `${brandName}-এ অর্ডার প্লেসমেন্ট, পাবলিক লিংক নিয়মাবলী, ZiniPay ওয়ালেট ডিপোজিট এবং REST API v2 ব্যবহারের অফিশিয়াল শর্তাবলী।`;
+      canonicalUrl = `${baseOrigin}/?tab=terms`;
+      breadcrumbLabel = 'Terms of Service';
+    } else if (currentTab === 'privacy') {
+      pageTitle = `Privacy Policy & Zero-Password Security | ${brandName} Bangladesh`;
+      pageDescription = `আমাদের জিরো-পাসওয়ার্ড সিকিউরিটি পলিসি, ZiniPay এনক্রিপ্টেড বিকাশ/নগদ ট্রানজেকশন এবং ক্লায়েন্ট ডাটা গোপনীয়তা নীতিমালা।`;
+      canonicalUrl = `${baseOrigin}/?tab=privacy`;
+      breadcrumbLabel = 'Privacy Policy';
+    } else if (currentTab === 'refund') {
+      pageTitle = `100% Automated Refund, Cancel & Refill Policy | ${brandName} BD`;
+      pageDescription = `অর্ডার ক্যানসেল হলে ১০০% সম্পূর্ণ রিফান্ড এবং পার্শিয়াল (Partial) অর্ডারে অবশিষ্ট ইউনিটের টাকা স্বয়ংক্রিয়ভাবে ওয়ালেটে ফেরত পাওয়ার গ্যারান্টি।`;
+      canonicalUrl = `${baseOrigin}/?tab=refund`;
+      breadcrumbLabel = 'Refund & Refill Policy';
+    } else if (currentTab === '404') {
+      pageTitle = `404 Page Not Found | ${brandName} Bangladesh`;
+      pageDescription = `কাঙ্ক্ষিত পেজটি খুঁজে পাওয়া যায়নি। বাংলাদেশের সেরা অটোমেটিক SMM সার্ভিস ক্যাটালগ ও অর্ডার ট্র্যাকারে ফিরে যান।`;
+      canonicalUrl = `${baseOrigin}/`;
+      breadcrumbLabel = '404 Not Found';
+      robotsDirective = 'noindex, follow';
+    } else if (currentTab === 'maintenance') {
+      pageTitle = `Scheduled System Maintenance | ${brandName} Bangladesh`;
+      pageDescription = `আমাদের ক্লাউড API v2 এবং ZiniPay পেমেন্ট গেটওয়ে আপগ্রেডের কাজ চলছে। খুব শীঘ্রই সকল সার্ভিস পুনরায় সচল হবে।`;
+      canonicalUrl = `${baseOrigin}/`;
+      breadcrumbLabel = 'System Maintenance';
+      robotsDirective = 'noindex, follow';
     }
 
     document.title = pageTitle;
@@ -106,6 +163,8 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
     // Update standard & social meta tags
     upsertMetaTag('name', 'description', pageDescription);
     upsertMetaTag('name', 'keywords', keywords);
+    upsertMetaTag('name', 'robots', robotsDirective);
+    upsertMetaTag('name', 'googlebot', robotsDirective);
     upsertMetaTag('property', 'og:title', pageTitle);
     upsertMetaTag('property', 'og:description', pageDescription);
     upsertMetaTag('property', 'og:url', canonicalUrl);
@@ -163,9 +222,43 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
       }
     }));
 
+    const breadcrumbItems: any[] = [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: `${brandName} Bangladesh`,
+        item: `${baseOrigin}/`
+      }
+    ];
+
+    if (currentTab !== 'landing' && currentTab !== 'home') {
+      breadcrumbItems.push({
+        '@type': 'ListItem',
+        position: 2,
+        name: breadcrumbLabel,
+        item: canonicalUrl
+      });
+    }
+
     const jsonLdGraph: Record<string, any> = {
       '@context': 'https://schema.org',
       '@graph': [
+        {
+          '@type': pageSchemaType,
+          '@id': `${canonicalUrl}#webpage`,
+          url: canonicalUrl,
+          name: pageTitle,
+          description: pageDescription,
+          inLanguage: ['bn-BD', 'en'],
+          isPartOf: {
+            '@id': `${baseOrigin}/#webapp`
+          }
+        },
+        {
+          '@type': 'BreadcrumbList',
+          '@id': `${canonicalUrl}#breadcrumb`,
+          itemListElement: breadcrumbItems
+        },
         {
           '@type': 'WebApplication',
           '@id': `${baseOrigin}/#webapp`,
@@ -201,6 +294,15 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
           url: `${baseOrigin}/`,
           areaServed: 'BD',
           knowsLanguage: ['bn-BD', 'en'],
+          contactPoint: [
+            {
+              '@type': 'ContactPoint',
+              contactType: 'customer support',
+              areaServed: 'BD',
+              availableLanguage: ['Bengali', 'English'],
+              url: `${baseOrigin}/?tab=contact`
+            }
+          ],
           ...(siteSettings.whatsappUrl || siteSettings.telegramUrl
             ? {
                 sameAs: [siteSettings.whatsappUrl, siteSettings.telegramUrl].filter(Boolean)

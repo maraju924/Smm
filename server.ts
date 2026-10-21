@@ -8,8 +8,15 @@ import {
   collection,
   getDocs,
   doc,
-  getDoc
+  getDoc,
+  setLogLevel
 } from 'firebase/firestore';
+
+try {
+  setLogLevel('silent');
+} catch {
+  // ignore
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -184,6 +191,28 @@ app.use(express.urlencoded({ extended: true, limit: '5mb' }));
   app.post('/api/provider/clear-logs', (_req: Request, res: Response) => {
     apiTrafficLogs.length = 0;
     res.json({ status: 'success' });
+  });
+
+  // In-memory server fallback cache for SiteSettings when Firestore write quota is reached
+  let serverSettingsCache: Record<string, any> = {};
+
+  app.get('/api/settings', async (_req: Request, res: Response) => {
+    try {
+      const snap = await getDoc(doc(serverDb, 'settings', 'global'));
+      if (snap.exists()) {
+        serverSettingsCache = { ...(snap.data() || {}), ...serverSettingsCache };
+      }
+    } catch {
+      // use cached settings
+    }
+    res.json({ status: 'success', settings: serverSettingsCache });
+  });
+
+  app.post('/api/settings', (req: Request, res: Response) => {
+    if (req.body && typeof req.body === 'object') {
+      serverSettingsCache = { ...serverSettingsCache, ...req.body, updatedAt: Date.now() };
+    }
+    res.json({ status: 'success', settings: serverSettingsCache });
   });
 
   // ============================================================================
@@ -2347,10 +2376,16 @@ app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
       const staticEntries = [
         { loc: `${baseOrigin}/`, priority: '1.0', changefreq: 'daily' },
-        { loc: `${baseOrigin}/?tab=services`, priority: '0.9', changefreq: 'hourly' },
-        { loc: `${baseOrigin}/?tab=api`, priority: '0.8', changefreq: 'weekly' },
-        { loc: `${baseOrigin}/?tab=track`, priority: '0.8', changefreq: 'daily' },
-        { loc: `${baseOrigin}/?tab=add-funds`, priority: '0.7', changefreq: 'weekly' }
+        { loc: `${baseOrigin}/?tab=services`, priority: '0.95', changefreq: 'hourly' },
+        { loc: `${baseOrigin}/?tab=about`, priority: '0.85', changefreq: 'monthly' },
+        { loc: `${baseOrigin}/?tab=contact`, priority: '0.85', changefreq: 'weekly' },
+        { loc: `${baseOrigin}/?tab=refund`, priority: '0.80', changefreq: 'monthly' },
+        { loc: `${baseOrigin}/?tab=terms`, priority: '0.70', changefreq: 'monthly' },
+        { loc: `${baseOrigin}/?tab=privacy`, priority: '0.70', changefreq: 'monthly' },
+        { loc: `${baseOrigin}/?tab=api`, priority: '0.85', changefreq: 'weekly' },
+        { loc: `${baseOrigin}/?tab=track`, priority: '0.80', changefreq: 'daily' },
+        { loc: `${baseOrigin}/?tab=add-funds`, priority: '0.80', changefreq: 'weekly' },
+        { loc: `${baseOrigin}/?tab=affiliates`, priority: '0.75', changefreq: 'weekly' }
       ];
 
       const categoryEntries = categories.map((cat) => ({
@@ -2410,11 +2445,20 @@ ${allUrls
     const robotsContent = `User-agent: *
 Allow: /
 Allow: /?tab=services
+Allow: /?tab=about
+Allow: /?tab=contact
+Allow: /?tab=refund
+Allow: /?tab=terms
+Allow: /?tab=privacy
 Allow: /?tab=api
 Allow: /?tab=track
+Allow: /?tab=add-funds
+Allow: /?tab=affiliates
 Disallow: /api/provider/
 Disallow: /api/zinipay/
 Disallow: /?tab=admin
+Disallow: /?tab=404
+Disallow: /?tab=maintenance
 
 Sitemap: ${baseOrigin}/sitemap.xml
 `;

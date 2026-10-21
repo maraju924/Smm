@@ -17,7 +17,13 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { UserProfile, Currency, Language } from '../types';
-import { handleFirestoreError, OperationType } from '../firebase/error-handler';
+import {
+  handleFirestoreError,
+  OperationType,
+  isFirestoreQuotaExhausted,
+  isQuotaError,
+  markFirestoreQuotaExhausted
+} from '../firebase/error-handler';
 import { sanitizeForFirestore } from '../services/db';
 
 interface AuthContextType {
@@ -74,48 +80,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const setCurrency = async (c: Currency) => {
+    if (c === currency) return;
     setCurrencyState(c);
-    if (user) {
+    if (user && !isFirestoreQuotaExhausted()) {
       try {
         await setDoc(doc(db, 'users', user.uid), sanitizeForFirestore({
           currency: c,
           updatedAt: Date.now()
         }), { merge: true });
       } catch (e) {
-        console.error('Failed to sync currency preference to server:', e);
+        if (isQuotaError(e)) markFirestoreQuotaExhausted();
       }
     }
   };
 
   const setLanguage = async (l: Language) => {
+    if (l === language) return;
     setLanguageState(l);
-    if (user) {
+    if (user && !isFirestoreQuotaExhausted()) {
       try {
         await setDoc(doc(db, 'users', user.uid), sanitizeForFirestore({
           language: l,
           updatedAt: Date.now()
         }), { merge: true });
       } catch (e) {
-        console.error('Failed to sync language preference to server:', e);
+        if (isQuotaError(e)) markFirestoreQuotaExhausted();
       }
     }
   };
 
   const setDarkMode = async (d: boolean) => {
+    if (d === darkMode) return;
     setDarkModeState(d);
     if (d) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-    if (user) {
+    if (user && !isFirestoreQuotaExhausted()) {
       try {
         await setDoc(doc(db, 'users', user.uid), sanitizeForFirestore({
           darkMode: d,
           updatedAt: Date.now()
         }), { merge: true });
       } catch (e) {
-        console.error('Failed to sync theme preference to server:', e);
+        if (isQuotaError(e)) markFirestoreQuotaExhausted();
       }
     }
   };
@@ -140,7 +149,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const data = docSnap.data() as UserProfile;
             const isEmailAdmin = isSuperAdminEmail(currentUser.email);
 
-            if (isEmailAdmin && data.role !== 'admin') {
+            if (isEmailAdmin && data.role !== 'admin' && !isFirestoreQuotaExhausted()) {
               try {
                 await setDoc(userRef, { role: 'admin' }, { merge: true });
                 await setDoc(doc(db, 'admins', currentUser.uid), {
@@ -148,21 +157,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   active: true
                 }, { merge: true });
               } catch (e) {
-                console.error('Error upgrading admin doc:', e);
+                if (isQuotaError(e)) markFirestoreQuotaExhausted();
               }
             }
 
             if (data.currency) setCurrencyState(data.currency);
             if (data.language) setLanguageState(data.language);
             if (data.darkMode !== undefined) setDarkModeState(data.darkMode);
-
-            // Sync API key lookup index on server for external /api/v2 requests
-            if (data.apiKey) {
-              setDoc(doc(db, 'api_keys', data.apiKey), {
-                uid: currentUser.uid,
-                updatedAt: Date.now()
-              }, { merge: true }).catch(() => {});
-            }
 
             setProfile({
               ...data,
@@ -192,27 +193,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               updatedAt: Date.now()
             };
 
-            try {
-              await setDoc(userRef, sanitizeForFirestore(newProfile));
-              await setDoc(doc(db, 'api_keys', newProfile.apiKey), {
-                uid: currentUser.uid,
-                updatedAt: Date.now()
-              }, { merge: true });
-              if (isEmailAdmin) {
-                await setDoc(doc(db, 'admins', currentUser.uid), {
-                  email: currentUser.email,
-                  active: true
+            if (!isFirestoreQuotaExhausted()) {
+              try {
+                await setDoc(userRef, sanitizeForFirestore(newProfile));
+                await setDoc(doc(db, 'api_keys', newProfile.apiKey), {
+                  uid: currentUser.uid,
+                  updatedAt: Date.now()
                 }, { merge: true });
+                if (isEmailAdmin) {
+                  await setDoc(doc(db, 'admins', currentUser.uid), {
+                    email: currentUser.email,
+                    active: true
+                  }, { merge: true });
+                }
+              } catch (err) {
+                if (isQuotaError(err)) markFirestoreQuotaExhausted();
               }
-              setProfile(newProfile);
-            } catch (err) {
-              console.error('Failed to create user profile on server:', err);
-              setProfile(newProfile);
             }
+            setProfile(newProfile);
           }
           setLoading(false);
-        }, (error) => {
-          console.error('User doc snapshot error:', error);
+        }, () => {
           setLoading(false);
         });
 

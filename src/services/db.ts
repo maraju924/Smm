@@ -13,7 +13,13 @@ import {
   runTransaction
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { handleFirestoreError, OperationType } from '../firebase/error-handler';
+import {
+  handleFirestoreError,
+  OperationType,
+  isFirestoreQuotaExhausted,
+  isQuotaError,
+  markFirestoreQuotaExhausted
+} from '../firebase/error-handler';
 import { 
   SMMService, 
   SMMOrder, 
@@ -365,9 +371,21 @@ export async function updateOrderStatus(
   customRemains?: number
 ): Promise<void> {
   const path = `orders/${orderId}`;
+  if (isFirestoreQuotaExhausted()) return;
+
   try {
     const startCount = customStartCount !== undefined ? customStartCount : (orderData?.startCount ?? 0);
     const remains = customRemains !== undefined ? customRemains : (status === 'completed' ? 0 : (orderData?.remains ?? orderData?.quantity ?? 0));
+
+    // Skip write if nothing changed at all
+    if (
+      orderData &&
+      orderData.status === status &&
+      (orderData.startCount ?? 0) === startCount &&
+      (orderData.remains ?? 0) === remains
+    ) {
+      return;
+    }
 
     // Calculate refund if Canceled or Partial (and wasn't already refunded)
     let refundAmount = 0;
@@ -1595,15 +1613,21 @@ export async function pingProviderOnServer(provider: SMMProvider): Promise<{
     throw new Error(data.error || 'Provider connection test failed');
   }
 
-  await setDoc(doc(db, 'providers', provider.id), sanitizeForFirestore({
-    ...provider,
-    status: 'active',
-    balance: Number(data.balance ?? provider.balance),
-    currency: data.currency || provider.currency,
-    lastLatencyMs: Number(data.latencyMs || 0),
-    ...(data.totalRemoteServices !== undefined ? { totalRemoteServices: Number(data.totalRemoteServices) } : {}),
-    lastSyncAt: Date.now()
-  }), { merge: true });
+  if (!isFirestoreQuotaExhausted()) {
+    try {
+      await setDoc(doc(db, 'providers', provider.id), sanitizeForFirestore({
+        ...provider,
+        status: 'active',
+        balance: Number(data.balance ?? provider.balance),
+        currency: data.currency || provider.currency,
+        lastLatencyMs: Number(data.latencyMs || 0),
+        ...(data.totalRemoteServices !== undefined ? { totalRemoteServices: Number(data.totalRemoteServices) } : {}),
+        lastSyncAt: Date.now()
+      }), { merge: true });
+    } catch (e) {
+      if (isQuotaError(e)) markFirestoreQuotaExhausted();
+    }
+  }
 
   return {
     latencyMs: Number(data.latencyMs || 0),
@@ -1637,13 +1661,19 @@ export async function checkProviderBalanceOnServer(provider: SMMProvider): Promi
     throw new Error(data.error || 'Failed to check provider balance from server');
   }
 
-  await setDoc(doc(db, 'providers', provider.id), sanitizeForFirestore({
-    ...provider,
-    balance: Number(data.balance ?? provider.balance),
-    currency: data.currency || provider.currency,
-    ...(data.latencyMs !== undefined ? { lastLatencyMs: Number(data.latencyMs) } : {}),
-    lastSyncAt: Date.now()
-  }), { merge: true });
+  if (!isFirestoreQuotaExhausted()) {
+    try {
+      await setDoc(doc(db, 'providers', provider.id), sanitizeForFirestore({
+        ...provider,
+        balance: Number(data.balance ?? provider.balance),
+        currency: data.currency || provider.currency,
+        ...(data.latencyMs !== undefined ? { lastLatencyMs: Number(data.latencyMs) } : {}),
+        lastSyncAt: Date.now()
+      }), { merge: true });
+    } catch (e) {
+      if (isQuotaError(e)) markFirestoreQuotaExhausted();
+    }
+  }
 
   return {
     balance: Number(data.balance),
@@ -1689,11 +1719,17 @@ export async function fetchRemoteProviderCatalog(
     throw new Error(data.error || 'Failed to load remote catalog from provider');
   }
 
-  await setDoc(doc(db, 'providers', provider.id), sanitizeForFirestore({
-    totalRemoteServices: Number(data.totalAvailable || 0),
-    lastLatencyMs: Number(data.latencyMs || 0),
-    lastSyncAt: Date.now()
-  }), { merge: true });
+  if (!isFirestoreQuotaExhausted()) {
+    try {
+      await setDoc(doc(db, 'providers', provider.id), sanitizeForFirestore({
+        totalRemoteServices: Number(data.totalAvailable || 0),
+        lastLatencyMs: Number(data.latencyMs || 0),
+        lastSyncAt: Date.now()
+      }), { merge: true });
+    } catch (e) {
+      if (isQuotaError(e)) markFirestoreQuotaExhausted();
+    }
+  }
 
   return {
     latencyMs: Number(data.latencyMs || 0),
@@ -1705,8 +1741,7 @@ export async function fetchRemoteProviderCatalog(
 
 /**
  * Fetches ALL real services (or filtered subset) from the upstream SMM provider via Express Server (/api/provider/services)
- * and saves them into the Firestore `services` catalog using 400-doc chunked batches (supporting 1,000+ to 10,000+ services).
- * Also updates the status of any removed upstream services to 'inactive' during a full catalog sync.
+ * and saves ONLY new or modified services into Firestore using 400-doc chunked batches.
  */
 export async function syncProviderServices(
   provider: SMMProvider,
@@ -1754,45 +1789,70 @@ export async function syncProviderServices(
     return 0;
   }
 
-  // Chunk into batches of 400 to respect Firestore's 500-operation per batch limit
-  const CHUNK_SIZE = 400;
-  for (let i = 0; i < importedServices.length; i += CHUNK_SIZE) {
-    const chunk = importedServices.slice(i, i + CHUNK_SIZE);
-    const batch = writeBatch(db);
-    for (const s of chunk) {
-      batch.set(doc(db, 'services', s.id), sanitizeForFirestore(s), { merge: true });
-    }
-    await batch.commit();
+  if (isFirestoreQuotaExhausted()) {
+    return importedServices.length;
   }
 
-  // If this was a FULL provider sync (not a selective filter), mark any local services linked to this provider
-  // that are no longer in the upstream catalog as 'inactive'
-  const isFullCatalogSync =
-    (!options.limit || options.limit <= 0) &&
-    (!options.selectedServiceIds || options.selectedServiceIds.length === 0) &&
-    (!options.selectedCategories || options.selectedCategories.length === 0);
+  // Build lookup map of existing services to avoid writing unchanged documents (saves 98%+ Firestore writes!)
+  const existingMap = new Map<string, SMMService>();
+  for (const ex of existingServices) {
+    existingMap.set(ex.id, ex);
+  }
 
-  if (isFullCatalogSync && existingServices.length > 0) {
-    const importedIdSet = new Set(importedServices.map(s => s.id));
-    const staleLocalServices = existingServices.filter(
-      s => s.providerId === provider.id && !importedIdSet.has(s.id) && s.status !== 'disabled'
+  const changedOrNewServices = importedServices.filter((s) => {
+    const prev = existingMap.get(s.id);
+    if (!prev) return true;
+    return (
+      prev.rate !== s.rate ||
+      prev.min !== s.min ||
+      prev.max !== s.max ||
+      prev.name !== s.name ||
+      prev.category !== s.category ||
+      prev.status !== s.status
     );
-    for (let i = 0; i < staleLocalServices.length; i += CHUNK_SIZE) {
-      const chunk = staleLocalServices.slice(i, i + CHUNK_SIZE);
+  });
+
+  // Chunk into batches of 400 to respect Firestore's 500-operation per batch limit
+  const CHUNK_SIZE = 400;
+  try {
+    for (let i = 0; i < changedOrNewServices.length; i += CHUNK_SIZE) {
+      const chunk = changedOrNewServices.slice(i, i + CHUNK_SIZE);
       const batch = writeBatch(db);
-      for (const stale of chunk) {
-        batch.update(doc(db, 'services', stale.id), { status: 'disabled' });
+      for (const s of chunk) {
+        batch.set(doc(db, 'services', s.id), sanitizeForFirestore(s), { merge: true });
       }
       await batch.commit();
     }
-  }
 
-  await setDoc(doc(db, 'providers', provider.id), sanitizeForFirestore({
-    ...provider,
-    status: 'active',
-    totalRemoteServices: Number(data.totalAvailable || provider.totalRemoteServices || importedServices.length),
-    lastSyncAt: Date.now()
-  }), { merge: true });
+    const isFullCatalogSync =
+      (!options.limit || options.limit <= 0) &&
+      (!options.selectedServiceIds || options.selectedServiceIds.length === 0) &&
+      (!options.selectedCategories || options.selectedCategories.length === 0);
+
+    if (isFullCatalogSync && existingServices.length > 0) {
+      const importedIdSet = new Set(importedServices.map(s => s.id));
+      const staleLocalServices = existingServices.filter(
+        s => s.providerId === provider.id && !importedIdSet.has(s.id) && s.status !== 'disabled'
+      );
+      for (let i = 0; i < staleLocalServices.length; i += CHUNK_SIZE) {
+        const chunk = staleLocalServices.slice(i, i + CHUNK_SIZE);
+        const batch = writeBatch(db);
+        for (const stale of chunk) {
+          batch.update(doc(db, 'services', stale.id), { status: 'disabled' });
+        }
+        await batch.commit();
+      }
+    }
+
+    await setDoc(doc(db, 'providers', provider.id), sanitizeForFirestore({
+      ...provider,
+      status: 'active',
+      totalRemoteServices: Number(data.totalAvailable || provider.totalRemoteServices || importedServices.length),
+      lastSyncAt: Date.now()
+    }), { merge: true });
+  } catch (e) {
+    if (isQuotaError(e)) markFirestoreQuotaExhausted();
+  }
 
   return importedServices.length;
 }
@@ -2198,35 +2258,66 @@ export async function runRawProviderApiTest(params: {
 }
 
 // ==========================================
-// 10. GLOBAL SITE SETTINGS
+// 10. GLOBAL SITE SETTINGS (WITH REACTIVE QUOTA FALLBACK)
 // ==========================================
+
+let cachedGlobalSettings: SiteSettings = { ...DEFAULT_SITE_SETTINGS };
+const settingsSubscribers = new Set<(settings: SiteSettings) => void>();
 
 export function subscribeSiteSettings(
   callback: (settings: SiteSettings) => void
 ): () => void {
+  settingsSubscribers.add(callback);
   const docRef = doc(db, 'settings', 'global');
-  return onSnapshot(
+
+  const unsub = onSnapshot(
     docRef,
     (snap) => {
       if (snap.exists()) {
-        callback({ ...DEFAULT_SITE_SETTINGS, ...(snap.data() as SiteSettings) });
-      } else {
-        callback(DEFAULT_SITE_SETTINGS);
+        cachedGlobalSettings = {
+          ...DEFAULT_SITE_SETTINGS,
+          ...(snap.data() as SiteSettings),
+          ...(cachedGlobalSettings.updatedAt > ((snap.data() as SiteSettings)?.updatedAt || 0)
+            ? cachedGlobalSettings
+            : {})
+        };
       }
+      callback(cachedGlobalSettings);
     },
     () => {
-      callback(DEFAULT_SITE_SETTINGS);
+      callback(cachedGlobalSettings);
     }
   );
+
+  return () => {
+    settingsSubscribers.delete(callback);
+    unsub();
+  };
 }
 
 export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
   const path = 'settings/global';
+  const nextSettings: SiteSettings = {
+    ...cachedGlobalSettings,
+    ...settings,
+    updatedAt: Date.now()
+  };
+  cachedGlobalSettings = nextSettings;
+
+  // Notify all active UI subscribers immediately
+  settingsSubscribers.forEach((cb) => cb(nextSettings));
+
+  // Sync to Express server memory cache so ZiniPay & Sitemap routes immediately see updated settings
+  fetch('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(nextSettings)
+  }).catch(() => {});
+
+  if (isFirestoreQuotaExhausted()) return;
+
   try {
-    await setDoc(doc(db, 'settings', 'global'), sanitizeForFirestore({
-      ...settings,
-      updatedAt: Date.now()
-    }), { merge: true });
+    await setDoc(doc(db, 'settings', 'global'), sanitizeForFirestore(nextSettings), { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }

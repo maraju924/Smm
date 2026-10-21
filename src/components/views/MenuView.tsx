@@ -213,6 +213,65 @@ export const MenuView: React.FC<MenuViewProps> = ({
         })}
       </div>
 
+      {/* Company, Help Center & Legal Policies Section */}
+      <div className="rounded-3xl bg-[#0D1220] border border-white/[0.07] p-4 sm:p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-mono uppercase tracking-wider font-bold text-[#22D3EE]">
+            {t('কোম্পানি, হেল্প সেন্টার ও পলিসি', 'Company, Help & Legal Policies')}
+          </span>
+          <a
+            href="/sitemap.xml"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] font-mono text-[#94A3B8] hover:text-white"
+          >
+            Sitemap.xml
+          </a>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs font-bold">
+          <button
+            type="button"
+            onClick={() => onNavigateTab('about')}
+            className="p-3 rounded-2xl bg-[#080B14] hover:bg-[#141B2B] border border-white/[0.06] text-[#F1F5F9] text-left transition-colors"
+          >
+            <span className="block text-[#22D3EE] text-[10px] font-mono">INFO</span>
+            <span className="mt-0.5 block">{t('আমাদের সম্পর্কে', 'About Us')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigateTab('contact')}
+            className="p-3 rounded-2xl bg-[#080B14] hover:bg-[#141B2B] border border-white/[0.06] text-[#F1F5F9] text-left transition-colors"
+          >
+            <span className="block text-[#8B5CF6] text-[10px] font-mono">24/7 HELP</span>
+            <span className="mt-0.5 block">{t('যোগাযোগ ও সাপোর্ট', 'Contact & Help')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigateTab('refund')}
+            className="p-3 rounded-2xl bg-[#080B14] hover:bg-[#141B2B] border border-white/[0.06] text-[#F1F5F9] text-left transition-colors"
+          >
+            <span className="block text-[#22C55E] text-[10px] font-mono">100% AUTO</span>
+            <span className="mt-0.5 block">{t('রিফান্ড পলিসি', 'Refund Policy')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigateTab('terms')}
+            className="p-3 rounded-2xl bg-[#080B14] hover:bg-[#141B2B] border border-white/[0.06] text-[#F1F5F9] text-left transition-colors"
+          >
+            <span className="block text-amber-400 text-[10px] font-mono">LEGAL</span>
+            <span className="mt-0.5 block">{t('ব্যবহারের শর্তাবলী', 'Terms of Service')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigateTab('privacy')}
+            className="p-3 rounded-2xl bg-[#080B14] hover:bg-[#141B2B] border border-white/[0.06] text-[#F1F5F9] text-left transition-colors col-span-2 sm:col-span-1"
+          >
+            <span className="block text-[#94A3B8] text-[10px] font-mono">SECURITY</span>
+            <span className="mt-0.5 block">{t('প্রাইভেসি পলিসি', 'Privacy Policy')}</span>
+          </button>
+        </div>
+      </div>
+
       {user && (
         <button
           onClick={logout}

@@ -19,6 +19,7 @@ import { ProfileView } from './components/views/ProfileView';
 import { MenuView } from './components/views/MenuView';
 import { AdminView } from './components/views/AdminView';
 import { PublicLandingView } from './components/views/PublicLandingView';
+import { ProductionPagesView, ProductionPageType } from './components/views/ProductionPagesView';
 import { AuthModal } from './components/modals/AuthModal';
 import { CommandPaletteModal } from './components/modals/CommandPaletteModal';
 import { Toast, ToastMessage } from './components/common/Toast';
@@ -36,7 +37,6 @@ import {
   SiteSettings
 } from './types';
 import { 
-  purgeAllDemoDataFromServer, 
   subscribeServices, 
   subscribeUserOrders, 
   subscribeAllOrders,
@@ -51,33 +51,95 @@ import {
   subscribeCoupons,
   subscribeProviders,
   subscribeSiteSettings,
-  autoSyncAllProvidersEverything
+  syncActiveOrdersWithProviders
 } from './services/db';
 import { DEFAULT_SITE_SETTINGS } from './data/seedServices';
 
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
+const VALID_APP_TABS = new Set([
+  'landing',
+  'home',
+  'new-order',
+  'mass-order',
+  'orders',
+  'services',
+  'add-funds',
+  'analytics',
+  'affiliates',
+  'tickets',
+  'track-order',
+  'api-docs',
+  'profile',
+  'menu',
+  'admin',
+  'about',
+  'contact',
+  'terms',
+  'privacy',
+  'refund',
+  '404',
+  'maintenance'
+]);
+
+const PRODUCTION_PAGE_TABS = new Set<string>([
+  'about',
+  'contact',
+  'terms',
+  'privacy',
+  'refund',
+  '404',
+  'maintenance'
+]);
+
+function normalizeTabId(raw: string): string {
+  const clean = raw.trim().toLowerCase().replace(/^\/+|\/+$/g, '');
+  if (!clean) return 'landing';
+  if (clean === 'api') return 'api-docs';
+  if (clean === 'track') return 'track-order';
+  if (clean === 'about-us') return 'about';
+  if (clean === 'contact-us' || clean === 'help') return 'contact';
+  if (clean === 'terms-of-service' || clean === 'tos') return 'terms';
+  if (clean === 'privacy-policy') return 'privacy';
+  if (clean === 'refund-policy' || clean === 'cancellation-policy') return 'refund';
+  if (clean === 'not-found') return '404';
+  return VALID_APP_TABS.has(clean) ? clean : '404';
+}
+
+function resolveInitialRoute(): { tab: string; isWorkspace: boolean; params: any } {
+  const searchParams = new URLSearchParams(window.location.search);
+  const tabParam = searchParams.get('tab');
+  const catParam = searchParams.get('category');
+  const pathname = window.location.pathname.replace(/^\/+|\/+$/g, '');
+
+  if (tabParam) {
+    const resolved = normalizeTabId(tabParam);
+    return {
+      tab: resolved,
+      isWorkspace: !PRODUCTION_PAGE_TABS.has(resolved) && resolved !== 'landing',
+      params: catParam ? { category: catParam } : {}
+    };
+  }
+
+  if (pathname && pathname !== 'index.html') {
+    const resolved = normalizeTabId(pathname);
+    return {
+      tab: resolved,
+      isWorkspace: !PRODUCTION_PAGE_TABS.has(resolved) && resolved !== 'landing',
+      params: catParam ? { category: catParam } : {}
+    };
+  }
+
+  return { tab: 'landing', isWorkspace: false, params: {} };
+}
+
 const MainAppContent: React.FC = () => {
   const { profile, isAdmin } = useAuth();
   
-  // Navigation tab (supports deep-linked SEO URLs like /?tab=services&category=Facebook)
-  const [currentTab, setCurrentTab] = useState<string>(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tabParam = params.get('tab');
-    if (tabParam && ['services', 'api', 'api-docs', 'track', 'add-funds', 'new-order'].includes(tabParam)) {
-      return tabParam === 'api' ? 'api-docs' : tabParam;
-    }
-    return 'landing';
-  });
-  const [guestWorkspaceMode, setGuestWorkspaceMode] = useState<boolean>(() => {
-    const params = new URLSearchParams(window.location.search);
-    return Boolean(params.get('tab'));
-  });
-  const [navParams, setNavParams] = useState<any>(() => {
-    const params = new URLSearchParams(window.location.search);
-    const cat = params.get('category');
-    return cat ? { category: cat } : {};
-  });
+  // Navigation tab (supports deep-linked SEO URLs like /?tab=about, /about, /?tab=services&category=Facebook)
+  const [currentTab, setCurrentTab] = useState<string>(() => resolveInitialRoute().tab);
+  const [guestWorkspaceMode, setGuestWorkspaceMode] = useState<boolean>(() => resolveInitialRoute().isWorkspace);
+  const [navParams, setNavParams] = useState<any>(() => resolveInitialRoute().params);
 
   // Modals & Layout State
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -145,30 +207,23 @@ const MainAppContent: React.FC = () => {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
-  // Purge any legacy demo records on server when admin is active
-  useEffect(() => {
-    if (isAdmin) {
-      purgeAllDemoDataFromServer();
-    }
-  }, [isAdmin]);
-
-  // Automatic 5-Minute Background Sync for All API Providers (All Services + Balances + Order Statuses)
+  // Lightweight 5-Minute Background Sync ONLY for Active Orders (Zero redundant catalog writes)
   useEffect(() => {
     if (!isAdmin) return;
 
     const runAutoSync = async () => {
       if (isAutoSyncingRef.current || providersRef.current.length === 0) return;
+      const hasActiveOrders = ordersRef.current.some(o =>
+        ['pending', 'processing', 'in_progress'].includes(o.status)
+      );
+      if (!hasActiveOrders) return;
+
       isAutoSyncingRef.current = true;
       setIsSyncingCatalog(true);
       try {
-        await autoSyncAllProvidersEverything(
-          providersRef.current,
-          ordersRef.current,
-          servicesRef.current,
-          siteSettingsRef.current.usdToBdtRate || 122
-        );
+        await syncActiveOrdersWithProviders(ordersRef.current, providersRef.current);
       } catch (e) {
-        console.warn('Automatic 5m provider sync warning:', e);
+        console.warn('Automatic 5m order status sync warning:', e);
       } finally {
         isAutoSyncingRef.current = false;
         setIsSyncingCatalog(false);
@@ -178,38 +233,6 @@ const MainAppContent: React.FC = () => {
     const intervalId = setInterval(runAutoSync, FIVE_MINUTES_MS);
     return () => clearInterval(intervalId);
   }, [isAdmin]);
-
-  // Trigger immediate background sync if any connected provider has incomplete catalog (e.g. 100 vs 1046) or is older than 5 minutes
-  useEffect(() => {
-    if (!isAdmin || providers.length === 0 || isAutoSyncingRef.current) return;
-
-    const needsImmediateFullSync = providers.some(prv => {
-      if (prv.status !== 'active' || !prv.apiUrl || !prv.apiKey) return false;
-      const localLinkedCount = services.filter(s => s.providerId === prv.id).length;
-      const hasMissingCatalogServices =
-        prv.totalRemoteServices !== undefined &&
-        prv.totalRemoteServices > 0 &&
-        localLinkedCount < prv.totalRemoteServices;
-      const isStaleSync = !prv.lastSyncAt || Date.now() - prv.lastSyncAt >= FIVE_MINUTES_MS;
-      return hasMissingCatalogServices || isStaleSync;
-    });
-
-    if (needsImmediateFullSync) {
-      isAutoSyncingRef.current = true;
-      setIsSyncingCatalog(true);
-      autoSyncAllProvidersEverything(
-        providers,
-        ordersRef.current,
-        servicesRef.current,
-        siteSettingsRef.current.usdToBdtRate || 122
-      )
-        .catch(() => {})
-        .finally(() => {
-          isAutoSyncingRef.current = false;
-          setIsSyncingCatalog(false);
-        });
-    }
-  }, [isAdmin, providers.length]);
 
   // Subscribe Services, Announcements, Coupons & Site Settings (Public)
   useEffect(() => {
@@ -271,10 +294,41 @@ const MainAppContent: React.FC = () => {
   }, [profile?.uid, isAdmin]);
 
   const handleNavigate = (tabId: string, params?: any) => {
-    setCurrentTab(tabId);
+    const normalized = normalizeTabId(tabId);
+    setCurrentTab(normalized);
     setNavParams(params || {});
+
+    // Synchronize browser URL for SEO crawlers, deep-linking & browser back/forward
+    try {
+      const url = new URL(window.location.href);
+      url.pathname = '/';
+      if (normalized === 'landing') {
+        url.search = '';
+      } else {
+        url.searchParams.set('tab', normalized === 'api-docs' ? 'api' : normalized === 'track-order' ? 'track' : normalized);
+        if (params?.category) {
+          url.searchParams.set('category', String(params.category));
+        } else {
+          url.searchParams.delete('category');
+        }
+      }
+      window.history.pushState({ tab: normalized, params: params || {} }, '', url.toString());
+    } catch {
+      // ignore history errors in restricted iframes
+    }
+
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  useEffect(() => {
+    const onPopState = () => {
+      const route = resolveInitialRoute();
+      setCurrentTab(route.tab);
+      setNavParams(route.params);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   const inProgressOrderCount = orders.filter(o => ['in_progress', 'processing'].includes(o.status)).length;
 
@@ -296,6 +350,75 @@ const MainAppContent: React.FC = () => {
           siteSettings={siteSettings}
           onShowToast={addToast}
           onExitAdmin={() => handleNavigate('home')}
+        />
+      </>
+    );
+  }
+
+  // GLOBAL MAINTENANCE MODE ENFORCEMENT (Non-Admin Visitors see Maintenance Page)
+  if (siteSettings.maintenanceMode && !isAdmin) {
+    return (
+      <>
+        <SeoHeadManager
+          currentTab="maintenance"
+          navParams={navParams}
+          siteSettings={siteSettings}
+          services={services}
+        />
+        <Toast toasts={toasts} onDismiss={removeToast} />
+        <AuthModal
+          isOpen={isAuthOpen}
+          onClose={() => setIsAuthOpen(false)}
+          onSuccessToast={(msg) => {
+            addToast(msg, 'success');
+            setCurrentTab('home');
+          }}
+        />
+        <ProductionPagesView
+          page="maintenance"
+          siteSettings={siteSettings}
+          services={services}
+          onNavigateTab={handleNavigate}
+          onOpenAuth={() => setIsAuthOpen(true)}
+          onShowToast={addToast}
+          standalone={true}
+        />
+      </>
+    );
+  }
+
+  // STANDALONE PUBLIC SEO PRODUCTION PAGES (When visited by guests outside workspace)
+  if (!profile && !guestWorkspaceMode && PRODUCTION_PAGE_TABS.has(currentTab)) {
+    return (
+      <>
+        <SeoHeadManager
+          currentTab={currentTab}
+          navParams={navParams}
+          siteSettings={siteSettings}
+          services={services}
+        />
+        <Toast toasts={toasts} onDismiss={removeToast} />
+        <AuthModal
+          isOpen={isAuthOpen}
+          onClose={() => setIsAuthOpen(false)}
+          onSuccessToast={(msg) => {
+            addToast(msg, 'success');
+            setCurrentTab('home');
+          }}
+        />
+        <ProductionPagesView
+          page={currentTab as ProductionPageType}
+          siteSettings={siteSettings}
+          services={services}
+          onNavigateTab={(tabId, params) => {
+            if (!PRODUCTION_PAGE_TABS.has(normalizeTabId(tabId)) && tabId !== 'landing') {
+              setGuestWorkspaceMode(true);
+            }
+            handleNavigate(tabId, params);
+          }}
+          onOpenAuth={() => setIsAuthOpen(true)}
+          onShowToast={addToast}
+          standalone={true}
         />
       </>
     );
@@ -325,8 +448,13 @@ const MainAppContent: React.FC = () => {
           announcements={announcements}
           siteSettings={siteSettings}
           onNavigateTab={(tabId, params) => {
-            setGuestWorkspaceMode(true);
-            handleNavigate(tabId === 'api' ? 'api-docs' : tabId, params);
+            const norm = normalizeTabId(tabId);
+            if (!PRODUCTION_PAGE_TABS.has(norm) && norm !== 'landing') {
+              setGuestWorkspaceMode(true);
+            } else {
+              setGuestWorkspaceMode(false);
+            }
+            handleNavigate(norm, params);
           }}
           onOpenAuth={() => setIsAuthOpen(true)}
           onEnterWorkspace={() => {
@@ -535,6 +663,18 @@ const MainAppContent: React.FC = () => {
                   onNavigateTab={handleNavigate}
                   onOpenAuth={() => setIsAuthOpen(true)}
                   siteSettings={siteSettings}
+                />
+              )}
+
+              {PRODUCTION_PAGE_TABS.has(currentTab) && (
+                <ProductionPagesView
+                  page={currentTab as ProductionPageType}
+                  siteSettings={siteSettings}
+                  services={services}
+                  onNavigateTab={handleNavigate}
+                  onOpenAuth={() => setIsAuthOpen(true)}
+                  onShowToast={addToast}
+                  standalone={false}
                 />
               )}
             </motion.div>

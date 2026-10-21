@@ -141,6 +141,21 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
           icon: User
         },
         {
+          id: 'about',
+          label: language === 'bn' ? 'আমাদের সম্পর্কে' : 'About & Infrastructure',
+          icon: ShieldCheck
+        },
+        {
+          id: 'contact',
+          label: language === 'bn' ? 'হেল্প সেন্টার ও যোগাযোগ' : 'Help Center & Contact',
+          icon: MessageSquare
+        },
+        {
+          id: 'refund',
+          label: language === 'bn' ? 'রিফান্ড ও লিগ্যাল পলিসি' : 'Refund & Legal Policies',
+          icon: Sparkles
+        },
+        {
           id: 'landing',
           label: language === 'bn' ? 'পাবলিক ল্যান্ডিং পেজ' : 'Public Landing Page',
           icon: Sparkles

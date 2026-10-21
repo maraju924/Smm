@@ -1070,22 +1070,140 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
             </div>
           </div>
 
+          {/* Multi-Column Crawlable SEO Footer Navigation */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 py-8 border-t border-b border-white/[0.06] mb-6 text-xs">
+            <div className="space-y-2.5">
+              <h4 className="font-mono font-bold uppercase tracking-wider text-white text-[11px]">
+                {language === 'bn' ? 'কোম্পানি ও তথ্য' : 'Company & Info'}
+              </h4>
+              <ul className="space-y-2 text-[#94A3B8]">
+                <li>
+                  <button type="button" onClick={() => onNavigateTab('about')} className="hover:text-[#22D3EE] transition-colors">
+                    {language === 'bn' ? 'আমাদের সম্পর্কে (About Us)' : 'About Us'}
+                  </button>
+                </li>
+                <li>
+                  <button type="button" onClick={() => onNavigateTab('contact')} className="hover:text-[#22D3EE] transition-colors">
+                    {language === 'bn' ? 'যোগাযোগ ও হেল্প সেন্টার' : 'Contact & 24/7 Help Center'}
+                  </button>
+                </li>
+                <li>
+                  <button type="button" onClick={() => onNavigateTab('services')} className="hover:text-[#22D3EE] transition-colors">
+                    {language === 'bn' ? 'সার্ভিস ও BDT রেট লিস্ট' : 'Services & BDT Rate List'}
+                  </button>
+                </li>
+                <li>
+                  <button type="button" onClick={() => onNavigateTab('api')} className="hover:text-[#22D3EE] transition-colors">
+                    {language === 'bn' ? 'হোলসেল REST API v2' : 'Wholesale REST API v2'}
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            <div className="space-y-2.5">
+              <h4 className="font-mono font-bold uppercase tracking-wider text-white text-[11px]">
+                {language === 'bn' ? 'লিগ্যাল ও পলিসি' : 'Legal & Policies'}
+              </h4>
+              <ul className="space-y-2 text-[#94A3B8]">
+                <li>
+                  <button type="button" onClick={() => onNavigateTab('refund')} className="hover:text-[#22D3EE] transition-colors">
+                    {language === 'bn' ? 'অটোমেটিক রিফান্ড ও রিফিল পলিসি' : 'Refund & Refill Policy'}
+                  </button>
+                </li>
+                <li>
+                  <button type="button" onClick={() => onNavigateTab('terms')} className="hover:text-[#22D3EE] transition-colors">
+                    {language === 'bn' ? 'ব্যবহারের শর্তাবলী (Terms)' : 'Terms of Service'}
+                  </button>
+                </li>
+                <li>
+                  <button type="button" onClick={() => onNavigateTab('privacy')} className="hover:text-[#22D3EE] transition-colors">
+                    {language === 'bn' ? 'গোপনীয়তা নীতি (Privacy)' : 'Privacy Policy'}
+                  </button>
+                </li>
+                <li>
+                  <a href="/sitemap.xml" target="_blank" rel="noopener noreferrer" className="hover:text-[#22D3EE] transition-colors">
+                    {language === 'bn' ? 'এক্সএমএল সাইটম্যাপ (Sitemap)' : 'XML Sitemap (Google BD)'}
+                  </a>
+                </li>
+              </ul>
+            </div>
+
+            <div className="space-y-2.5">
+              <h4 className="font-mono font-bold uppercase tracking-wider text-white text-[11px]">
+                {language === 'bn' ? 'বাংলাদেশ মনিটাইজেশন হাব' : 'BD Monetization Hub'}
+              </h4>
+              <ul className="space-y-2 text-[#94A3B8]">
+                <li>
+                  <button type="button" onClick={() => onNavigateTab('services', { category: 'Facebook' })} className="hover:text-[#22D3EE] transition-colors">
+                    Facebook 60k Watchtime BD
+                  </button>
+                </li>
+                <li>
+                  <button type="button" onClick={() => onNavigateTab('services', { category: 'YouTube' })} className="hover:text-[#22D3EE] transition-colors">
+                    YouTube 4000h Watchtime BD
+                  </button>
+                </li>
+                <li>
+                  <button type="button" onClick={() => onNavigateTab('services', { category: 'TikTok' })} className="hover:text-[#22D3EE] transition-colors">
+                    TikTok Views & Followers BD
+                  </button>
+                </li>
+                <li>
+                  <button type="button" onClick={() => onNavigateTab('services', { category: 'Instagram' })} className="hover:text-[#22D3EE] transition-colors">
+                    Instagram Followers & Reels BD
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            <div className="space-y-2.5">
+              <h4 className="font-mono font-bold uppercase tracking-wider text-white text-[11px]">
+                {language === 'bn' ? 'কুইক টুলস ও ওয়ালেট' : 'Quick Tools & Wallet'}
+              </h4>
+              <ul className="space-y-2 text-[#94A3B8]">
+                <li>
+                  <button type="button" onClick={() => onNavigateTab('add-funds')} className="hover:text-[#22D3EE] transition-colors">
+                    {language === 'bn' ? 'ZiniPay বিকাশ/নগদ অটো ডিপোজিট' : 'ZiniPay bKash/Nagad Deposit'}
+                  </button>
+                </li>
+                <li>
+                  <button type="button" onClick={() => onNavigateTab('track-order')} className="hover:text-[#22D3EE] transition-colors">
+                    {language === 'bn' ? 'লাইভ অর্ডার ট্র্যাকার' : 'Live Order Tracker'}
+                  </button>
+                </li>
+                <li>
+                  <button type="button" onClick={() => onNavigateTab('affiliates')} className="hover:text-[#22D3EE] transition-colors">
+                    {language === 'bn' ? 'অ্যাফিলিয়েট ও ফ্রি ভাউচার' : 'Affiliates & Promo Vouchers'}
+                  </button>
+                </li>
+                <li>
+                  <button type="button" onClick={onOpenAuth} className="text-[#22D3EE] font-bold hover:underline">
+                    {language === 'bn' ? 'ক্লায়েন্ট লগইন / রেজিস্টার' : 'Client Portal Login'}
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
+
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#94A3B8]">
             <p className="font-mono">
-              © {new Date().getFullYear()} {siteSettings?.siteName || 'AmarTrend SMM'}. Cloud API v2 Infrastructure.
+              © {new Date().getFullYear()} {siteSettings?.siteName || 'AmarTrend SMM'} Bangladesh. Cloud API v2 Infrastructure.
             </p>
-            <div className="flex flex-wrap items-center gap-5">
-              <button type="button" onClick={() => onNavigateTab('services')} className="hover:text-white">
-                {language === 'bn' ? 'সার্ভিস ক্যাটালগ' : 'Services'}
+            <div className="flex flex-wrap items-center gap-4">
+              <button type="button" onClick={() => onNavigateTab('about')} className="hover:text-white">
+                {language === 'bn' ? 'আমাদের সম্পর্কে' : 'About'}
               </button>
-              <button type="button" onClick={() => onNavigateTab('api')} className="hover:text-white">
-                {language === 'bn' ? 'API ডকস' : 'API Docs'}
+              <button type="button" onClick={() => onNavigateTab('contact')} className="hover:text-white">
+                {language === 'bn' ? 'হেল্প সেন্টার' : 'Contact'}
               </button>
-              <button type="button" onClick={() => onNavigateTab('track-order')} className="hover:text-white">
-                {language === 'bn' ? 'অর্ডার ট্র্যাকার' : 'Track Order'}
+              <button type="button" onClick={() => onNavigateTab('refund')} className="hover:text-white">
+                {language === 'bn' ? 'রিফান্ড পলিসি' : 'Refund Policy'}
               </button>
-              <button type="button" onClick={onOpenAuth} className="text-[#22D3EE] font-bold hover:underline">
-                {language === 'bn' ? 'লগইন / সাইন আপ' : 'Client Portal'}
+              <button type="button" onClick={() => onNavigateTab('terms')} className="hover:text-white">
+                {language === 'bn' ? 'শর্তাবলী' : 'Terms'}
+              </button>
+              <button type="button" onClick={() => onNavigateTab('privacy')} className="hover:text-white">
+                {language === 'bn' ? 'প্রাইভেসি' : 'Privacy'}
               </button>
             </div>
           </div>
