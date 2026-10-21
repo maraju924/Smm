@@ -22,6 +22,7 @@ import { PublicLandingView } from './components/views/PublicLandingView';
 import { AuthModal } from './components/modals/AuthModal';
 import { CommandPaletteModal } from './components/modals/CommandPaletteModal';
 import { Toast, ToastMessage } from './components/common/Toast';
+import { SeoHeadManager } from './components/common/SeoHeadManager';
 import { 
   SMMService, 
   SMMOrder, 
@@ -59,10 +60,24 @@ const FIVE_MINUTES_MS = 5 * 60 * 1000;
 const MainAppContent: React.FC = () => {
   const { profile, isAdmin } = useAuth();
   
-  // Navigation tab
-  const [currentTab, setCurrentTab] = useState<string>('landing');
-  const [guestWorkspaceMode, setGuestWorkspaceMode] = useState<boolean>(false);
-  const [navParams, setNavParams] = useState<any>({});
+  // Navigation tab (supports deep-linked SEO URLs like /?tab=services&category=Facebook)
+  const [currentTab, setCurrentTab] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab');
+    if (tabParam && ['services', 'api', 'api-docs', 'track', 'add-funds', 'new-order'].includes(tabParam)) {
+      return tabParam === 'api' ? 'api-docs' : tabParam;
+    }
+    return 'landing';
+  });
+  const [guestWorkspaceMode, setGuestWorkspaceMode] = useState<boolean>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return Boolean(params.get('tab'));
+  });
+  const [navParams, setNavParams] = useState<any>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const cat = params.get('category');
+    return cat ? { category: cat } : {};
+  });
 
   // Modals & Layout State
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -290,6 +305,12 @@ const MainAppContent: React.FC = () => {
   if (currentTab === 'landing' || (!profile && currentTab === 'home' && !guestWorkspaceMode)) {
     return (
       <>
+        <SeoHeadManager
+          currentTab="landing"
+          navParams={navParams}
+          siteSettings={siteSettings}
+          services={services}
+        />
         <Toast toasts={toasts} onDismiss={removeToast} />
         <AuthModal
           isOpen={isAuthOpen}
@@ -319,6 +340,12 @@ const MainAppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#080B14] text-[#F1F5F9] flex font-sans selection:bg-[#8B5CF6] selection:text-white">
+      <SeoHeadManager
+        currentTab={currentTab}
+        navParams={navParams}
+        siteSettings={siteSettings}
+        services={services}
+      />
       {/* Toast notifications */}
       <Toast toasts={toasts} onDismiss={removeToast} />
 
@@ -438,7 +465,7 @@ const MainAppContent: React.FC = () => {
                   }}
                   onOpenAuth={() => setIsAuthOpen(true)}
                   onShowToast={addToast}
-                  initialPlatform={navParams.platform}
+                  initialPlatform={navParams.platform || navParams.category}
                   initialSearchQuery={navParams.searchQuery}
                 />
               )}

@@ -225,6 +225,14 @@ export interface SiteSettings {
   zinipayAutoVerifyTrx?: boolean;
   zinipayFeePassToUser?: boolean;
   zinipayFeePercent?: number;
+  // Bangladesh SEO & Google Indexing Configuration
+  seoTitle?: string;
+  seoDescription?: string;
+  seoKeywords?: string;
+  seoCanonicalDomain?: string;
+  googleSiteVerification?: string;
+  googleAnalyticsId?: string;
+  seoOgImage?: string;
   updatedAt: number;
 }
 

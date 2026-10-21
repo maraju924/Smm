@@ -2292,6 +2292,144 @@ app.use(express.urlencoded({ extended: true, limit: '5mb' }));
   });
 
   // ============================================================================
+  // 5B. DYNAMIC GOOGLE BANGLADESH SEO ENGINE (/sitemap.xml & /robots.txt)
+  // ============================================================================
+  const handleSitemapXml = async (req: Request, res: Response) => {
+    try {
+      let customDomain = '';
+      let categories: string[] = ['Facebook', 'YouTube', 'TikTok', 'Instagram', 'Telegram'];
+
+      try {
+        const settingsSnap = await getDoc(doc(serverDb, 'settings', 'global'));
+        if (settingsSnap.exists()) {
+          const s = settingsSnap.data() || {};
+          customDomain = String(s.seoCanonicalDomain || s.zinipayBrandDomain || '').trim();
+        }
+      } catch {
+        // fallback to request host
+      }
+
+      try {
+        const srvSnap = await getDocs(collection(serverDb, 'services'));
+        if (!srvSnap.empty) {
+          const catSet = new Set<string>();
+          srvSnap.docs.forEach((d) => {
+            const data = d.data();
+            if (data.status !== 'disabled' && data.category) {
+              catSet.add(String(data.category).trim());
+            }
+          });
+          if (catSet.size > 0) {
+            categories = Array.from(catSet).slice(0, 35);
+          }
+        }
+      } catch {
+        // fallback to default platform categories
+      }
+
+      const forwardedProto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
+      const hostHeader = (req.headers['x-forwarded-host'] as string) || req.get('host') || 'm.khatirajbd.com';
+      const baseOrigin = customDomain
+        ? customDomain.startsWith('http')
+          ? customDomain.replace(/\/+$/, '')
+          : `https://${customDomain.replace(/\/+$/, '')}`
+        : `${forwardedProto.split(',')[0].trim()}://${hostHeader.split(',')[0].trim()}`;
+
+      const todayIso = new Date().toISOString().split('T')[0];
+
+      const escapeXml = (str: string) =>
+        str
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&apos;');
+
+      const staticEntries = [
+        { loc: `${baseOrigin}/`, priority: '1.0', changefreq: 'daily' },
+        { loc: `${baseOrigin}/?tab=services`, priority: '0.9', changefreq: 'hourly' },
+        { loc: `${baseOrigin}/?tab=api`, priority: '0.8', changefreq: 'weekly' },
+        { loc: `${baseOrigin}/?tab=track`, priority: '0.8', changefreq: 'daily' },
+        { loc: `${baseOrigin}/?tab=add-funds`, priority: '0.7', changefreq: 'weekly' }
+      ];
+
+      const categoryEntries = categories.map((cat) => ({
+        loc: `${baseOrigin}/?tab=services&category=${encodeURIComponent(cat)}`,
+        priority: '0.85',
+        changefreq: 'daily'
+      }));
+
+      const allUrls = [...staticEntries, ...categoryEntries];
+
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+${allUrls
+  .map(
+    (u) => `  <url>
+    <loc>${escapeXml(u.loc)}</loc>
+    <lastmod>${todayIso}</lastmod>
+    <changefreq>${u.changefreq}</changefreq>
+    <priority>${u.priority}</priority>
+    <xhtml:link rel="alternate" hreflang="bn-BD" href="${escapeXml(u.loc)}" />
+    <xhtml:link rel="alternate" hreflang="en" href="${escapeXml(u.loc)}" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="${escapeXml(u.loc)}" />
+  </url>`
+  )
+  .join('\n')}
+</urlset>`;
+
+      res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600');
+      res.status(200).send(xml);
+    } catch (err: any) {
+      res.status(500).send(`<!-- Sitemap Error: ${err?.message || 'Failed'} -->`);
+    }
+  };
+
+  const handleRobotsTxt = async (req: Request, res: Response) => {
+    let customDomain = '';
+    try {
+      const settingsSnap = await getDoc(doc(serverDb, 'settings', 'global'));
+      if (settingsSnap.exists()) {
+        const s = settingsSnap.data() || {};
+        customDomain = String(s.seoCanonicalDomain || s.zinipayBrandDomain || '').trim();
+      }
+    } catch {
+      // ignore
+    }
+
+    const forwardedProto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
+    const hostHeader = (req.headers['x-forwarded-host'] as string) || req.get('host') || 'm.khatirajbd.com';
+    const baseOrigin = customDomain
+      ? customDomain.startsWith('http')
+        ? customDomain.replace(/\/+$/, '')
+        : `https://${customDomain.replace(/\/+$/, '')}`
+      : `${forwardedProto.split(',')[0].trim()}://${hostHeader.split(',')[0].trim()}`;
+
+    const robotsContent = `User-agent: *
+Allow: /
+Allow: /?tab=services
+Allow: /?tab=api
+Allow: /?tab=track
+Disallow: /api/provider/
+Disallow: /api/zinipay/
+Disallow: /?tab=admin
+
+Sitemap: ${baseOrigin}/sitemap.xml
+`;
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600');
+    res.status(200).send(robotsContent);
+  };
+
+  app.get('/sitemap.xml', handleSitemapXml);
+  app.get('/api/sitemap.xml', handleSitemapXml);
+  app.get('/robots.txt', handleRobotsTxt);
+  app.get('/api/robots.txt', handleRobotsTxt);
+
+  // ============================================================================
   // 6. VITE MIDDLEWARE (DEV) OR STATIC ASSETS (PRODUCTION)
   // ============================================================================
 async function startServer() {

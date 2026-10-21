@@ -209,6 +209,13 @@
         "zinipayAutoVerifyTrx": { "type": "boolean" },
         "zinipayFeePassToUser": { "type": "boolean" },
         "zinipayFeePercent": { "type": "number" },
+        "seoTitle": { "type": "string" },
+        "seoDescription": { "type": "string" },
+        "seoKeywords": { "type": "string" },
+        "seoCanonicalDomain": { "type": "string" },
+        "googleSiteVerification": { "type": "string" },
+        "googleAnalyticsId": { "type": "string" },
+        "seoOgImage": { "type": "string" },
         "updatedAt": { "type": "number" }
       },
       "required": ["usdToBdtRate"]

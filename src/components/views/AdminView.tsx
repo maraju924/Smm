@@ -38,7 +38,8 @@ import {
   DollarSign,
   Cpu,
   AlertTriangle,
-  TrendingUp
+  TrendingUp,
+  Globe
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
@@ -91,7 +92,12 @@ import {
   purgeAllDemoDataFromServer,
   fetchServerHealthStatus
 } from '../../services/db';
-import { DEFAULT_SITE_SETTINGS } from '../../data/seedServices';
+import {
+  DEFAULT_SITE_SETTINGS,
+  BD_MAIN_SEO_KEYWORD,
+  BD_SUB_SEO_KEYWORDS,
+  DEFAULT_BD_SEO_KEYWORDS_STRING
+} from '../../data/seedServices';
 import { AdminFinanceView } from './AdminFinanceView';
 
 interface AdminViewProps {
@@ -3918,13 +3924,320 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   </div>
                 </div>
 
+                {/* =========================================================
+                    GOOGLE BANGLADESH SEO & INDEXING COMMAND CENTER
+                   ========================================================= */}
+                <div className="bg-gradient-to-b from-[#0D1220] to-[#080B14] border border-emerald-500/30 rounded-3xl p-4 sm:p-5 space-y-4 text-xs shadow-[0_16px_40px_rgba(0,0,0,0.6)]">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/[0.08]">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Globe className="w-4 h-4 text-emerald-400" />
+                        <h3 className="text-sm font-black text-white">
+                          Google Bangladesh SEO & Indexing Command Center
+                        </h3>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        100% Geo-Targeted Bangladesh (`bn-BD` / `gl=bd`) Search Ranking, Rich Snippets & Sitemap Engine
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettingsForm({
+                          ...settingsForm,
+                          seoTitle: `${settingsForm.siteName || 'AmarTrend SMM'} – #1 ${BD_MAIN_SEO_KEYWORD}`,
+                          seoDescription:
+                            'বাংলাদেশের সেরা ও সবচেয়ে কম দামে অটোমেটিক SMM Panel। বিকাশ ও নগদে তাৎক্ষণিক ডিপোজিট করে Facebook Page Monetization, 60k Watchtime, Non-Drop Followers, YouTube 4000h Watchtime ও TikTok Views নিন।',
+                          seoKeywords: DEFAULT_BD_SEO_KEYWORDS_STRING
+                        });
+                        onShowToast(
+                          'Loaded researched Bangladesh Low-Competition Main + 15 Sub-Keywords!',
+                          'success'
+                        );
+                      }}
+                      className="px-3 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-bold text-[11px] flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Load Researched BD Keywords (1 Main + 15 Sub)</span>
+                    </button>
+                  </div>
+
+                  {/* Live Google Search Result Snippet Preview (SERP Card) */}
+                  <div className="rounded-2xl bg-[#080B14] border border-white/10 p-4 space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 mb-1">
+                      <span>GOOGLE.COM.BD LIVE SEARCH SNIPPET PREVIEW</span>
+                      <span className="text-emerald-400">Schema.org Rich Snippets Active</span>
+                    </div>
+                    <div className="text-xs text-slate-300 font-mono truncate">
+                      {settingsForm.seoCanonicalDomain?.trim() || window.location.origin} › bangladesh-smm-panel
+                    </div>
+                    <div className="text-base font-bold text-[#8AB4F8] leading-snug">
+                      {settingsForm.seoTitle?.trim() ||
+                        `${settingsForm.siteName || 'AmarTrend SMM'} – #1 ${BD_MAIN_SEO_KEYWORD}`}
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-amber-400 font-mono">
+                      <span>★★★★★</span>
+                      <span className="text-slate-300">Rating: 4.9/5 · 1,480 votes · Price range: ৳5 – ৳25,000 BDT</span>
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed line-clamp-2">
+                      {settingsForm.seoDescription?.trim() ||
+                        'বাংলাদেশের সেরা ও সবচেয়ে কম দামে অটোমেটিক SMM Panel। বিকাশ ও নগদে তাৎক্ষণিক ডিপোজিট করে Facebook Page Monetization, 60k Watchtime, Non-Drop Followers, YouTube 4000h Watchtime ও TikTok Views নিন।'}
+                    </p>
+                  </div>
+
+                  {/* SEO Meta Title & Meta Description Inputs with Character Health Meters */}
+                  <div className="grid grid-cols-1 gap-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] font-bold text-slate-300 uppercase">
+                          SEO Meta Title (Google Headline)
+                        </label>
+                        <span
+                          className={`text-[10px] font-mono ${
+                            (settingsForm.seoTitle || '').length >= 30 &&
+                            (settingsForm.seoTitle || '').length <= 65
+                              ? 'text-emerald-400'
+                              : 'text-amber-400'
+                          }`}
+                        >
+                          {(settingsForm.seoTitle || '').length} / 60 chars (Optimal: 30–60)
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        value={settingsForm.seoTitle || ''}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, seoTitle: e.target.value })}
+                        placeholder="AmarTrend SMM – #1 Cheapest bKash Nagad SMM Panel Bangladesh"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] font-bold text-slate-300 uppercase">
+                          SEO Meta Description (Bilingual Bengali + English Summary)
+                        </label>
+                        <span
+                          className={`text-[10px] font-mono ${
+                            (settingsForm.seoDescription || '').length >= 110 &&
+                            (settingsForm.seoDescription || '').length <= 170
+                              ? 'text-emerald-400'
+                              : 'text-amber-400'
+                          }`}
+                        >
+                          {(settingsForm.seoDescription || '').length} / 160 chars (Optimal: 120–160)
+                        </span>
+                      </div>
+                      <textarea
+                        rows={2}
+                        value={settingsForm.seoDescription || ''}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, seoDescription: e.target.value })}
+                        placeholder="বাংলাদেশের সেরা ও সবচেয়ে কম দামে অটোমেটিক SMM Panel..."
+                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white leading-relaxed"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] font-bold text-slate-300 uppercase">
+                          Target Keywords (Main Keyword + 15 Low-Competition BD Sub-Keywords)
+                        </label>
+                        <span className="text-[10px] font-mono text-cyan-400">
+                          {(settingsForm.seoKeywords || '')
+                            .split(',')
+                            .map((s) => s.trim())
+                            .filter(Boolean).length}{' '}
+                          Active Keywords
+                        </span>
+                      </div>
+                      <textarea
+                        rows={3}
+                        value={settingsForm.seoKeywords || ''}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, seoKeywords: e.target.value })}
+                        placeholder={DEFAULT_BD_SEO_KEYWORDS_STRING}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono text-[11px] leading-relaxed"
+                      />
+
+                      {/* Quick-Insert Researched Keyword Matrix */}
+                      <div className="mt-2 p-3 rounded-2xl bg-slate-950/80 border border-white/[0.06] space-y-2">
+                        <div className="text-[10px] font-mono text-slate-400 flex items-center justify-between">
+                          <span>MAIN KEYWORD: {BD_MAIN_SEO_KEYWORD}</span>
+                          <span className="text-emerald-400">Low-Competition BD Cluster</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[BD_MAIN_SEO_KEYWORD, ...BD_SUB_SEO_KEYWORDS].map((kw) => {
+                            const isIncluded = (settingsForm.seoKeywords || '')
+                              .toLowerCase()
+                              .includes(kw.toLowerCase());
+                            return (
+                              <button
+                                key={kw}
+                                type="button"
+                                onClick={() => {
+                                  const current = (settingsForm.seoKeywords || '')
+                                    .split(',')
+                                    .map((k) => k.trim())
+                                    .filter(Boolean);
+                                  if (!isIncluded) {
+                                    setSettingsForm({
+                                      ...settingsForm,
+                                      seoKeywords: [...current, kw].join(', ')
+                                    });
+                                  }
+                                }}
+                                className={`px-2 py-1 rounded-lg text-[10px] font-mono border transition-colors cursor-pointer ${
+                                  isIncluded
+                                    ? 'bg-emerald-500/15 border-emerald-500/35 text-emerald-300'
+                                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                                }`}
+                              >
+                                {isIncluded ? '✓ ' : '+ '}
+                                {kw}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Canonical Domain, Google Search Console Verification & GA4 ID */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-white/[0.07]">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-300 uppercase block mb-1">
+                        Canonical Website Domain
+                      </label>
+                      <input
+                        type="text"
+                        value={settingsForm.seoCanonicalDomain || ''}
+                        onChange={(e) =>
+                          setSettingsForm({ ...settingsForm, seoCanonicalDomain: e.target.value })
+                        }
+                        placeholder="https://m.khatirajbd.com"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-300 uppercase block mb-1">
+                        Google Search Console Code
+                      </label>
+                      <input
+                        type="text"
+                        value={settingsForm.googleSiteVerification || ''}
+                        onChange={(e) =>
+                          setSettingsForm({ ...settingsForm, googleSiteVerification: e.target.value })
+                        }
+                        placeholder="google-site-verification token"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-300 uppercase block mb-1">
+                        Google Analytics 4 ID (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={settingsForm.googleAnalyticsId || ''}
+                        onChange={(e) =>
+                          setSettingsForm({ ...settingsForm, googleAnalyticsId: e.target.value })
+                        }
+                        placeholder="G-XXXXXXXXXX"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Sitemap.xml & Robots.txt Quick Copy & Test Bar for Google Search Console */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-white/[0.07]">
+                    <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-bold text-emerald-400 uppercase">
+                          Dynamic XML Sitemap URL
+                        </div>
+                        <div className="text-[11px] font-mono text-slate-300 truncate">
+                          {(settingsForm.seoCanonicalDomain?.trim() || window.location.origin).replace(
+                            /\/+$/,
+                            ''
+                          )}
+                          /sitemap.xml
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const url = `${(
+                              settingsForm.seoCanonicalDomain?.trim() || window.location.origin
+                            ).replace(/\/+$/, '')}/sitemap.xml`;
+                            navigator.clipboard.writeText(url);
+                            onShowToast('Sitemap.xml URL copied for Google Search Console!', 'success');
+                          }}
+                          className="px-2.5 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold text-[10px] cursor-pointer"
+                        >
+                          Copy URL
+                        </button>
+                        <a
+                          href="/sitemap.xml"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-200 font-bold text-[10px]"
+                        >
+                          Open
+                        </a>
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-bold text-cyan-400 uppercase">
+                          Crawler Robots.txt URL
+                        </div>
+                        <div className="text-[11px] font-mono text-slate-300 truncate">
+                          {(settingsForm.seoCanonicalDomain?.trim() || window.location.origin).replace(
+                            /\/+$/,
+                            ''
+                          )}
+                          /robots.txt
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const url = `${(
+                              settingsForm.seoCanonicalDomain?.trim() || window.location.origin
+                            ).replace(/\/+$/, '')}/robots.txt`;
+                            navigator.clipboard.writeText(url);
+                            onShowToast('Robots.txt URL copied!', 'success');
+                          }}
+                          className="px-2.5 py-1.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 font-bold text-[10px] cursor-pointer"
+                        >
+                          Copy URL
+                        </button>
+                        <a
+                          href="/robots.txt"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-200 font-bold text-[10px]"
+                        >
+                          Open
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <button
                   type="submit"
                   disabled={savingSettings}
-                  className="w-full py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
+                  className="w-full py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all cursor-pointer"
                 >
                   <Save className="w-4 h-4" />
-                  <span>{savingSettings ? 'Saving ZiniPay & Global Settings...' : 'Save ZiniPay & Global Settings'}</span>
+                  <span>
+                    {savingSettings
+                      ? 'Saving ZiniPay, SEO & Global Settings...'
+                      : 'Save ZiniPay, SEO & Global Settings'}
+                  </span>
                 </button>
               </form>
             )}

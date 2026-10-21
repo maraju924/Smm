@@ -25,6 +25,7 @@ import {
 import { motion } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
 import { SMMService, Announcement, SiteSettings } from '../../types';
+import { BD_MAIN_SEO_KEYWORD, BD_SUB_SEO_KEYWORDS } from '../../data/seedServices';
 
 interface PublicLandingViewProps {
   services: SMMService[];
@@ -141,22 +142,52 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
     {
       q:
         language === 'bn'
+          ? 'বাংলাদেশে সবচেয়ে কম দামে বিকাশ ও নগদে অটোমেটিক SMM Panel কোনটি?'
+          : 'Which is the cheapest bKash & Nagad automated SMM Panel in Bangladesh?',
+      a:
+        language === 'bn'
+          ? `${siteSettings?.siteName || 'AmarTrend SMM'} হলো বাংলাদেশের সেরা ও সবচেয়ে কম দামের অটোমেটিক SMM Panel। এখানে ZiniPay অটোমেটিক পেমেন্ট গেটওয়ের মাধ্যমে বিকাশ (bKash), নগদ (Nagad), রকেট (Rocket) এবং উপায় (Upay) দিয়ে ১ ক্লিকে তাৎক্ষণিক ডিপোজিট করে সকল সোশ্যাল মিডিয়া সার্ভিস নেওয়া যায়।`
+          : `${siteSettings?.siteName || 'AmarTrend SMM'} is Bangladesh's #1 cheapest automated SMM panel supporting instant 1-click bKash, Nagad, Rocket, and Upay deposits via ZiniPay Gateway with wholesale BDT pricing.`
+    },
+    {
+      q:
+        language === 'bn'
+          ? 'ফেসবুক পেজ মনিটাইজেশন (60k Watchtime ও Non-Drop Followers) করতে কত সময় লাগে?'
+          : 'How fast can I complete Facebook Page Monetization (60k Watchtime & Followers) in BD?',
+      a:
+        language === 'bn'
+          ? 'আমাদের Facebook Page Monetization Package, 60,000 Minutes Watchtime এবং Non-Drop Profile/Page Followers সার্ভিস অর্ডার দেওয়ার কয়েক মিনিটের মধ্যেই অটোমেটিক শুরু হয় এবং ২৪ থেকে ৭২ ঘণ্টার মধ্যে সম্পূর্ণ নিরাপদে ডেলিভারি সম্পন্ন হয়।'
+          : 'Our Facebook Page Monetization packages, 60k Minutes In-Stream Ads Watchtime, and Non-Drop BD/Global Followers start within minutes and complete safely within 24–72 hours.'
+    },
+    {
+      q:
+        language === 'bn'
+          ? 'ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম ও ১০০০ সাবস্ক্রাইবার এবং টিকটক ভিউ কি নিরাপদ?'
+          : 'Are YouTube 4000 Hours Watchtime, Subscribers, and TikTok Views safe for monetization?',
+      a:
+        language === 'bn'
+          ? 'হ্যাঁ, ১০০% নিরাপদ। আমাদের YouTube 4000 Hours Watchtime, Monetization Pack এবং TikTok Viral Views ও Followers সার্ভিস রিয়েল রিটেনশন ও অটো-রিফিল গ্যারান্টিযুক্ত।'
+          : 'Yes. All YouTube 4000 Hours Watchtime, Subscribers, and TikTok Views/Followers services use high-retention delivery with automated refill protection.'
+    },
+    {
+      q:
+        language === 'bn'
           ? 'অর্ডার দেওয়ার কতক্ষণের মধ্যে কাজ শুরু হয়?'
           : 'How fast do orders start after submission?',
       a:
         language === 'bn'
           ? 'আমাদের ক্লাউড সার্ভার সরাসরি আপস্ট্রিম API প্রোভাইডারের সাথে যুক্ত। অর্ডার সাবমিট করার কয়েক সেকেন্ডের মধ্যেই স্বয়ংক্রিয়ভাবে ডিসপ্যাচ হয় এবং স্ট্যাটাস প্রতি ৫ মিনিটে অটো-সিঙ্ক হয়।'
-          : 'Orders are dispatched to upstream API clusters within milliseconds of submission. Real-time background workers synchronize start counts, remains, and completion status every 5 minutes.'
+          : 'Orders are dispatched to upstream API clusters within seconds of submission. Real-time background workers synchronize start counts, remains, and completion status every 5 minutes.'
     },
     {
       q:
         language === 'bn'
-          ? 'ওয়ালেটে কীভাবে টাকা (ফান্ড) অ্যাড করব?'
-          : 'What payment methods are supported for adding funds?',
+          ? 'ওয়ালেটে বিকাশ বা নগদে কীভাবে টাকা (ফান্ড) অ্যাড করব?'
+          : 'How do I deposit funds using bKash or Nagad?',
       a:
         language === 'bn'
-          ? 'আপনি বিকাশ (bKash), নগদ (Nagad), রকেট (Rocket), উপায় (Upay) এবং Binance USDT (TRC-20)-এর মাধ্যমে তাৎক্ষণিক ফান্ড অ্যাড করতে পারবেন। এছাড়া ডিপোজিটের ওপর বিশেষ বোনাস ও প্রোমো ভাউচার সুবিধা রয়েছে।'
-          : 'We support local Bangladeshi gateways (bKash, Nagad, Rocket, Upay) alongside Binance USDT. Special deposit bonuses and promotional gift vouchers are credited directly to your wallet.'
+          ? 'ওয়ালেট সেকশনে গিয়ে ডিপোজিট বাটনে ক্লিক করে টাকার পরিমাণ লিখুন এবং ZiniPay পেমেন্ট গেটওয়েতে গিয়ে বিকাশ, নগদ, রকেট বা উপায় সিলেক্ট করে পেমেন্ট সম্পন্ন করুন। পেমেন্ট শেষ হওয়া মাত্রই স্বয়ংক্রিয়ভাবে আপনার ব্যালেন্স যোগ হয়ে যাবে।'
+          : 'Simply open the Wallet tab, click Deposit, enter your BDT amount, and complete checkout via ZiniPay Gateway using bKash, Nagad, Rocket, or Upay. Your balance credits automatically.'
     },
     {
       q:
@@ -171,8 +202,8 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
     {
       q:
         language === 'bn'
-          ? 'রিসেলার এবং চাইল্ড প্যানেলের জন্য কি API সুবিধা আছে?'
-          : 'Do you provide a REST API for resellers and agencies?',
+          ? 'রিসেলার এবং চাইল্ড প্যানেলের জন্য কি Wholesale API v2 সুবিধা আছে?'
+          : 'Do you provide a Wholesale REST API v2 for Bangladeshi resellers and agencies?',
       a:
         language === 'bn'
           ? 'হ্যাঁ! প্রোফাইল সেকশন থেকে আপনি ১-ক্লিকে আপনার নিজস্ব API Key জেনারেট করতে পারবেন এবং স্ট্যান্ডার্ড /api/v2 এন্ডপয়েন্ট ব্যবহার করে যেকোনো প্যানেল সংযুক্ত করতে পারবেন।'
@@ -872,6 +903,132 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
               </div>
             );
           })}
+        </div>
+      </section>
+
+      {/* =====================================================================
+          SECTION 5B: BANGLADESH SMM & MONETIZATION KEYWORD GUIDE (SEMANTIC SEO)
+         ===================================================================== */}
+      <section
+        id="bd-seo-guide"
+        aria-label="Bangladesh Social Media Marketing and Monetization Guide"
+        className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 border-t border-white/[0.06]"
+      >
+        <div className="max-w-3xl mb-8">
+          <span className="text-xs font-mono text-[#22D3EE] tracking-wider">
+            Bangladesh SMM Growth & Monetization Hub
+          </span>
+          <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1">
+            {language === 'bn'
+              ? 'বাংলাদেশের সেরা ও সবচেয়ে কম দামে অটোমেটিক SMM Panel (বিকাশ ও নগদ পেমেন্ট)'
+              : '#1 Cheapest bKash & Nagad Automated SMM Panel in Bangladesh'}
+          </h2>
+          <p className="text-xs sm:text-sm text-[#94A3B8] leading-relaxed mt-2">
+            {language === 'bn'
+              ? 'ফেসবুক পেজ মনিটাইজেশন, ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম, টিকটক ভাইরাল ভিউ এবং ইনস্টাগ্রাম ফলোয়ার বুস্ট করার জন্য বাংলাদেশের কন্টেন্ট ক্রিয়েটর, এজেন্সি ও রিসেলারদের প্রথম পছন্দ।'
+              : 'Engineered specifically for Bangladeshi creators, e-commerce brands, and digital agencies with instant ZiniPay bKash/Nagad deposits and direct API v2 wholesale rates.'}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+          <article className="rounded-3xl bg-[#0D1220] border border-white/[0.08] p-6 flex flex-col justify-between">
+            <div>
+              <span className="text-xs font-mono text-[#8B5CF6]">01. Facebook Monetization BD</span>
+              <h3 className="text-base sm:text-lg font-bold text-white mt-1.5">
+                {language === 'bn'
+                  ? 'ফেসবুক পেজ মনিটাইজেশন ও 60k Watchtime সার্ভিস'
+                  : 'Facebook Page Monetization & 60k Watchtime BD'}
+              </h3>
+              <p className="text-xs text-[#94A3B8] leading-relaxed mt-2">
+                {language === 'bn'
+                  ? 'কম দামে নন-ড্রপ ফেসবুক পেজ ফলোয়ার, প্রোফাইল ফলোয়ার, ৬০,০০০ মিনিট ইন-স্ট্রিম অ্যাডস ওয়াচটাইম এবং রিলস ভিউ বুস্ট করুন সম্পূর্ণ অটোমেটিক ডেলিভারিতে।'
+                  : 'Buy Non-Drop Facebook Page & Profile Followers, 60k Minutes Watchtime for In-Stream Ads, and viral Reels views in Bangladesh with refill guarantee.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('services', { category: 'Facebook' })}
+              className="mt-5 text-xs font-bold text-[#22D3EE] hover:underline inline-flex items-center gap-1.5 w-fit cursor-pointer"
+            >
+              <span>{language === 'bn' ? 'ফেসবুক সার্ভিস লিস্ট দেখুন' : 'View Facebook BD Services'}</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </article>
+
+          <article className="rounded-3xl bg-[#0D1220] border border-white/[0.08] p-6 flex flex-col justify-between">
+            <div>
+              <span className="text-xs font-mono text-[#22D3EE]">02. YouTube & TikTok Boost BD</span>
+              <h3 className="text-base sm:text-lg font-bold text-white mt-1.5">
+                {language === 'bn'
+                  ? 'ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম ও টিকটক ভিউ প্যানেল'
+                  : 'YouTube 4000h Watchtime & TikTok Viral Panel BD'}
+              </h3>
+              <p className="text-xs text-[#94A3B8] leading-relaxed mt-2">
+                {language === 'bn'
+                  ? 'ইউটিউব চ্যানেল মনিটাইজেশনের জন্য ১০০০ সাবস্ক্রাইবার ও ৪০০০ ঘণ্টা ওয়াচটাইম এবং টিকটক ভিডিও ফর-ইউ (ForYou) ভিউ ও লাইক নিন সবচেয়ে সস্তা রেটে।'
+                  : 'Complete your YouTube Partner Program requirements with high-retention 4000 Hours Watchtime & Subscribers, plus instant TikTok Views and Followers in BDT.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('services', { category: 'YouTube' })}
+              className="mt-5 text-xs font-bold text-[#22D3EE] hover:underline inline-flex items-center gap-1.5 w-fit cursor-pointer"
+            >
+              <span>{language === 'bn' ? 'ইউটিউব ও টিকটক সার্ভিস দেখুন' : 'View YouTube & TikTok Services'}</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </article>
+
+          <article className="rounded-3xl bg-[#0D1220] border border-white/[0.08] p-6 flex flex-col justify-between">
+            <div>
+              <span className="text-xs font-mono text-emerald-400">03. Instant bKash & Nagad Gateway</span>
+              <h3 className="text-base sm:text-lg font-bold text-white mt-1.5">
+                {language === 'bn'
+                  ? 'ZiniPay বিকাশ ও নগদ অটোমেটিক পেমেন্ট ও রিসেলার API'
+                  : 'bKash & Nagad Auto Deposit + Wholesale API v2'}
+              </h3>
+              <p className="text-xs text-[#94A3B8] leading-relaxed mt-2">
+                {language === 'bn'
+                  ? 'ম্যানুয়াল ভেরিফিকেশনের ঝামেলা ছাড়াই বিকাশ, নগদ, রকেট ও উপায়ে অটোমেটিক ফান্ড অ্যাড করুন এবং আমাদের REST API v2 দিয়ে নিজস্ব চাইল্ড প্যানেল পরিচালনা করুন।'
+                  : 'Zero manual waiting—add funds 24/7 via automated bKash, Nagad, Rocket, and Upay checkout and connect child panels to our high-speed REST API v2.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('add-funds')}
+              className="mt-5 text-xs font-bold text-[#22D3EE] hover:underline inline-flex items-center gap-1.5 w-fit cursor-pointer"
+            >
+              <span>{language === 'bn' ? 'অটো ডিপোজিট ওয়ালেট দেখুন' : 'Open Instant Deposit Wallet'}</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </article>
+        </div>
+
+        {/* Crawlable Bangladesh Search Keyword Index (Clean Unboxed Text Separators) */}
+        <div className="rounded-2xl bg-[#0D1220]/60 border border-white/[0.06] p-5">
+          <div className="text-xs font-semibold text-white mb-2">
+            {language === 'bn'
+              ? 'জনপ্রিয় সার্চ টপিকস (Popular SMM Searches in Bangladesh):'
+              : 'Popular SMM & Monetization Searches in Bangladesh:'}
+          </div>
+          <p className="text-xs text-[#94A3B8] leading-relaxed">
+            {[BD_MAIN_SEO_KEYWORD, ...BD_SUB_SEO_KEYWORDS].map((kw, idx, arr) => (
+              <React.Fragment key={kw}>
+                <button
+                  type="button"
+                  onClick={() => onNavigateTab('services')}
+                  className="hover:text-white transition-colors text-left inline cursor-pointer"
+                >
+                  {kw}
+                </button>
+                {idx < arr.length - 1 && (
+                  <span aria-hidden="true" className="mx-2 text-slate-600">
+                    ·
+                  </span>
+                )}
+              </React.Fragment>
+            ))}
+          </p>
         </div>
       </section>
 
