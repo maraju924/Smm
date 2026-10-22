@@ -1,0 +1,19 @@
+User-agent: *
+Allow: /
+Allow: /?tab=services
+Allow: /?tab=about
+Allow: /?tab=contact
+Allow: /?tab=refund
+Allow: /?tab=terms
+Allow: /?tab=privacy
+Allow: /?tab=api
+Allow: /?tab=track
+Allow: /?tab=add-funds
+Allow: /?tab=affiliates
+Disallow: /api/provider/
+Disallow: /api/zinipay/
+Disallow: /?tab=admin
+Disallow: /?tab=404
+Disallow: /?tab=maintenance
+
+Sitemap: https://smm.khatirajbd.com/sitemap.xml

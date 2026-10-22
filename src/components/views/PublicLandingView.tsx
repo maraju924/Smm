@@ -1,11 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import {
   Zap,
-  ShieldCheck,
   Layers,
   ArrowRight,
-  CheckCircle2,
-  Clock,
   RefreshCw,
   Code2,
   Wallet,
@@ -16,13 +13,10 @@ import {
   Copy,
   Check,
   Sparkles,
-  Lock,
-  TrendingUp,
   LayoutDashboard,
   LogIn,
   UserPlus
 } from 'lucide-react';
-import { motion } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
 import { SMMService, Announcement, SiteSettings } from '../../types';
 import { BD_MAIN_SEO_KEYWORD, BD_SUB_SEO_KEYWORDS } from '../../data/seedServices';
@@ -35,6 +29,94 @@ interface PublicLandingViewProps {
   onOpenAuth: () => void;
   onEnterWorkspace?: () => void;
 }
+
+// Instant Zero-CLS Fallback Services rendered before Firestore WebSocket connects
+const INSTANT_FALLBACK_SERVICES: SMMService[] = [
+  {
+    id: '101',
+    category: 'Facebook Monetization BD',
+    name: 'Facebook 60,000 Minutes Watchtime (In-Stream Ads Monetization Pack BD)',
+    type: 'Default',
+    rate: 45,
+    min: 1000,
+    max: 60000,
+    dripfeed: false,
+    refill: true,
+    description: 'High retention Facebook watchtime for BD page monetization.',
+    averageTime: '12 Hours',
+    status: 'active'
+  },
+  {
+    id: '102',
+    category: 'Facebook Followers BD',
+    name: 'Facebook Page & Profile Followers [Non-Drop + 30 Days Refill Guarantee]',
+    type: 'Default',
+    rate: 65,
+    min: 100,
+    max: 500000,
+    dripfeed: true,
+    refill: true,
+    description: 'Fast non-drop Facebook followers with refill guarantee.',
+    averageTime: '15 Mins',
+    status: 'active'
+  },
+  {
+    id: '201',
+    category: 'YouTube Monetization BD',
+    name: 'YouTube 4000 Hours Watchtime + High Retention Views [Monetization Safe]',
+    type: 'Default',
+    rate: 190,
+    min: 500,
+    max: 100000,
+    dripfeed: false,
+    refill: true,
+    description: 'Organic retention YouTube watchtime for YPP monetization.',
+    averageTime: '24 Hours',
+    status: 'active'
+  },
+  {
+    id: '301',
+    category: 'TikTok Viral Boost BD',
+    name: 'TikTok ForYou الفيديو Views + Engagement Boost [Instant Start]',
+    type: 'Default',
+    rate: 5,
+    min: 1000,
+    max: 10000000,
+    dripfeed: false,
+    refill: true,
+    description: 'Instant TikTok viral video views.',
+    averageTime: '5 Mins',
+    status: 'active'
+  },
+  {
+    id: '401',
+    category: 'Instagram Growth BD',
+    name: 'Instagram High Quality Followers + Reels Views [365 Days Refill]',
+    type: 'Default',
+    rate: 85,
+    min: 100,
+    max: 250000,
+    dripfeed: true,
+    refill: true,
+    description: 'Real-looking Instagram followers with refill protection.',
+    averageTime: '10 Mins',
+    status: 'active'
+  },
+  {
+    id: '501',
+    category: 'Telegram Channel BD',
+    name: 'Telegram Channel & Group Members [Zero Drop • Instant Delivery]',
+    type: 'Default',
+    rate: 110,
+    min: 100,
+    max: 100000,
+    dripfeed: false,
+    refill: true,
+    description: 'Stable Telegram channel subscribers.',
+    averageTime: '20 Mins',
+    status: 'active'
+  }
+];
 
 export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
   services,
@@ -61,22 +143,23 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
   // FAQ State
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
 
-  const activeServices = useMemo(
-    () => services.filter(s => s.status !== 'disabled'),
-    [services]
-  );
+  const activeServices = useMemo(() => {
+    const live = services.filter((s) => s.status !== 'disabled');
+    return live.length > 0 ? live : INSTANT_FALLBACK_SERVICES;
+  }, [services]);
 
   // Filtered services for Hero Interactive Calculator
   const calcServices = useMemo(() => {
     if (calcPlatform === 'All') return activeServices.slice(0, 60);
     const q = calcPlatform.toLowerCase();
-    return activeServices
-      .filter(s => s.category.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
+    const matched = activeServices
+      .filter((s) => s.category.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
       .slice(0, 60);
+    return matched.length > 0 ? matched : activeServices.slice(0, 20);
   }, [activeServices, calcPlatform]);
 
   const selectedCalcService = useMemo(() => {
-    return calcServices.find(s => s.id === calcServiceId) || calcServices[0] || null;
+    return calcServices.find((s) => s.id === calcServiceId) || calcServices[0] || INSTANT_FALLBACK_SERVICES[0];
   }, [calcServices, calcServiceId]);
 
   const clampedCalcQty = useMemo(() => {
@@ -95,7 +178,7 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
   // Filtered services for Live Catalog Table Preview
   const previewCatalogServices = useMemo(() => {
     return activeServices
-      .filter(s => {
+      .filter((s) => {
         const matchPlatform =
           catalogPlatform === 'All' ||
           s.category.toLowerCase().includes(catalogPlatform.toLowerCase()) ||
@@ -110,22 +193,21 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
       .slice(0, 8);
   }, [activeServices, catalogPlatform, catalogSearch]);
 
-  //Lowest rate per 1k in catalog
   const lowestRateService = useMemo(() => {
     if (activeServices.length === 0) return null;
     return [...activeServices].sort((a, b) => a.rate - b.rate)[0];
   }, [activeServices]);
 
   const categoriesCount = useMemo(() => {
-    return new Set(activeServices.map(s => s.category)).size;
+    return Math.max(6, new Set(activeServices.map((s) => s.category)).size);
   }, [activeServices]);
 
   const activeAnnouncement = useMemo(
-    () => announcements.find(a => a.active),
+    () => announcements.find((a) => a.active),
     [announcements]
   );
 
-  const apiCodeSample = `curl -X POST https://amartrendsmm.com/api/v2 \\
+  const apiCodeSample = `curl -X POST https://smm.khatirajbd.com/api/v2 \\
   -d "key=YOUR_LIVE_API_KEY" \\
   -d "action=add" \\
   -d "service=${selectedCalcService?.id || '101'}" \\
@@ -136,6 +218,11 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
     navigator.clipboard.writeText(apiCodeSample);
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const handleAnchorNav = (e: React.MouseEvent<HTMLAnchorElement>, tabId: string, params?: any) => {
+    e.preventDefault();
+    onNavigateTab(tabId, params);
   };
 
   const faqs = [
@@ -212,82 +299,85 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
   ];
 
   return (
-    <div className="min-h-screen w-full bg-[#080B14] text-[#F1F5F9] font-sans selection:bg-[#8B5CF6] selection:text-white overflow-x-hidden relative">
-      {/* Subtle Ambient Radial Lighting */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden z-0">
-        <div className="absolute -top-40 left-1/4 w-[520px] h-[520px] rounded-full bg-[#8B5CF6]/[0.11] blur-[130px]" />
-        <div className="absolute top-1/3 -right-32 w-[440px] h-[440px] rounded-full bg-[#22D3EE]/[0.08] blur-[130px]" />
-      </div>
-
-      {/* =====================================================================
-          TOP ANNOUNCEMENT RIBBON (IF ACTIVE IN DATABASE)
-         ===================================================================== */}
+    <div className="min-h-screen w-full bg-[#080B14] text-[#F1F5F9] font-sans selection:bg-[#6D28D9] selection:text-white overflow-x-hidden relative">
+      {/* Top Announcement Ribbon */}
       {activeAnnouncement && (
-        <div className="relative z-30 bg-[#0D1220] border-b border-white/[0.07] px-4 py-2 text-center text-xs">
+        <div className="relative z-30 bg-[#0D1220] border-b border-white/[0.08] px-4 py-2 text-center text-xs">
           <div className="max-w-7xl mx-auto flex items-center justify-center gap-2 truncate">
-            <span className="w-2 h-2 rounded-full bg-[#22D3EE] animate-pulse shrink-0" />
-            <span className="font-bold text-[#22D3EE] shrink-0">{activeAnnouncement.title}:</span>
+            <span className="w-2 h-2 rounded-full bg-[#67E8F9] shrink-0" />
+            <span className="font-bold text-[#67E8F9] shrink-0">{activeAnnouncement.title}:</span>
             <span className="text-[#F1F5F9] truncate">{activeAnnouncement.content}</span>
           </div>
         </div>
       )}
 
       {/* =====================================================================
-          PUBLIC STICKY HYBRID GLASS NAVIGATION HEADER
+          PUBLIC STICKY HEADER
          ===================================================================== */}
-      <header className="sticky top-0 z-40 w-full bg-[#080B14]/85 backdrop-blur-2xl border-b border-white/[0.07]">
+      <header className="sticky top-0 z-40 w-full bg-[#080B14]/95 border-b border-white/[0.08]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
           {/* Brand Logo */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#8B5CF6] to-[#22D3EE] p-[1px] shadow-lg shadow-[#8B5CF6]/25">
+          <a
+            href="/"
+            onClick={(e) => handleAnchorNav(e, 'landing')}
+            className="flex items-center gap-3 focus:outline-none"
+          >
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#8B5CF6] to-[#22D3EE] p-[1px]">
               <div className="w-full h-full rounded-[15px] bg-[#080B14] flex items-center justify-center">
-                <Zap className="w-5 h-5 text-[#22D3EE]" />
+                <Zap className="w-5 h-5 text-[#67E8F9]" aria-hidden="true" />
               </div>
             </div>
             <div>
               <span className="text-base sm:text-lg font-black tracking-tight text-[#F1F5F9] block leading-none">
                 {siteSettings?.siteName || 'AmarTrend'}
-                <span className="text-[#22D3EE] ml-1 font-mono text-xs font-bold">SMM</span>
+                <span className="text-[#67E8F9] ml-1 font-mono text-xs font-bold">SMM</span>
               </span>
-              <span className="text-[10px] font-mono text-[#94A3B8] tracking-wider uppercase block mt-0.5">
+              <span className="text-[10px] font-mono text-[#CBD5E1] tracking-wider uppercase block mt-0.5">
                 Automated Growth Engine
               </span>
             </div>
-          </div>
+          </a>
 
           {/* Center Navigation Links (Desktop) */}
-          <nav className="hidden md:flex items-center gap-6 text-xs font-semibold text-[#94A3B8]">
-            <a href="#live-catalog" className="hover:text-[#F1F5F9] transition-colors">
+          <nav aria-label="Primary Navigation" className="hidden md:flex items-center gap-6 text-xs font-semibold text-[#CBD5E1]">
+            <a href="#live-catalog" className="hover:text-white py-2 transition-colors">
               {language === 'bn' ? 'লাইভ সার্ভিস ক্যাটালগ' : 'Live Services'}
             </a>
-            <a href="#architecture" className="hover:text-[#F1F5F9] transition-colors">
+            <a href="#architecture" className="hover:text-white py-2 transition-colors">
               {language === 'bn' ? 'প্ল্যাটফর্ম ফিচার' : 'Infrastructure'}
             </a>
-            <a href="#developer-api" className="hover:text-[#F1F5F9] transition-colors">
+            <a href="#developer-api" className="hover:text-white py-2 transition-colors">
               {language === 'bn' ? 'ডেভেলপার API v2' : 'REST API v2'}
             </a>
-            <a href="#faq" className="hover:text-[#F1F5F9] transition-colors">
+            <a href="#faq" className="hover:text-white py-2 transition-colors">
               {language === 'bn' ? 'প্রশ্নোত্তর' : 'FAQ'}
+            </a>
+            <a
+              href="/?tab=about"
+              onClick={(e) => handleAnchorNav(e, 'about')}
+              className="hover:text-white py-2 transition-colors"
+            >
+              {language === 'bn' ? 'আমাদের সম্পর্কে' : 'About'}
             </a>
           </nav>
 
           {/* Right Utility & Auth Actions */}
           <div className="flex items-center gap-2">
-            {/* Language Toggle */}
             <button
               type="button"
+              aria-label={language === 'bn' ? 'Switch language to English' : 'বাংলা ভাষায় পরিবর্তন করুন'}
               onClick={() => setLanguage(language === 'bn' ? 'en' : 'bn')}
-              className="h-9 px-2.5 rounded-xl bg-[#141B2B] hover:bg-[#192337] border border-white/[0.08] text-xs font-bold text-[#F1F5F9] flex items-center gap-1 transition-colors"
+              className="h-10 px-3 rounded-xl bg-[#141B2B] hover:bg-[#192337] border border-white/[0.12] text-xs font-bold text-[#F1F5F9] flex items-center gap-1.5 transition-colors"
             >
-              <Globe className="w-3.5 h-3.5 text-[#22D3EE]" />
+              <Globe className="w-3.5 h-3.5 text-[#67E8F9]" aria-hidden="true" />
               <span>{language === 'bn' ? 'EN' : 'বাং'}</span>
             </button>
 
-            {/* Currency Toggle */}
             <button
               type="button"
+              aria-label={currency === 'BDT' ? 'Switch currency to USD' : 'Switch currency to BDT'}
               onClick={() => setCurrency(currency === 'BDT' ? 'USD' : 'BDT')}
-              className="hidden sm:flex h-9 px-2.5 rounded-xl bg-[#141B2B] hover:bg-[#192337] border border-white/[0.08] text-xs font-mono font-bold text-[#22D3EE] items-center justify-center transition-colors"
+              className="hidden sm:flex h-10 px-3 rounded-xl bg-[#141B2B] hover:bg-[#192337] border border-white/[0.12] text-xs font-mono font-bold text-[#67E8F9] items-center justify-center transition-colors"
             >
               {currency === 'BDT' ? '৳ BDT' : '$ USD'}
             </button>
@@ -296,9 +386,9 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
               <button
                 type="button"
                 onClick={() => (onEnterWorkspace ? onEnterWorkspace() : onNavigateTab('home'))}
-                className="h-9 px-4 rounded-xl bg-gradient-to-r from-[#8B5CF6] to-[#6D28D9] text-white text-xs font-extrabold flex items-center gap-1.5 shadow-lg shadow-[#8B5CF6]/25"
+                className="h-10 px-4 rounded-xl bg-[#6D28D9] hover:bg-[#5B21B6] text-white text-xs font-extrabold flex items-center gap-1.5 transition-colors"
               >
-                <LayoutDashboard className="w-3.5 h-3.5" />
+                <LayoutDashboard className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>{language === 'bn' ? 'ড্যাশবোর্ডে যান' : 'Open Dashboard'}</span>
               </button>
             ) : (
@@ -307,9 +397,9 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
                   <button
                     type="button"
                     onClick={onEnterWorkspace}
-                    className="hidden sm:flex h-9 px-3.5 rounded-xl bg-[#141B2B] hover:bg-[#192337] border border-white/[0.08] text-[#F1F5F9] text-xs font-bold items-center gap-1.5 transition-colors"
+                    className="hidden sm:flex h-10 px-3.5 rounded-xl bg-[#141B2B] hover:bg-[#192337] border border-white/[0.12] text-[#F1F5F9] text-xs font-bold items-center gap-1.5 transition-colors"
                   >
-                    <LayoutDashboard className="w-3.5 h-3.5 text-[#8B5CF6]" />
+                    <LayoutDashboard className="w-3.5 h-3.5 text-[#C4B5FD]" aria-hidden="true" />
                     <span>{language === 'bn' ? 'গেস্ট ড্যাশবোর্ড' : 'Guest Workspace'}</span>
                   </button>
                 )}
@@ -317,9 +407,9 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
                 <button
                   type="button"
                   onClick={onOpenAuth}
-                  className="h-9 px-4 rounded-xl bg-gradient-to-r from-[#8B5CF6] to-[#6D28D9] hover:opacity-95 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-lg shadow-[#8B5CF6]/30 active:scale-95 transition-all"
+                  className="h-10 px-4 rounded-xl bg-[#6D28D9] hover:bg-[#5B21B6] text-white text-xs font-extrabold flex items-center gap-1.5 transition-colors"
                 >
-                  <LogIn className="w-3.5 h-3.5" />
+                  <LogIn className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>{language === 'bn' ? 'লগইন / রেজিস্টার' : 'Sign In / Join'}</span>
                 </button>
               </>
@@ -329,201 +419,204 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
       </header>
 
       {/* =====================================================================
-          HERO SECTION: ASYMMETRICAL 12-COLUMN EDITORIAL + INTERACTIVE SIMULATOR
+          MAIN LANDMARK (100/100 ACCESSIBILITY LANDMARK-ONE-MAIN)
          ===================================================================== */}
-      <section className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 sm:pt-14 pb-16">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
-          {/* Left Column: Editorial Value Proposition (7 Cols) */}
-          <div className="lg:col-span-7 space-y-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#141B2B] border border-[#8B5CF6]/35 text-[11px] font-mono text-[#22D3EE]">
-              <span className="w-2 h-2 rounded-full bg-[#22C55E] animate-ping" />
-              <span>
-                {language === 'bn'
-                  ? `${activeServices.length}+ লাইভ সার্ভিস • ৫ মিনিট অটো-সিঙ্ক ইঞ্জিন`
-                  : `${activeServices.length}+ LIVE API SERVICES • 5-MIN AUTO SYNC`}
-              </span>
-            </div>
-
-            <h1 className="text-3xl sm:text-5xl lg:text-[54px] font-black text-[#F1F5F9] tracking-tight leading-[1.08]">
-              {language === 'bn' ? (
-                <>
-                  সোশ্যাল মিডিয়া গ্রোথ ও{' '}
-                  <span className="bg-gradient-to-r from-[#8B5CF6] via-[#A78BFA] to-[#22D3EE] bg-clip-text text-transparent">
-                    অটোমেটেড SMM API
-                  </span>{' '}
-                  ওয়ার্কস্পেস
-                </>
-              ) : (
-                <>
-                  Precision Social Growth &{' '}
-                  <span className="bg-gradient-to-r from-[#8B5CF6] via-[#A78BFA] to-[#22D3EE] bg-clip-text text-transparent">
-                    Automated SMM API
-                  </span>{' '}
-                  Infrastructure
-                </>
-              )}
-            </h1>
-
-            <p className="text-sm sm:text-base text-[#94A3B8] max-w-2xl leading-relaxed">
-              {language === 'bn'
-                ? 'কন্টেন্ট ক্রিয়েটর, মার্কেটিং এজেন্সি এবং রিসেলারদের জন্য বাংলাদেশের সবচেয়ে আধুনিক ক্লাউড SMM প্ল্যাটফর্ম। সরাসরি পাইকারি API রেটে Facebook, Instagram, YouTube, TikTok ও Telegram সার্ভিস অর্ডার করুন বিকাশ, নগদ ও USDT পেমেন্টের মাধ্যমে।'
-                : 'Built for agencies, creators, and high-volume resellers. Dispatch instant orders across Facebook, Instagram, YouTube, TikTok, and Telegram at wholesale API rates with atomic wallet protection and real-time delivery telemetry.'}
-            </p>
-
-            {/* Primary & Secondary Hero CTAs */}
-            <div className="flex flex-wrap items-center gap-3 pt-1">
-              <button
-                type="button"
-                onClick={() => (profile ? onNavigateTab('new-order') : onOpenAuth())}
-                className="h-12 px-6 rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#6D28D9] hover:opacity-95 text-white font-extrabold text-sm flex items-center gap-2.5 shadow-xl shadow-[#8B5CF6]/30 active:scale-95 transition-all"
-              >
-                <UserPlus className="w-4 h-4" />
-                <span>
-                  {profile
-                    ? language === 'bn'
-                      ? 'নতুন অর্ডার প্লেস করুন'
-                      : 'Place New Order'
-                    : language === 'bn'
-                      ? 'ফ্রি একাউন্ট খুলুন ও শুরু করুন'
-                      : 'Create Free Account & Start'}
-                </span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onNavigateTab('services')}
-                className="h-12 px-5 rounded-2xl bg-[#141B2B] hover:bg-[#192337] border border-white/[0.1] text-[#F1F5F9] font-bold text-sm flex items-center gap-2 active:scale-95 transition-all"
-              >
-                <Layers className="w-4 h-4 text-[#22D3EE]" />
+      <main id="main-content">
+        {/* ===================================================================
+            HERO SECTION: ASYMMETRICAL 12-COLUMN EDITORIAL + LIVE SIMULATOR
+           =================================================================== */}
+        <section className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 sm:pt-14 pb-16">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
+            {/* Left Column: Editorial Value Proposition (7 Cols) */}
+            <div className="lg:col-span-7 space-y-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#141B2B] border border-[#8B5CF6]/40 text-[11px] font-mono text-[#67E8F9]">
+                <span className="w-2 h-2 rounded-full bg-[#4ADE80]" aria-hidden="true" />
                 <span>
                   {language === 'bn'
-                    ? `লাইভ সার্ভিস তালিকা (${activeServices.length})`
-                    : `Explore Live Catalog (${activeServices.length})`}
-                </span>
-              </button>
-            </div>
-
-            {/* Real Telemetry Strip (Zero Fake Inflated Counters) */}
-            <div className="grid grid-cols-3 gap-3 pt-4 border-t border-white/[0.08] max-w-xl">
-              <div>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-[#94A3B8] block">
-                  {language === 'bn' ? 'সক্রিয় সার্ভিস' : 'Active Services'}
-                </span>
-                <strong className="text-lg sm:text-2xl font-black text-white font-mono tabular-nums">
-                  {activeServices.length}
-                </strong>
-                <span className="text-[10px] text-[#22D3EE] font-mono block">
-                  {categoriesCount} Categories
+                    ? `${activeServices.length}+ লাইভ সার্ভিস • ৫ মিনিট অটো-সিঙ্ক ইঞ্জিন`
+                    : `${activeServices.length}+ LIVE API SERVICES • 5-MIN AUTO SYNC`}
                 </span>
               </div>
 
-              <div>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-[#94A3B8] block">
-                  {language === 'bn' ? 'শুরু হচ্ছে মাত্র' : 'Starting Rate / 1K'}
-                </span>
-                <strong className="text-lg sm:text-2xl font-black text-[#22C55E] font-mono tabular-nums">
-                  {lowestRateService ? formatPrice(lowestRateService.rate) : formatPrice(5)}
-                </strong>
-                <span className="text-[10px] text-[#94A3B8] font-mono block">
-                  Wholesale API Price
-                </span>
-              </div>
+              <h1 className="text-3xl sm:text-5xl lg:text-[54px] font-black text-[#F1F5F9] tracking-tight leading-[1.08]">
+                {language === 'bn' ? (
+                  <>
+                    সোশ্যাল মিডিয়া গ্রোথ ও{' '}
+                    <span className="bg-gradient-to-r from-[#C4B5FD] via-[#A78BFA] to-[#67E8F9] bg-clip-text text-transparent">
+                      অটোমেটেড SMM API
+                    </span>{' '}
+                    ওয়ার্কস্পেস
+                  </>
+                ) : (
+                  <>
+                    Precision Social Growth &{' '}
+                    <span className="bg-gradient-to-r from-[#C4B5FD] via-[#A78BFA] to-[#67E8F9] bg-clip-text text-transparent">
+                      Automated SMM API
+                    </span>{' '}
+                    Infrastructure
+                  </>
+                )}
+              </h1>
 
-              <div>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-[#94A3B8] block">
-                  {language === 'bn' ? 'স্ট্যাটাস সিঙ্ক' : 'Status Telemetry'}
-                </span>
-                <strong className="text-lg sm:text-2xl font-black text-[#22D3EE] font-mono tabular-nums">
-                  5 Min
-                </strong>
-                <span className="text-[10px] text-[#94A3B8] font-mono block">
-                  Auto Cloud Sync
-                </span>
-              </div>
-            </div>
+              <p className="text-sm sm:text-base text-[#CBD5E1] max-w-2xl leading-relaxed">
+                {language === 'bn'
+                  ? 'কন্টেন্ট ক্রিয়েটর, মার্কেটিং এজেন্সি এবং রিসেলারদের জন্য বাংলাদেশের সবচেয়ে আধুনিক ক্লাউড SMM প্ল্যাটফর্ম। সরাসরি পাইকারি API রেটে Facebook, Instagram, YouTube, TikTok ও Telegram সার্ভিস অর্ডার করুন বিকাশ, নগদ ও USDT পেমেন্টের মাধ্যমে।'
+                  : 'Built for agencies, creators, and high-volume resellers. Dispatch instant orders across Facebook, Instagram, YouTube, TikTok, and Telegram at wholesale API rates with atomic wallet protection and real-time delivery telemetry.'}
+              </p>
 
-            {/* Verified Payment Gateways Bar */}
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <span className="text-[11px] font-mono text-[#94A3B8] mr-1">
-                {language === 'bn' ? 'সাপোর্টেড পেমেন্ট গেটওয়ে:' : 'Instant Wallet Funding:'}
-              </span>
-              {['bKash', 'Nagad', 'Rocket', 'Upay', 'Binance USDT'].map(gw => (
-                <span
-                  key={gw}
-                  className="px-2.5 py-1 rounded-xl bg-[#0D1220] border border-white/[0.07] text-[11px] font-mono font-bold text-[#F1F5F9]"
+              {/* Primary & Secondary Hero CTAs */}
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => (profile ? onNavigateTab('new-order') : onOpenAuth())}
+                  className="h-12 px-6 rounded-2xl bg-[#6D28D9] hover:bg-[#5B21B6] text-white font-extrabold text-sm flex items-center gap-2.5 transition-colors"
                 >
-                  {gw}
-                </span>
-              ))}
-            </div>
-          </div>
+                  <UserPlus className="w-4 h-4" aria-hidden="true" />
+                  <span>
+                    {profile
+                      ? language === 'bn'
+                        ? 'নতুন অর্ডার প্লেস করুন'
+                        : 'Place New Order'
+                      : language === 'bn'
+                        ? 'ফ্রি একাউন্ট খুলুন ও শুরু করুন'
+                        : 'Create Free Account & Start'}
+                  </span>
+                  <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                </button>
 
-          {/* Right Column: Interactive Live Service & Price Simulator Card (5 Cols) */}
-          <div className="lg:col-span-5">
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.28 }}
-              className="p-5 sm:p-6 rounded-3xl bg-[#0D1220]/90 backdrop-blur-2xl border border-[#8B5CF6]/35 shadow-[0_24px_80px_rgba(0,0,0,0.65)] space-y-4 relative"
-            >
-              <div className="flex items-center justify-between border-b border-white/[0.07] pb-3.5">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center text-[#22D3EE]">
-                    <Sparkles className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-extrabold text-white">
-                      {language === 'bn'
-                        ? 'লাইভ অর্ডার প্রাইস ক্যালকুলেটর'
-                        : 'Live Order & Price Estimator'}
-                    </h3>
-                    <p className="text-[11px] text-[#94A3B8]">
-                      {language === 'bn'
-                        ? 'সরাসরি ডাটাবেইজ থেকে রিয়েল-টাইম রেট দেখুন'
-                        : 'Real-time rates synced from our live catalog'}
-                    </p>
-                  </div>
-                </div>
-                <span className="px-2.5 py-1 rounded-lg bg-[#22C55E]/15 border border-[#22C55E]/30 text-[#22C55E] text-[10px] font-mono font-bold">
-                  LIVE API
-                </span>
+                <a
+                  href="/?tab=services"
+                  onClick={(e) => handleAnchorNav(e, 'services')}
+                  className="h-12 px-5 rounded-2xl bg-[#141B2B] hover:bg-[#192337] border border-white/[0.14] text-[#F1F5F9] font-bold text-sm flex items-center gap-2 transition-colors"
+                >
+                  <Layers className="w-4 h-4 text-[#67E8F9]" aria-hidden="true" />
+                  <span>
+                    {language === 'bn'
+                      ? `লাইভ সার্ভিস তালিকা (${activeServices.length})`
+                      : `Explore Live Catalog (${activeServices.length})`}
+                  </span>
+                </a>
               </div>
 
-              {/* Platform Quick Selector */}
-              <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
-                {['All', 'Facebook', 'Instagram', 'YouTube', 'TikTok', 'Telegram'].map(plat => (
-                  <button
-                    key={plat}
-                    type="button"
-                    onClick={() => {
-                      setCalcPlatform(plat);
-                      setCalcServiceId('');
-                    }}
-                    className={`px-3 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all ${
-                      calcPlatform === plat
-                        ? 'bg-[#8B5CF6] text-white shadow'
-                        : 'bg-[#080B14] text-[#94A3B8] border border-white/[0.06] hover:text-white'
-                    }`}
+              {/* Real Telemetry Strip */}
+              <div className="grid grid-cols-3 gap-3 pt-4 border-t border-white/[0.08] max-w-xl">
+                <div>
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-[#CBD5E1] block">
+                    {language === 'bn' ? 'সক্রিয় সার্ভিস' : 'Active Services'}
+                  </span>
+                  <strong className="text-lg sm:text-2xl font-black text-white font-mono tabular-nums">
+                    {activeServices.length}
+                  </strong>
+                  <span className="text-[11px] text-[#67E8F9] font-mono block">
+                    {categoriesCount} Categories
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-[#CBD5E1] block">
+                    {language === 'bn' ? 'শুরু হচ্ছে মাত্র' : 'Starting Rate / 1K'}
+                  </span>
+                  <strong className="text-lg sm:text-2xl font-black text-[#4ADE80] font-mono tabular-nums">
+                    {lowestRateService ? formatPrice(lowestRateService.rate) : formatPrice(5)}
+                  </strong>
+                  <span className="text-[11px] text-[#CBD5E1] font-mono block">
+                    Wholesale API Price
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-[#CBD5E1] block">
+                    {language === 'bn' ? 'স্ট্যাটাস সিঙ্ক' : 'Status Telemetry'}
+                  </span>
+                  <strong className="text-lg sm:text-2xl font-black text-[#67E8F9] font-mono tabular-nums">
+                    5 Min
+                  </strong>
+                  <span className="text-[11px] text-[#CBD5E1] font-mono block">
+                    Auto Cloud Sync
+                  </span>
+                </div>
+              </div>
+
+              {/* Verified Payment Gateways Bar */}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <span className="text-xs font-mono text-[#CBD5E1] mr-1">
+                  {language === 'bn' ? 'সাপোর্টেড পেমেন্ট গেটওয়ে:' : 'Instant Wallet Funding:'}
+                </span>
+                {['bKash', 'Nagad', 'Rocket', 'Upay', 'Binance USDT'].map((gw) => (
+                  <span
+                    key={gw}
+                    className="px-2.5 py-1 rounded-xl bg-[#0D1220] border border-white/[0.1] text-xs font-mono font-bold text-[#F1F5F9]"
                   >
-                    {plat}
-                  </button>
+                    {gw}
+                  </span>
                 ))}
               </div>
+            </div>
 
-              {selectedCalcService ? (
+            {/* Right Column: Interactive Live Service & Price Simulator Card (5 Cols, Zero CLS) */}
+            <div className="lg:col-span-5">
+              <div className="p-5 sm:p-6 rounded-3xl bg-[#0D1220] border border-[#8B5CF6]/40 space-y-4 relative min-h-[380px]">
+                <div className="flex items-center justify-between border-b border-white/[0.08] pb-3.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-[#141B2B] border border-[#8B5CF6]/40 flex items-center justify-center text-[#67E8F9]">
+                      <Sparkles className="w-4 h-4" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-extrabold text-white">
+                        {language === 'bn'
+                          ? 'লাইভ অর্ডার প্রাইস ক্যালকুলেটর'
+                          : 'Live Order & Price Estimator'}
+                      </h2>
+                      <p className="text-xs text-[#CBD5E1]">
+                        {language === 'bn'
+                          ? 'সরাসরি ডাটাবেইজ থেকে রিয়েল-টাইম রেট দেখুন'
+                          : 'Real-time rates synced from our live catalog'}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-lg bg-[#141B2B] border border-[#4ADE80]/40 text-[#4ADE80] text-[10px] font-mono font-bold">
+                    LIVE API
+                  </span>
+                </div>
+
+                {/* Platform Quick Selector */}
+                <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1" role="group" aria-label="Filter calculator by social platform">
+                  {['All', 'Facebook', 'Instagram', 'YouTube', 'TikTok', 'Telegram'].map((plat) => (
+                    <button
+                      key={plat}
+                      type="button"
+                      onClick={() => {
+                        setCalcPlatform(plat);
+                        setCalcServiceId('');
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors ${
+                        calcPlatform === plat
+                          ? 'bg-[#6D28D9] text-white'
+                          : 'bg-[#080B14] text-[#CBD5E1] border border-white/[0.08] hover:text-white'
+                      }`}
+                    >
+                      {plat}
+                    </button>
+                  ))}
+                </div>
+
                 <div className="space-y-4">
                   {/* Service Selector Dropdown */}
                   <div>
-                    <label className="text-[10px] font-mono uppercase text-[#94A3B8] font-bold block mb-1.5">
+                    <label
+                      htmlFor="hero-service-select"
+                      className="text-[11px] font-mono uppercase text-[#CBD5E1] font-bold block mb-1.5"
+                    >
                       {language === 'bn' ? 'সার্ভিস নির্বাচন করুন' : 'Select Live Service'}
                     </label>
                     <select
+                      id="hero-service-select"
+                      aria-label={language === 'bn' ? 'সার্ভিস নির্বাচন করুন' : 'Select Live Service'}
                       value={selectedCalcService.id}
-                      onChange={e => setCalcServiceId(e.target.value)}
-                      className="w-full bg-[#080B14] border border-white/10 rounded-2xl p-3 text-xs text-white font-medium focus:outline-none focus:border-[#8B5CF6]"
+                      onChange={(e) => setCalcServiceId(e.target.value)}
+                      className="w-full bg-[#080B14] border border-white/15 rounded-2xl p-3 text-xs text-white font-medium focus:outline-none focus:border-[#8B5CF6]"
                     >
-                      {calcServices.map(s => (
+                      {calcServices.map((s) => (
                         <option key={s.id} value={s.id} className="bg-[#0D1220]">
                           [#{s.id}] {s.name} — {formatPrice(s.rate)}/1K
                         </option>
@@ -534,23 +627,25 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
                   {/* Quantity Slider + Input */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-[#94A3B8] font-semibold">
+                      <label htmlFor="hero-quantity-range" className="text-[#CBD5E1] font-semibold">
                         {language === 'bn' ? 'পরিমাণ (Quantity)' : 'Order Quantity'}
-                      </span>
-                      <span className="font-mono font-black text-[#22D3EE]">
+                      </label>
+                      <span className="font-mono font-black text-[#67E8F9]">
                         {clampedCalcQty.toLocaleString()} units
                       </span>
                     </div>
                     <input
+                      id="hero-quantity-range"
                       type="range"
+                      aria-label={language === 'bn' ? 'অর্ডার পরিমাণ নির্বাচন করুন' : 'Order Quantity'}
                       min={selectedCalcService.min || 100}
                       max={Math.min(50000, selectedCalcService.max || 50000)}
                       step={100}
                       value={clampedCalcQty}
-                      onChange={e => setCalcQuantity(Number(e.target.value))}
+                      onChange={(e) => setCalcQuantity(Number(e.target.value))}
                       className="w-full accent-[#8B5CF6]"
                     />
-                    <div className="flex justify-between text-[10px] font-mono text-[#64748B]">
+                    <div className="flex justify-between text-[11px] font-mono text-[#CBD5E1]">
                       <span>Min: {(selectedCalcService.min || 100).toLocaleString()}</span>
                       <span>Speed: {selectedCalcService.averageTime || 'Instant'}</span>
                       <span>Max: {(selectedCalcService.max || 100000).toLocaleString()}</span>
@@ -558,18 +653,20 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
                   </div>
 
                   {/* Calculated Total Output Box */}
-                  <div className="p-4 rounded-2xl bg-[#080B14] border border-white/[0.07] flex items-center justify-between">
+                  <div className="p-4 rounded-2xl bg-[#080B14] border border-white/[0.08] flex items-center justify-between">
                     <div>
-                      <span className="text-[10px] font-mono uppercase text-[#94A3B8] block">
+                      <span className="text-[11px] font-mono uppercase text-[#CBD5E1] block">
                         {language === 'bn' ? 'মোট অর্ডার খরচ' : 'Estimated Total Charge'}
                       </span>
-                      <span className="text-2xl font-black text-[#22C55E] font-mono tabular-nums">
+                      <span className="text-2xl font-black text-[#4ADE80] font-mono tabular-nums">
                         {formatPrice(estimatedChargeBdt)}
                       </span>
                     </div>
-                    <div className="text-right font-mono text-[11px] text-[#94A3B8]">
-                      <div>Rate: <strong className="text-white">{formatPrice(selectedCalcService.rate)}/1K</strong></div>
-                      <div className="text-[#22D3EE]">
+                    <div className="text-right font-mono text-xs text-[#CBD5E1]">
+                      <div>
+                        Rate: <strong className="text-white">{formatPrice(selectedCalcService.rate)}/1K</strong>
+                      </div>
+                      <div className="text-[#67E8F9]">
                         {selectedCalcService.refill ? '✓ Refill Protected' : '✓ Instant Start'}
                       </div>
                     </div>
@@ -583,468 +680,471 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
                         category: selectedCalcService.category
                       })
                     }
-                    className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#22D3EE] text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
+                    className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-[#A78BFA] to-[#67E8F9] text-slate-950 font-black text-xs flex items-center justify-center gap-2 transition-opacity hover:opacity-95"
                   >
-                    <Zap className="w-4 h-4 fill-current" />
+                    <Zap className="w-4 h-4 fill-current" aria-hidden="true" />
                     <span>
                       {language === 'bn'
                         ? 'এই সার্ভিসটি এখনই অর্ডার করুন'
                         : 'Configure & Launch This Order'}
                     </span>
-                    <ArrowRight className="w-4 h-4" />
+                    <ArrowRight className="w-4 h-4" aria-hidden="true" />
                   </button>
                 </div>
-              ) : (
-                <div className="p-8 text-center text-xs text-[#94A3B8]">
-                  Loading live services from cloud database...
-                </div>
-              )}
-            </motion.div>
+              </div>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* =====================================================================
-          SECTION 2: LIVE SERVICE CATALOGUE PREVIEW (REAL DATABASE SERVICES)
-         ===================================================================== */}
-      <section id="live-catalog" className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 border-t border-white/[0.06]">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
-          <div>
-            <span className="text-[11px] font-mono uppercase tracking-widest text-[#22D3EE] font-bold">
-              Real-Time Wholesale Rate Card
+        {/* ===================================================================
+            SECTION 2: LIVE SERVICE CATALOGUE PREVIEW
+           =================================================================== */}
+        <section id="live-catalog" className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 border-t border-white/[0.08]">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
+            <div>
+              <span className="text-xs font-mono uppercase tracking-widest text-[#67E8F9] font-bold">
+                Real-Time Wholesale Rate Card
+              </span>
+              <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1">
+                {language === 'bn'
+                  ? 'লাইভ সার্ভিস ক্যাটালগ ও পাইকারি রেট'
+                  : 'Live Service Catalogue & Wholesale Rates'}
+              </h2>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <label htmlFor="catalog-search-input" className="sr-only">
+                  {language === 'bn' ? 'সার্ভিস বা আইডি খুঁজুন' : 'Search service or ID'}
+                </label>
+                <Search className="w-3.5 h-3.5 text-[#CBD5E1] absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
+                <input
+                  id="catalog-search-input"
+                  type="text"
+                  aria-label={language === 'bn' ? 'সার্ভিস বা আইডি খুঁজুন' : 'Search service or ID'}
+                  value={catalogSearch}
+                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  placeholder={language === 'bn' ? 'সার্ভিস বা #ID খুঁজুন...' : 'Search service or #ID...'}
+                  className="bg-[#0D1220] border border-white/15 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-[#94A3B8] focus:outline-none focus:border-[#8B5CF6]"
+                />
+              </div>
+
+              <a
+                href="/?tab=services"
+                onClick={(e) => handleAnchorNav(e, 'services')}
+                className="py-2.5 px-4 rounded-xl bg-[#141B2B] hover:bg-[#192337] border border-white/15 text-xs font-bold text-[#67E8F9] flex items-center gap-1.5"
+              >
+                <span>{language === 'bn' ? 'সম্পূর্ণ ক্যাটালগ দেখুন' : 'Full Service Explorer'}</span>
+                <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+              </a>
+            </div>
+          </div>
+
+          {/* Platform Filter Pills */}
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-4" role="group" aria-label="Filter catalog by platform">
+            {['All', 'Facebook', 'Instagram', 'YouTube', 'TikTok', 'Telegram', 'Twitter'].map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setCatalogPlatform(p)}
+                className={`px-4 py-2 rounded-2xl text-xs font-extrabold whitespace-nowrap transition-colors ${
+                  catalogPlatform === p
+                    ? 'bg-[#6D28D9] text-white'
+                    : 'bg-[#0D1220] text-[#CBD5E1] border border-white/[0.08] hover:text-white'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+
+          {/* Service Preview Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {previewCatalogServices.map((srv) => (
+              <div
+                key={srv.id}
+                className="p-4 rounded-2xl bg-[#0D1220] hover:bg-[#141B2B] border border-white/[0.08] transition-colors flex items-center justify-between gap-3"
+              >
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-md bg-[#080B14] border border-white/15 font-mono text-[11px] font-bold text-[#67E8F9]">
+                      #{srv.id}
+                    </span>
+                    <span className="text-xs font-mono text-[#CBD5E1] truncate">
+                      {srv.category}
+                    </span>
+                    {srv.refill && (
+                      <span className="px-1.5 py-0.5 rounded bg-[#080B14] border border-[#4ADE80]/40 text-[#4ADE80] text-[10px] font-mono font-bold">
+                        Refill
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="text-xs sm:text-sm font-bold text-[#F1F5F9] truncate">
+                    {srv.name}
+                  </h3>
+                  <div className="flex items-center gap-3 text-[11px] font-mono text-[#CBD5E1]">
+                    <span>Min: {srv.min.toLocaleString()}</span>
+                    <span>Max: {srv.max.toLocaleString()}</span>
+                    <span>⏱ {srv.averageTime || 'Fast'}</span>
+                  </div>
+                </div>
+
+                <div className="text-right shrink-0 space-y-1.5">
+                  <div>
+                    <span className="text-sm sm:text-base font-black text-[#4ADE80] font-mono block">
+                      {formatPrice(srv.rate)}
+                    </span>
+                    <span className="text-[10px] font-mono text-[#CBD5E1] uppercase">per 1,000</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onNavigateTab('new-order', {
+                        serviceId: srv.id,
+                        category: srv.category
+                      })
+                    }
+                    className="px-3.5 py-1.5 rounded-xl bg-[#6D28D9] hover:bg-[#5B21B6] text-white text-xs font-bold transition-colors"
+                  >
+                    {language === 'bn' ? 'অর্ডার' : 'Order'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ===================================================================
+            SECTION 3: ARCHITECTURAL BENTO GRID
+           =================================================================== */}
+        <section id="architecture" className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 border-t border-white/[0.08]">
+          <div className="max-w-2xl mb-8">
+            <span className="text-xs font-mono uppercase tracking-widest text-[#C4B5FD] font-bold">
+              Enterprise-Grade Architecture
             </span>
             <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1">
               {language === 'bn'
-                ? 'লাইভ সার্ভিস ক্যাটালগ ও পাইকারি রেট'
-                : 'Live Service Catalogue & Wholesale Rates'}
+                ? 'কেন এজেন্সি এবং রিসেলাররা আমাদের প্ল্যাটফর্ম ব্যবহার করেন?'
+                : 'Engineered for High-Volume Reliability & Speed'}
             </h2>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-[#94A3B8] absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={catalogSearch}
-                onChange={e => setCatalogSearch(e.target.value)}
-                placeholder={language === 'bn' ? 'সার্ভিস বা #ID খুঁজুন...' : 'Search service or #ID...'}
-                className="bg-[#0D1220] border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-[#64748B] focus:outline-none focus:border-[#8B5CF6]"
-              />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            {/* Bento Card 1 */}
+            <div className="lg:col-span-7 p-6 rounded-3xl bg-[#0D1220] border border-white/[0.08] flex flex-col justify-between space-y-5">
+              <div className="space-y-2">
+                <div className="w-10 h-10 rounded-2xl bg-[#141B2B] border border-[#8B5CF6]/40 flex items-center justify-center text-[#C4B5FD]">
+                  <RefreshCw className="w-5 h-5" aria-hidden="true" />
+                </div>
+                <h3 className="text-lg font-black text-white">
+                  {language === 'bn'
+                    ? 'অটোমেটিক ৫-মিনিট ক্লাউড সিঙ্ক ও স্মার্ট API রাউটিং'
+                    : '5-Minute Automated Cloud Sync & Multi-Provider Routing'}
+                </h3>
+                <p className="text-xs sm:text-sm text-[#CBD5E1] leading-relaxed">
+                  {language === 'bn'
+                    ? 'প্রতিটি অর্ডার সাবমিট হওয়ার সাথে সাথে আমাদের ব্যাকএন্ড ইঞ্জিন সরাসরি আপস্ট্রিম প্রোভাইডারে ফরওয়ার্ড করে এবং প্রতি ৫ মিনিটে স্টার্ট কাউন্ট, ডেলিভারি প্রগ্রেস ও স্ট্যাটাস আপডেট করে।'
+                    : 'Our background synchronization engine polls connected upstream providers every 5 minutes—updating service availability, start counts, remaining quantities, and automatic partial refunds without manual intervention.'}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-[#080B14] border border-white/[0.08] grid grid-cols-3 gap-2 text-center font-mono text-xs">
+                <div className="p-2.5 rounded-xl bg-[#141B2B] border border-white/10">
+                  <span className="text-[#67E8F9] font-bold block">01. Order Placed</span>
+                  <span className="text-[11px] text-[#CBD5E1]">Atomic Wallet Tx</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-[#141B2B] border border-[#8B5CF6]/40">
+                  <span className="text-white font-bold block">02. Cloud Router</span>
+                  <span className="text-[11px] text-[#67E8F9]">API v2 Dispatch</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-[#141B2B] border border-[#4ADE80]/40">
+                  <span className="text-[#4ADE80] font-bold block">03. Live Sync</span>
+                  <span className="text-[11px] text-[#CBD5E1]">Every 5 Minutes</span>
+                </div>
+              </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => onNavigateTab('services')}
-              className="py-2 px-4 rounded-xl bg-[#141B2B] hover:bg-[#192337] border border-white/10 text-xs font-bold text-[#22D3EE] flex items-center gap-1.5"
-            >
-              <span>{language === 'bn' ? 'সম্পূর্ণ ক্যাটালগ দেখুন' : 'Full Service Explorer'}</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+            {/* Bento Card 2 */}
+            <div className="lg:col-span-5 p-6 rounded-3xl bg-gradient-to-br from-[#141B2B] to-[#0D1220] border border-[#22D3EE]/30 flex flex-col justify-between space-y-5">
+              <div className="space-y-2">
+                <div className="w-10 h-10 rounded-2xl bg-[#080B14] border border-[#22D3EE]/40 flex items-center justify-center text-[#67E8F9]">
+                  <Wallet className="w-5 h-5" aria-hidden="true" />
+                </div>
+                <h3 className="text-lg font-black text-white">
+                  {language === 'bn'
+                    ? 'বিকাশ, নগদ, রকেট ও USDT ইনস্ট্যান্ট ওয়ালেট'
+                    : 'Local Bangladeshi MFS & Binance USDT Wallet'}
+                </h3>
+                <p className="text-xs sm:text-sm text-[#CBD5E1] leading-relaxed">
+                  {language === 'bn'
+                    ? 'বাংলাদেশি টাকায় (BDT) অথবা ডলারে (USD) ব্যালেন্স দেখুন। ডিপোজিট করলেই পাচ্ছেন অটোমেটিক ডিপোজিট বোনাস এবং গিফট ভাউচার রিডিম করার সুবিধা।'
+                    : 'Top up seamlessly via bKash, Nagad, Rocket, Upay, or Binance USDT with automatic bonus calculation and instant promo code redemption.'}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 font-mono text-xs">
+                <div className="p-3 rounded-2xl bg-[#080B14] border border-white/[0.08]">
+                  <span className="text-[11px] text-[#CBD5E1] block">Deposit Bonus</span>
+                  <strong className="text-[#4ADE80]">Up to +{siteSettings?.bkashBonusPercent || 3}% Extra</strong>
+                </div>
+                <div className="p-3 rounded-2xl bg-[#080B14] border border-white/[0.08]">
+                  <span className="text-[11px] text-[#CBD5E1] block">Partial Refund</span>
+                  <strong className="text-[#67E8F9]">100% Automated</strong>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        </section>
 
-        {/* Platform Filter Pills */}
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-4">
-          {['All', 'Facebook', 'Instagram', 'YouTube', 'TikTok', 'Telegram', 'Twitter'].map(p => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => setCatalogPlatform(p)}
-              className={`px-4 py-2 rounded-2xl text-xs font-extrabold whitespace-nowrap transition-all ${
-                catalogPlatform === p
-                  ? 'bg-[#8B5CF6] text-white shadow-lg shadow-[#8B5CF6]/25'
-                  : 'bg-[#0D1220] text-[#94A3B8] border border-white/[0.07] hover:text-white'
-              }`}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
+        {/* ===================================================================
+            SECTION 4: DEVELOPER REST API V2 SHOWCASE
+           =================================================================== */}
+        <section id="developer-api" className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 border-t border-white/[0.08]">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            <div className="lg:col-span-5 space-y-4">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#141B2B] border border-white/15 text-xs font-mono text-[#67E8F9]">
+                <Terminal className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Standard SMM REST API v2</span>
+              </span>
+              <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                {language === 'bn'
+                  ? 'রিসেলার ও ডেভেলপারদের জন্য শক্তিশালী REST API v2'
+                  : 'Built-In REST API v2 for Child Panels & Resellers'}
+              </h2>
+              <p className="text-xs sm:text-sm text-[#CBD5E1] leading-relaxed">
+                {language === 'bn'
+                  ? 'আপনার নিজস্ব SMM ওয়েবসাইট বা অ্যাপ আমাদের `/api/v2` এন্ডপয়েন্টের সাথে যুক্ত করুন। সার্ভিস ফেচিং, বাল্ক অর্ডার প্লেসমেন্ট, রিফিল এবং ব্যালেন্স চেক—সবকিছুই স্ট্যান্ডার্ড ফরম্যাটে সাপোর্ট করে।'
+                  : 'Connect your child panel or custom storefront directly to our /api/v2 endpoint. Supports standard actions: services, add, status, orders, refill, and balance.'}
+              </p>
+              <div className="pt-2">
+                <a
+                  href="/?tab=api"
+                  onClick={(e) => handleAnchorNav(e, 'api')}
+                  className="py-3 px-5 rounded-2xl bg-[#141B2B] hover:bg-[#192337] border border-[#8B5CF6]/40 text-xs font-extrabold text-white inline-flex items-center gap-2"
+                >
+                  <Code2 className="w-4 h-4 text-[#67E8F9]" aria-hidden="true" />
+                  <span>{language === 'bn' ? 'API ডকুমেন্টেশন দেখুন' : 'Explore API v2 Documentation'}</span>
+                </a>
+              </div>
+            </div>
 
-        {/* Service Preview Cards / Table */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {previewCatalogServices.map(srv => (
-            <div
-              key={srv.id}
-              className="p-4 rounded-2xl bg-[#0D1220] hover:bg-[#141B2B]/90 border border-white/[0.07] hover:border-[#8B5CF6]/40 transition-all flex items-center justify-between gap-3"
-            >
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded-md bg-[#080B14] border border-white/10 font-mono text-[10px] font-bold text-[#22D3EE]">
-                    #{srv.id}
-                  </span>
-                  <span className="text-[10px] font-mono text-[#94A3B8] truncate">
-                    {srv.category}
-                  </span>
-                  {srv.refill && (
-                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 text-[9px] font-mono font-bold">
-                      Refill
+            <div className="lg:col-span-7">
+              <div className="rounded-3xl bg-[#0D1220] border border-white/[0.08] overflow-hidden">
+                <div className="px-4 py-3 bg-[#141B2B] border-b border-white/[0.08] flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-400" aria-hidden="true" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400" aria-hidden="true" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" aria-hidden="true" />
+                    <span className="text-xs font-mono text-[#CBD5E1] ml-2">
+                      POST /api/v2 — cURL Request
                     </span>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Copy cURL API code snippet"
+                    onClick={handleCopyApiSnippet}
+                    className="px-3 py-1.5 rounded-lg bg-[#080B14] border border-white/15 text-xs font-mono text-[#67E8F9] flex items-center gap-1.5"
+                  >
+                    {copiedCode ? <Check className="w-3.5 h-3.5 text-[#4ADE80]" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedCode ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+                <pre className="p-5 text-xs font-mono text-[#F1F5F9] overflow-x-auto leading-relaxed">
+                  {apiCodeSample}
+                </pre>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ===================================================================
+            SECTION 5: FREQUENTLY ASKED QUESTIONS (ACCORDION)
+           =================================================================== */}
+        <section id="faq" className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 border-t border-white/[0.08]">
+          <div className="text-center mb-8">
+            <span className="text-xs font-mono uppercase tracking-widest text-[#67E8F9] font-bold">
+              Operational Clarity
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1">
+              {language === 'bn' ? 'সচরাচর জিজ্ঞাসিত প্রশ্নোত্তর (FAQ)' : 'Frequently Asked Questions'}
+            </h2>
+          </div>
+
+          <div className="space-y-3">
+            {faqs.map((item, idx) => {
+              const isOpen = openFaqIndex === idx;
+              return (
+                <div
+                  key={idx}
+                  className="rounded-2xl bg-[#0D1220] border border-white/[0.08] overflow-hidden"
+                >
+                  <button
+                    type="button"
+                    aria-expanded={isOpen}
+                    onClick={() => setOpenFaqIndex(isOpen ? null : idx)}
+                    className="w-full p-4 sm:p-5 text-left flex items-center justify-between gap-3"
+                  >
+                    <span className="text-xs sm:text-sm font-extrabold text-[#F1F5F9]">
+                      {item.q}
+                    </span>
+                    <ChevronDown
+                      aria-hidden="true"
+                      className={`w-4 h-4 text-[#67E8F9] shrink-0 transition-transform ${
+                        isOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+                  {isOpen && (
+                    <div className="px-4 sm:px-5 pb-4 sm:pb-5 text-xs sm:text-sm text-[#CBD5E1] leading-relaxed border-t border-white/[0.06] pt-3">
+                      {item.a}
+                    </div>
                   )}
                 </div>
-                <h4 className="text-xs sm:text-sm font-bold text-[#F1F5F9] truncate">
-                  {srv.name}
-                </h4>
-                <div className="flex items-center gap-3 text-[10px] font-mono text-[#94A3B8]">
-                  <span>Min: {srv.min.toLocaleString()}</span>
-                  <span>Max: {srv.max.toLocaleString()}</span>
-                  <span>⏱ {srv.averageTime || 'Fast'}</span>
-                </div>
-              </div>
-
-              <div className="text-right shrink-0 space-y-1.5">
-                <div>
-                  <span className="text-sm sm:text-base font-black text-[#22C55E] font-mono block">
-                    {formatPrice(srv.rate)}
-                  </span>
-                  <span className="text-[9px] font-mono text-[#94A3B8] uppercase">per 1,000</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onNavigateTab('new-order', {
-                      serviceId: srv.id,
-                      category: srv.category
-                    })
-                  }
-                  className="px-3 py-1.5 rounded-xl bg-[#8B5CF6]/20 hover:bg-[#8B5CF6] text-[#22D3EE] hover:text-white text-[11px] font-bold transition-colors"
-                >
-                  {language === 'bn' ? 'অর্ডার' : 'Order'}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* =====================================================================
-          SECTION 3: ARCHITECTURAL BENTO GRID (ASYMMETRICAL 12-COL CAPABILITIES)
-         ===================================================================== */}
-      <section id="architecture" className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 border-t border-white/[0.06]">
-        <div className="max-w-2xl mb-8">
-          <span className="text-[11px] font-mono uppercase tracking-widest text-[#8B5CF6] font-bold">
-            Enterprise-Grade Architecture
-          </span>
-          <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1">
-            {language === 'bn'
-              ? 'কেন এজেন্সি এবং রিসেলাররা আমাদের প্ল্যাটফর্ম ব্যবহার করেন?'
-              : 'Engineered for High-Volume Reliability & Speed'}
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          {/* Bento Card 1 (7 Cols): Multi-Provider Smart Routing */}
-          <div className="lg:col-span-7 p-6 rounded-3xl bg-[#0D1220] border border-white/[0.08] flex flex-col justify-between space-y-5">
-            <div className="space-y-2">
-              <div className="w-10 h-10 rounded-2xl bg-[#8B5CF6]/15 border border-[#8B5CF6]/35 flex items-center justify-center text-[#8B5CF6]">
-                <RefreshCw className="w-5 h-5" />
-              </div>
-              <h3 className="text-lg font-black text-white">
-                {language === 'bn'
-                  ? 'অটোমেটিক ৫-মিনিট ক্লাউড সিঙ্ক ও স্মার্ট API রাউটিং'
-                  : '5-Minute Automated Cloud Sync & Multi-Provider Routing'}
-              </h3>
-              <p className="text-xs sm:text-sm text-[#94A3B8] leading-relaxed">
-                {language === 'bn'
-                  ? 'প্রতিটি অর্ডার সাবমিট হওয়ার সাথে সাথে আমাদের ব্যাকএন্ড ইঞ্জিন সরাসরি আপস্ট্রিম প্রোভাইডারে ফরওয়ার্ড করে এবং প্রতি ৫ মিনিটে স্টার্ট কাউন্ট, ডেলিভারি প্রগ্রেস ও স্ট্যাটাস আপডেট করে।'
-                  : 'Our background synchronization engine polls connected upstream providers every 5 minutes—updating service availability, start counts, remaining quantities, and automatic partial refunds without manual intervention.'}
-              </p>
-            </div>
-
-            {/* Visual Pipeline Diagram */}
-            <div className="p-4 rounded-2xl bg-[#080B14] border border-white/[0.06] grid grid-cols-3 gap-2 text-center font-mono text-[11px]">
-              <div className="p-2.5 rounded-xl bg-[#141B2B]/80 border border-white/5">
-                <span className="text-[#22D3EE] font-bold block">01. Order Placed</span>
-                <span className="text-[10px] text-[#94A3B8]">Atomic Wallet Tx</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-[#8B5CF6]/15 border border-[#8B5CF6]/30">
-                <span className="text-white font-bold block">02. Cloud Router</span>
-                <span className="text-[10px] text-[#22D3EE]">API v2 Dispatch</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-[#22C55E]/15 border border-[#22C55E]/30">
-                <span className="text-[#22C55E] font-bold block">03. Live Sync</span>
-                <span className="text-[10px] text-[#94A3B8]">Every 5 Minutes</span>
-              </div>
-            </div>
+              );
+            })}
           </div>
+        </section>
 
-          {/* Bento Card 2 (5 Cols): Local & Crypto Deposit Engine */}
-          <div className="lg:col-span-5 p-6 rounded-3xl bg-gradient-to-br from-[#141B2B] to-[#0D1220] border border-[#22D3EE]/25 flex flex-col justify-between space-y-5">
-            <div className="space-y-2">
-              <div className="w-10 h-10 rounded-2xl bg-[#22D3EE]/15 border border-[#22D3EE]/35 flex items-center justify-center text-[#22D3EE]">
-                <Wallet className="w-5 h-5" />
-              </div>
-              <h3 className="text-lg font-black text-white">
-                {language === 'bn'
-                  ? 'বিকাশ, নগদ, রকেট ও USDT ইনস্ট্যান্ট ওয়ালেট'
-                  : 'Local Bangladeshi MFS & Binance USDT Wallet'}
-              </h3>
-              <p className="text-xs sm:text-sm text-[#94A3B8] leading-relaxed">
-                {language === 'bn'
-                  ? 'বাংলাদেশি টাকায় (BDT) অথবা ডলারে (USD) ব্যালেন্স দেখুন। ডিপোজিট করলেই পাচ্ছেন অটোমেটিক ডিপোজিট বোনাস এবং গিফট ভাউচার রিডিম করার সুবিধা।'
-                  : 'Top up seamlessly via bKash, Nagad, Rocket, Upay, or Binance USDT with automatic bonus calculation and instant promo code redemption.'}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 font-mono text-xs">
-              <div className="p-3 rounded-2xl bg-[#080B14]/80 border border-white/[0.06]">
-                <span className="text-[10px] text-[#94A3B8] block">Deposit Bonus</span>
-                <strong className="text-[#22C55E]">Up to +{siteSettings?.bkashBonusPercent || 3}% Extra</strong>
-              </div>
-              <div className="p-3 rounded-2xl bg-[#080B14]/80 border border-white/[0.06]">
-                <span className="text-[10px] text-[#94A3B8] block">Partial Refund</span>
-                <strong className="text-[#22D3EE]">100% Automated</strong>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* =====================================================================
-          SECTION 4: DEVELOPER REST API V2 SHOWCASE
-         ===================================================================== */}
-      <section id="developer-api" className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 border-t border-white/[0.06]">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-          <div className="lg:col-span-5 space-y-4">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#141B2B] border border-white/10 text-[11px] font-mono text-[#22D3EE]">
-              <Terminal className="w-3.5 h-3.5" />
-              <span>Standard SMM REST API v2</span>
+        {/* ===================================================================
+            SECTION 5B: BANGLADESH SMM & MONETIZATION KEYWORD GUIDE (SEMANTIC SEO)
+           =================================================================== */}
+        <section
+          id="bd-seo-guide"
+          aria-label="Bangladesh Social Media Marketing and Monetization Guide"
+          className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 border-t border-white/[0.08]"
+        >
+          <div className="max-w-3xl mb-8">
+            <span className="text-xs font-mono text-[#67E8F9] tracking-wider font-bold">
+              Bangladesh SMM Growth & Monetization Hub
             </span>
-            <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+            <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1">
               {language === 'bn'
-                ? 'রিসেলার ও ডেভেলপারদের জন্য শক্তিশালী REST API v2'
-                : 'Built-In REST API v2 for Child Panels & Resellers'}
+                ? 'বাংলাদেশের সেরা ও সবচেয়ে কম দামে অটোমেটিক SMM Panel (বিকাশ ও নগদ পেমেন্ট)'
+                : '#1 Cheapest bKash & Nagad Automated SMM Panel in Bangladesh'}
             </h2>
-            <p className="text-xs sm:text-sm text-[#94A3B8] leading-relaxed">
+            <p className="text-xs sm:text-sm text-[#CBD5E1] leading-relaxed mt-2">
               {language === 'bn'
-                ? 'আপনার নিজস্ব SMM ওয়েবসাইট বা অ্যাপ আমাদের `/api/v2` এন্ডপয়েন্টের সাথে যুক্ত করুন। সার্ভিস ফেচিং, বাল্ক অর্ডার প্লেসমেন্ট, রিফিল এবং ব্যালেন্স চেক—সবকিছুই স্ট্যান্ডার্ড ফরম্যাটে সাপোর্ট করে।'
-                : 'Connect your child panel or custom storefront directly to our /api/v2 endpoint. Supports standard actions: services, add, status, orders, refill, and balance.'}
+                ? 'ফেসবুক পেজ মনিটাইজেশন, ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম, টিকটক ভাইরাল ভিউ এবং ইনস্টাগ্রাম ফলোয়ার বুস্ট করার জন্য বাংলাদেশের কন্টেন্ট ক্রিয়েটর, এজেন্সি ও রিসেলারদের প্রথম পছন্দ।'
+                : 'Engineered specifically for Bangladeshi creators, e-commerce brands, and digital agencies with instant ZiniPay bKash/Nagad deposits and direct API v2 wholesale rates.'}
             </p>
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => onNavigateTab('api')}
-                className="py-3 px-5 rounded-2xl bg-[#141B2B] hover:bg-[#192337] border border-[#8B5CF6]/40 text-xs font-extrabold text-white flex items-center gap-2"
-              >
-                <Code2 className="w-4 h-4 text-[#22D3EE]" />
-                <span>{language === 'bn' ? 'API ডকুমেন্টেশন দেখুন' : 'Explore API v2 Documentation'}</span>
-              </button>
-            </div>
           </div>
 
-          <div className="lg:col-span-7">
-            <div className="rounded-3xl bg-[#0D1220] border border-white/[0.08] overflow-hidden shadow-2xl">
-              <div className="px-4 py-3 bg-[#141B2B] border-b border-white/[0.07] flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
-                  <span className="text-[11px] font-mono text-[#94A3B8] ml-2">
-                    POST /api/v2 — cURL Request
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleCopyApiSnippet}
-                  className="px-2.5 py-1 rounded-lg bg-[#080B14] border border-white/10 text-[11px] font-mono text-[#22D3EE] flex items-center gap-1"
-                >
-                  {copiedCode ? <Check className="w-3 h-3 text-[#22C55E]" /> : <Copy className="w-3 h-3" />}
-                  <span>{copiedCode ? 'Copied' : 'Copy'}</span>
-                </button>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+            <article className="rounded-3xl bg-[#0D1220] border border-white/[0.08] p-6 flex flex-col justify-between">
+              <div>
+                <span className="text-xs font-mono font-bold text-[#C4B5FD]">01. Facebook Monetization BD</span>
+                <h3 className="text-base sm:text-lg font-bold text-white mt-1.5">
+                  {language === 'bn'
+                    ? 'ফেসবুক পেজ মনিটাইজেশন ও 60k Watchtime সার্ভিস'
+                    : 'Facebook Page Monetization & 60k Watchtime BD'}
+                </h3>
+                <p className="text-xs text-[#CBD5E1] leading-relaxed mt-2">
+                  {language === 'bn'
+                    ? 'কম দামে নন-ড্রপ ফেসবুক পেজ ফলোয়ার, প্রোফাইল ফলোয়ার, ৬০,০০০ মিনিট ইন-স্ট্রিম অ্যাডস ওয়াচটাইম এবং রিলস ভিউ বুস্ট করুন সম্পূর্ণ অটোমেটিক ডেলিভারিতে।'
+                    : 'Buy Non-Drop Facebook Page & Profile Followers, 60k Minutes Watchtime for In-Stream Ads, and viral Reels views in Bangladesh with refill guarantee.'}
+                </p>
               </div>
-              <pre className="p-5 text-xs font-mono text-[#F1F5F9] overflow-x-auto leading-relaxed">
-                {apiCodeSample}
-              </pre>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* =====================================================================
-          SECTION 5: FREQUENTLY ASKED QUESTIONS (ACCORDION)
-         ===================================================================== */}
-      <section id="faq" className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 border-t border-white/[0.06]">
-        <div className="text-center mb-8">
-          <span className="text-[11px] font-mono uppercase tracking-widest text-[#22D3EE] font-bold">
-            Operational Clarity
-          </span>
-          <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1">
-            {language === 'bn' ? 'সচরাচর জিজ্ঞাসিত প্রশ্নোত্তর (FAQ)' : 'Frequently Asked Questions'}
-          </h2>
-        </div>
-
-        <div className="space-y-3">
-          {faqs.map((item, idx) => {
-            const isOpen = openFaqIndex === idx;
-            return (
-              <div
-                key={idx}
-                className="rounded-2xl bg-[#0D1220] border border-white/[0.08] overflow-hidden"
+              <a
+                href="/?tab=services&category=Facebook"
+                onClick={(e) => handleAnchorNav(e, 'services', { category: 'Facebook' })}
+                className="mt-5 py-1.5 text-xs font-bold text-[#67E8F9] hover:underline inline-flex items-center gap-1.5 w-fit"
               >
-                <button
-                  type="button"
-                  onClick={() => setOpenFaqIndex(isOpen ? null : idx)}
-                  className="w-full p-4 sm:p-5 text-left flex items-center justify-between gap-3"
-                >
-                  <span className="text-xs sm:text-sm font-extrabold text-[#F1F5F9]">
-                    {item.q}
-                  </span>
-                  <ChevronDown
-                    className={`w-4 h-4 text-[#22D3EE] shrink-0 transition-transform ${
-                      isOpen ? 'rotate-180' : ''
-                    }`}
-                  />
-                </button>
-                {isOpen && (
-                  <div className="px-4 sm:px-5 pb-4 sm:pb-5 text-xs sm:text-sm text-[#94A3B8] leading-relaxed border-t border-white/[0.05] pt-3">
-                    {item.a}
-                  </div>
-                )}
+                <span>{language === 'bn' ? 'ফেসবুক সার্ভিস লিস্ট দেখুন' : 'View Facebook BD Services'}</span>
+                <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+              </a>
+            </article>
+
+            <article className="rounded-3xl bg-[#0D1220] border border-white/[0.08] p-6 flex flex-col justify-between">
+              <div>
+                <span className="text-xs font-mono font-bold text-[#67E8F9]">02. YouTube & TikTok Boost BD</span>
+                <h3 className="text-base sm:text-lg font-bold text-white mt-1.5">
+                  {language === 'bn'
+                    ? 'ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম ও টিকটক ভিউ প্যানেল'
+                    : 'YouTube 4000h Watchtime & TikTok Viral Panel BD'}
+                </h3>
+                <p className="text-xs text-[#CBD5E1] leading-relaxed mt-2">
+                  {language === 'bn'
+                    ? 'ইউটিউব চ্যানেল মনিটাইজেশনের জন্য ১০০০ সাবস্ক্রাইবার ও ৪০০০ ঘণ্টা ওয়াচটাইম এবং টিকটক ভিডিও ফর-ইউ (ForYou) ভিউ ও লাইক নিন সবচেয়ে সস্তা রেটে।'
+                    : 'Complete your YouTube Partner Program requirements with high-retention 4000 Hours Watchtime & Subscribers, plus instant TikTok Views and Followers in BDT.'}
+                </p>
               </div>
-            );
-          })}
-        </div>
-      </section>
+              <a
+                href="/?tab=services&category=YouTube"
+                onClick={(e) => handleAnchorNav(e, 'services', { category: 'YouTube' })}
+                className="mt-5 py-1.5 text-xs font-bold text-[#67E8F9] hover:underline inline-flex items-center gap-1.5 w-fit"
+              >
+                <span>{language === 'bn' ? 'ইউটিউব ও টিকটক সার্ভিস দেখুন' : 'View YouTube & TikTok Services'}</span>
+                <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+              </a>
+            </article>
 
-      {/* =====================================================================
-          SECTION 5B: BANGLADESH SMM & MONETIZATION KEYWORD GUIDE (SEMANTIC SEO)
-         ===================================================================== */}
-      <section
-        id="bd-seo-guide"
-        aria-label="Bangladesh Social Media Marketing and Monetization Guide"
-        className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 border-t border-white/[0.06]"
-      >
-        <div className="max-w-3xl mb-8">
-          <span className="text-xs font-mono text-[#22D3EE] tracking-wider">
-            Bangladesh SMM Growth & Monetization Hub
-          </span>
-          <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1">
-            {language === 'bn'
-              ? 'বাংলাদেশের সেরা ও সবচেয়ে কম দামে অটোমেটিক SMM Panel (বিকাশ ও নগদ পেমেন্ট)'
-              : '#1 Cheapest bKash & Nagad Automated SMM Panel in Bangladesh'}
-          </h2>
-          <p className="text-xs sm:text-sm text-[#94A3B8] leading-relaxed mt-2">
-            {language === 'bn'
-              ? 'ফেসবুক পেজ মনিটাইজেশন, ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম, টিকটক ভাইরাল ভিউ এবং ইনস্টাগ্রাম ফলোয়ার বুস্ট করার জন্য বাংলাদেশের কন্টেন্ট ক্রিয়েটর, এজেন্সি ও রিসেলারদের প্রথম পছন্দ।'
-              : 'Engineered specifically for Bangladeshi creators, e-commerce brands, and digital agencies with instant ZiniPay bKash/Nagad deposits and direct API v2 wholesale rates.'}
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
-          <article className="rounded-3xl bg-[#0D1220] border border-white/[0.08] p-6 flex flex-col justify-between">
-            <div>
-              <span className="text-xs font-mono text-[#8B5CF6]">01. Facebook Monetization BD</span>
-              <h3 className="text-base sm:text-lg font-bold text-white mt-1.5">
-                {language === 'bn'
-                  ? 'ফেসবুক পেজ মনিটাইজেশন ও 60k Watchtime সার্ভিস'
-                  : 'Facebook Page Monetization & 60k Watchtime BD'}
-              </h3>
-              <p className="text-xs text-[#94A3B8] leading-relaxed mt-2">
-                {language === 'bn'
-                  ? 'কম দামে নন-ড্রপ ফেসবুক পেজ ফলোয়ার, প্রোফাইল ফলোয়ার, ৬০,০০০ মিনিট ইন-স্ট্রিম অ্যাডস ওয়াচটাইম এবং রিলস ভিউ বুস্ট করুন সম্পূর্ণ অটোমেটিক ডেলিভারিতে।'
-                  : 'Buy Non-Drop Facebook Page & Profile Followers, 60k Minutes Watchtime for In-Stream Ads, and viral Reels views in Bangladesh with refill guarantee.'}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => onNavigateTab('services', { category: 'Facebook' })}
-              className="mt-5 text-xs font-bold text-[#22D3EE] hover:underline inline-flex items-center gap-1.5 w-fit cursor-pointer"
-            >
-              <span>{language === 'bn' ? 'ফেসবুক সার্ভিস লিস্ট দেখুন' : 'View Facebook BD Services'}</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </article>
-
-          <article className="rounded-3xl bg-[#0D1220] border border-white/[0.08] p-6 flex flex-col justify-between">
-            <div>
-              <span className="text-xs font-mono text-[#22D3EE]">02. YouTube & TikTok Boost BD</span>
-              <h3 className="text-base sm:text-lg font-bold text-white mt-1.5">
-                {language === 'bn'
-                  ? 'ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম ও টিকটক ভিউ প্যানেল'
-                  : 'YouTube 4000h Watchtime & TikTok Viral Panel BD'}
-              </h3>
-              <p className="text-xs text-[#94A3B8] leading-relaxed mt-2">
-                {language === 'bn'
-                  ? 'ইউটিউব চ্যানেল মনিটাইজেশনের জন্য ১০০০ সাবস্ক্রাইবার ও ৪০০০ ঘণ্টা ওয়াচটাইম এবং টিকটক ভিডিও ফর-ইউ (ForYou) ভিউ ও লাইক নিন সবচেয়ে সস্তা রেটে।'
-                  : 'Complete your YouTube Partner Program requirements with high-retention 4000 Hours Watchtime & Subscribers, plus instant TikTok Views and Followers in BDT.'}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => onNavigateTab('services', { category: 'YouTube' })}
-              className="mt-5 text-xs font-bold text-[#22D3EE] hover:underline inline-flex items-center gap-1.5 w-fit cursor-pointer"
-            >
-              <span>{language === 'bn' ? 'ইউটিউব ও টিকটক সার্ভিস দেখুন' : 'View YouTube & TikTok Services'}</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </article>
-
-          <article className="rounded-3xl bg-[#0D1220] border border-white/[0.08] p-6 flex flex-col justify-between">
-            <div>
-              <span className="text-xs font-mono text-emerald-400">03. Instant bKash & Nagad Gateway</span>
-              <h3 className="text-base sm:text-lg font-bold text-white mt-1.5">
-                {language === 'bn'
-                  ? 'ZiniPay বিকাশ ও নগদ অটোমেটিক পেমেন্ট ও রিসেলার API'
-                  : 'bKash & Nagad Auto Deposit + Wholesale API v2'}
-              </h3>
-              <p className="text-xs text-[#94A3B8] leading-relaxed mt-2">
-                {language === 'bn'
-                  ? 'ম্যানুয়াল ভেরিফিকেশনের ঝামেলা ছাড়াই বিকাশ, নগদ, রকেট ও উপায়ে অটোমেটিক ফান্ড অ্যাড করুন এবং আমাদের REST API v2 দিয়ে নিজস্ব চাইল্ড প্যানেল পরিচালনা করুন।'
-                  : 'Zero manual waiting—add funds 24/7 via automated bKash, Nagad, Rocket, and Upay checkout and connect child panels to our high-speed REST API v2.'}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => onNavigateTab('add-funds')}
-              className="mt-5 text-xs font-bold text-[#22D3EE] hover:underline inline-flex items-center gap-1.5 w-fit cursor-pointer"
-            >
-              <span>{language === 'bn' ? 'অটো ডিপোজিট ওয়ালেট দেখুন' : 'Open Instant Deposit Wallet'}</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </article>
-        </div>
-
-        {/* Crawlable Bangladesh Search Keyword Index (Clean Unboxed Text Separators) */}
-        <div className="rounded-2xl bg-[#0D1220]/60 border border-white/[0.06] p-5">
-          <div className="text-xs font-semibold text-white mb-2">
-            {language === 'bn'
-              ? 'জনপ্রিয় সার্চ টপিকস (Popular SMM Searches in Bangladesh):'
-              : 'Popular SMM & Monetization Searches in Bangladesh:'}
+            <article className="rounded-3xl bg-[#0D1220] border border-white/[0.08] p-6 flex flex-col justify-between">
+              <div>
+                <span className="text-xs font-mono font-bold text-[#4ADE80]">03. Instant bKash & Nagad Gateway</span>
+                <h3 className="text-base sm:text-lg font-bold text-white mt-1.5">
+                  {language === 'bn'
+                    ? 'ZiniPay বিকাশ ও নগদ অটোমেটিক পেমেন্ট ও রিসেলার API'
+                    : 'bKash & Nagad Auto Deposit + Wholesale API v2'}
+                </h3>
+                <p className="text-xs text-[#CBD5E1] leading-relaxed mt-2">
+                  {language === 'bn'
+                    ? 'ম্যানুয়াল ভেরিফিকেশনের ঝামেলা ছাড়াই বিকাশ, নগদ, রকেট ও উপায়ে অটোমেটিক ফান্ড অ্যাড করুন এবং আমাদের REST API v2 দিয়ে নিজস্ব চাইল্ড প্যানেল পরিচালনা করুন।'
+                    : 'Zero manual waiting—add funds 24/7 via automated bKash, Nagad, Rocket, and Upay checkout and connect child panels to our high-speed REST API v2.'}
+                </p>
+              </div>
+              <a
+                href="/?tab=add-funds"
+                onClick={(e) => handleAnchorNav(e, 'add-funds')}
+                className="mt-5 py-1.5 text-xs font-bold text-[#67E8F9] hover:underline inline-flex items-center gap-1.5 w-fit"
+              >
+                <span>{language === 'bn' ? 'অটো ডিপোজিট ওয়ালেট দেখুন' : 'Open Instant Deposit Wallet'}</span>
+                <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+              </a>
+            </article>
           </div>
-          <p className="text-xs text-[#94A3B8] leading-relaxed">
-            {[BD_MAIN_SEO_KEYWORD, ...BD_SUB_SEO_KEYWORDS].map((kw, idx, arr) => (
-              <React.Fragment key={kw}>
-                <button
-                  type="button"
-                  onClick={() => onNavigateTab('services')}
-                  className="hover:text-white transition-colors text-left inline cursor-pointer"
-                >
-                  {kw}
-                </button>
-                {idx < arr.length - 1 && (
-                  <span aria-hidden="true" className="mx-2 text-slate-600">
-                    ·
-                  </span>
-                )}
-              </React.Fragment>
-            ))}
-          </p>
-        </div>
-      </section>
+
+          {/* Crawlable Bangladesh Search Keyword Index */}
+          <div className="rounded-2xl bg-[#0D1220] border border-white/[0.08] p-5">
+            <h3 className="text-xs font-semibold text-white mb-2">
+              {language === 'bn'
+                ? 'জনপ্রিয় সার্চ টপিকস (Popular SMM Searches in Bangladesh):'
+                : 'Popular SMM & Monetization Searches in Bangladesh:'}
+            </h3>
+            <p className="text-xs text-[#CBD5E1] leading-relaxed">
+              {[BD_MAIN_SEO_KEYWORD, ...BD_SUB_SEO_KEYWORDS].map((kw, idx, arr) => (
+                <React.Fragment key={kw}>
+                  <a
+                    href="/?tab=services"
+                    onClick={(e) => handleAnchorNav(e, 'services')}
+                    className="hover:text-white transition-colors inline"
+                  >
+                    {kw}
+                  </a>
+                  {idx < arr.length - 1 && (
+                    <span aria-hidden="true" className="mx-2 text-[#94A3B8]">
+                      ·
+                    </span>
+                  )}
+                </React.Fragment>
+              ))}
+            </p>
+          </div>
+        </section>
+      </main>
 
       {/* =====================================================================
-          SECTION 6: FINAL CONVERSION BANNER & FOOTER
+          SECTION 6: FINAL CONVERSION BANNER & CRAWLABLE SEO FOOTER
          ===================================================================== */}
-      <footer className="relative z-10 border-t border-white/[0.08] bg-[#0D1220]/60 mt-8">
+      <footer className="relative z-10 border-t border-white/[0.08] bg-[#0D1220] mt-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="p-6 sm:p-10 rounded-3xl bg-gradient-to-r from-[#141B2B] via-[#0D1220] to-[#141B2B] border border-[#8B5CF6]/35 flex flex-col lg:flex-row items-center justify-between gap-6 mb-10">
             <div className="space-y-2 text-center lg:text-left">
-              <h3 className="text-xl sm:text-2xl font-black text-white">
+              <h2 className="text-xl sm:text-2xl font-black text-white">
                 {language === 'bn'
                   ? 'আপনার সোশ্যাল মিডিয়া ক্যাম্পেইন শুরু করতে প্রস্তুত?'
                   : 'Ready to Scale Your Social Media Campaigns?'}
-              </h3>
-              <p className="text-xs sm:text-sm text-[#94A3B8]">
+              </h2>
+              <p className="text-xs sm:text-sm text-[#CBD5E1]">
                 {language === 'bn'
                   ? 'মাত্র ৩০ সেকেন্ডে ফ্রি একাউন্ট তৈরি করুন এবং তাৎক্ষণিক অটোমেটেড অর্ডার ডেলিভারি উপভোগ করুন।'
                   : 'Create your free account in 30 seconds and access instant automated order dispatch.'}
@@ -1055,129 +1155,145 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
               <button
                 type="button"
                 onClick={() => (profile ? onNavigateTab('new-order') : onOpenAuth())}
-                className="h-11 px-6 rounded-2xl bg-gradient-to-r from-[#8B5CF6] to-[#6D28D9] text-white font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-[#8B5CF6]/25"
+                className="h-11 px-6 rounded-2xl bg-[#6D28D9] hover:bg-[#5B21B6] text-white font-extrabold text-xs flex items-center gap-2"
               >
                 <span>{language === 'bn' ? 'এখনই শুরু করুন' : 'Get Started Free'}</span>
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-4 h-4" aria-hidden="true" />
               </button>
-              <button
-                type="button"
-                onClick={() => onNavigateTab('track-order')}
-                className="h-11 px-5 rounded-2xl bg-[#080B14] border border-white/10 text-[#F1F5F9] font-bold text-xs"
+              <a
+                href="/?tab=track"
+                onClick={(e) => handleAnchorNav(e, 'track-order')}
+                className="h-11 px-5 rounded-2xl bg-[#080B14] border border-white/15 text-[#F1F5F9] font-bold text-xs inline-flex items-center"
               >
                 {language === 'bn' ? 'অর্ডার ট্র্যাক করুন' : 'Track an Order'}
-              </button>
+              </a>
             </div>
           </div>
 
           {/* Multi-Column Crawlable SEO Footer Navigation */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 py-8 border-t border-b border-white/[0.06] mb-6 text-xs">
-            <div className="space-y-2.5">
-              <h4 className="font-mono font-bold uppercase tracking-wider text-white text-[11px]">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 py-8 border-t border-b border-white/[0.08] mb-6 text-xs">
+            <div className="space-y-3">
+              <h3 className="font-mono font-bold uppercase tracking-wider text-white text-xs">
                 {language === 'bn' ? 'কোম্পানি ও তথ্য' : 'Company & Info'}
-              </h4>
-              <ul className="space-y-2 text-[#94A3B8]">
+              </h3>
+              <ul className="space-y-2.5 text-[#CBD5E1]">
                 <li>
-                  <button type="button" onClick={() => onNavigateTab('about')} className="hover:text-[#22D3EE] transition-colors">
+                  <a href="/?tab=about" onClick={(e) => handleAnchorNav(e, 'about')} className="hover:text-[#67E8F9] py-1 inline-block">
                     {language === 'bn' ? 'আমাদের সম্পর্কে (About Us)' : 'About Us'}
-                  </button>
+                  </a>
                 </li>
                 <li>
-                  <button type="button" onClick={() => onNavigateTab('contact')} className="hover:text-[#22D3EE] transition-colors">
+                  <a href="/?tab=contact" onClick={(e) => handleAnchorNav(e, 'contact')} className="hover:text-[#67E8F9] py-1 inline-block">
                     {language === 'bn' ? 'যোগাযোগ ও হেল্প সেন্টার' : 'Contact & 24/7 Help Center'}
-                  </button>
+                  </a>
                 </li>
                 <li>
-                  <button type="button" onClick={() => onNavigateTab('services')} className="hover:text-[#22D3EE] transition-colors">
+                  <a href="/?tab=services" onClick={(e) => handleAnchorNav(e, 'services')} className="hover:text-[#67E8F9] py-1 inline-block">
                     {language === 'bn' ? 'সার্ভিস ও BDT রেট লিস্ট' : 'Services & BDT Rate List'}
-                  </button>
+                  </a>
                 </li>
                 <li>
-                  <button type="button" onClick={() => onNavigateTab('api')} className="hover:text-[#22D3EE] transition-colors">
+                  <a href="/?tab=api" onClick={(e) => handleAnchorNav(e, 'api')} className="hover:text-[#67E8F9] py-1 inline-block">
                     {language === 'bn' ? 'হোলসেল REST API v2' : 'Wholesale REST API v2'}
-                  </button>
+                  </a>
                 </li>
               </ul>
             </div>
 
-            <div className="space-y-2.5">
-              <h4 className="font-mono font-bold uppercase tracking-wider text-white text-[11px]">
+            <div className="space-y-3">
+              <h3 className="font-mono font-bold uppercase tracking-wider text-white text-xs">
                 {language === 'bn' ? 'লিগ্যাল ও পলিসি' : 'Legal & Policies'}
-              </h4>
-              <ul className="space-y-2 text-[#94A3B8]">
+              </h3>
+              <ul className="space-y-2.5 text-[#CBD5E1]">
                 <li>
-                  <button type="button" onClick={() => onNavigateTab('refund')} className="hover:text-[#22D3EE] transition-colors">
+                  <a href="/?tab=refund" onClick={(e) => handleAnchorNav(e, 'refund')} className="hover:text-[#67E8F9] py-1 inline-block">
                     {language === 'bn' ? 'অটোমেটিক রিফান্ড ও রিফিল পলিসি' : 'Refund & Refill Policy'}
-                  </button>
+                  </a>
                 </li>
                 <li>
-                  <button type="button" onClick={() => onNavigateTab('terms')} className="hover:text-[#22D3EE] transition-colors">
+                  <a href="/?tab=terms" onClick={(e) => handleAnchorNav(e, 'terms')} className="hover:text-[#67E8F9] py-1 inline-block">
                     {language === 'bn' ? 'ব্যবহারের শর্তাবলী (Terms)' : 'Terms of Service'}
-                  </button>
+                  </a>
                 </li>
                 <li>
-                  <button type="button" onClick={() => onNavigateTab('privacy')} className="hover:text-[#22D3EE] transition-colors">
+                  <a href="/?tab=privacy" onClick={(e) => handleAnchorNav(e, 'privacy')} className="hover:text-[#67E8F9] py-1 inline-block">
                     {language === 'bn' ? 'গোপনীয়তা নীতি (Privacy)' : 'Privacy Policy'}
-                  </button>
+                  </a>
                 </li>
                 <li>
-                  <a href="/sitemap.xml" target="_blank" rel="noopener noreferrer" className="hover:text-[#22D3EE] transition-colors">
+                  <a href="/sitemap.xml" target="_blank" rel="noopener noreferrer" className="hover:text-[#67E8F9] py-1 inline-block">
                     {language === 'bn' ? 'এক্সএমএল সাইটম্যাপ (Sitemap)' : 'XML Sitemap (Google BD)'}
                   </a>
                 </li>
               </ul>
             </div>
 
-            <div className="space-y-2.5">
-              <h4 className="font-mono font-bold uppercase tracking-wider text-white text-[11px]">
+            <div className="space-y-3">
+              <h3 className="font-mono font-bold uppercase tracking-wider text-white text-xs">
                 {language === 'bn' ? 'বাংলাদেশ মনিটাইজেশন হাব' : 'BD Monetization Hub'}
-              </h4>
-              <ul className="space-y-2 text-[#94A3B8]">
+              </h3>
+              <ul className="space-y-2.5 text-[#CBD5E1]">
                 <li>
-                  <button type="button" onClick={() => onNavigateTab('services', { category: 'Facebook' })} className="hover:text-[#22D3EE] transition-colors">
+                  <a
+                    href="/?tab=services&category=Facebook"
+                    onClick={(e) => handleAnchorNav(e, 'services', { category: 'Facebook' })}
+                    className="hover:text-[#67E8F9] py-1 inline-block"
+                  >
                     Facebook 60k Watchtime BD
-                  </button>
+                  </a>
                 </li>
                 <li>
-                  <button type="button" onClick={() => onNavigateTab('services', { category: 'YouTube' })} className="hover:text-[#22D3EE] transition-colors">
+                  <a
+                    href="/?tab=services&category=YouTube"
+                    onClick={(e) => handleAnchorNav(e, 'services', { category: 'YouTube' })}
+                    className="hover:text-[#67E8F9] py-1 inline-block"
+                  >
                     YouTube 4000h Watchtime BD
-                  </button>
+                  </a>
                 </li>
                 <li>
-                  <button type="button" onClick={() => onNavigateTab('services', { category: 'TikTok' })} className="hover:text-[#22D3EE] transition-colors">
+                  <a
+                    href="/?tab=services&category=TikTok"
+                    onClick={(e) => handleAnchorNav(e, 'services', { category: 'TikTok' })}
+                    className="hover:text-[#67E8F9] py-1 inline-block"
+                  >
                     TikTok Views & Followers BD
-                  </button>
+                  </a>
                 </li>
                 <li>
-                  <button type="button" onClick={() => onNavigateTab('services', { category: 'Instagram' })} className="hover:text-[#22D3EE] transition-colors">
+                  <a
+                    href="/?tab=services&category=Instagram"
+                    onClick={(e) => handleAnchorNav(e, 'services', { category: 'Instagram' })}
+                    className="hover:text-[#67E8F9] py-1 inline-block"
+                  >
                     Instagram Followers & Reels BD
-                  </button>
+                  </a>
                 </li>
               </ul>
             </div>
 
-            <div className="space-y-2.5">
-              <h4 className="font-mono font-bold uppercase tracking-wider text-white text-[11px]">
+            <div className="space-y-3">
+              <h3 className="font-mono font-bold uppercase tracking-wider text-white text-xs">
                 {language === 'bn' ? 'কুইক টুলস ও ওয়ালেট' : 'Quick Tools & Wallet'}
-              </h4>
-              <ul className="space-y-2 text-[#94A3B8]">
+              </h3>
+              <ul className="space-y-2.5 text-[#CBD5E1]">
                 <li>
-                  <button type="button" onClick={() => onNavigateTab('add-funds')} className="hover:text-[#22D3EE] transition-colors">
+                  <a href="/?tab=add-funds" onClick={(e) => handleAnchorNav(e, 'add-funds')} className="hover:text-[#67E8F9] py-1 inline-block">
                     {language === 'bn' ? 'ZiniPay বিকাশ/নগদ অটো ডিপোজিট' : 'ZiniPay bKash/Nagad Deposit'}
-                  </button>
+                  </a>
                 </li>
                 <li>
-                  <button type="button" onClick={() => onNavigateTab('track-order')} className="hover:text-[#22D3EE] transition-colors">
+                  <a href="/?tab=track" onClick={(e) => handleAnchorNav(e, 'track-order')} className="hover:text-[#67E8F9] py-1 inline-block">
                     {language === 'bn' ? 'লাইভ অর্ডার ট্র্যাকার' : 'Live Order Tracker'}
-                  </button>
+                  </a>
                 </li>
                 <li>
-                  <button type="button" onClick={() => onNavigateTab('affiliates')} className="hover:text-[#22D3EE] transition-colors">
+                  <a href="/?tab=affiliates" onClick={(e) => handleAnchorNav(e, 'affiliates')} className="hover:text-[#67E8F9] py-1 inline-block">
                     {language === 'bn' ? 'অ্যাফিলিয়েট ও ফ্রি ভাউচার' : 'Affiliates & Promo Vouchers'}
-                  </button>
+                  </a>
                 </li>
                 <li>
-                  <button type="button" onClick={onOpenAuth} className="text-[#22D3EE] font-bold hover:underline">
+                  <button type="button" onClick={onOpenAuth} className="text-[#67E8F9] font-bold hover:underline py-1">
                     {language === 'bn' ? 'ক্লায়েন্ট লগইন / রেজিস্টার' : 'Client Portal Login'}
                   </button>
                 </li>
@@ -1185,26 +1301,26 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#94A3B8]">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#CBD5E1]">
             <p className="font-mono">
               © {new Date().getFullYear()} {siteSettings?.siteName || 'AmarTrend SMM'} Bangladesh. Cloud API v2 Infrastructure.
             </p>
             <div className="flex flex-wrap items-center gap-4">
-              <button type="button" onClick={() => onNavigateTab('about')} className="hover:text-white">
+              <a href="/?tab=about" onClick={(e) => handleAnchorNav(e, 'about')} className="hover:text-white py-1">
                 {language === 'bn' ? 'আমাদের সম্পর্কে' : 'About'}
-              </button>
-              <button type="button" onClick={() => onNavigateTab('contact')} className="hover:text-white">
+              </a>
+              <a href="/?tab=contact" onClick={(e) => handleAnchorNav(e, 'contact')} className="hover:text-white py-1">
                 {language === 'bn' ? 'হেল্প সেন্টার' : 'Contact'}
-              </button>
-              <button type="button" onClick={() => onNavigateTab('refund')} className="hover:text-white">
+              </a>
+              <a href="/?tab=refund" onClick={(e) => handleAnchorNav(e, 'refund')} className="hover:text-white py-1">
                 {language === 'bn' ? 'রিফান্ড পলিসি' : 'Refund Policy'}
-              </button>
-              <button type="button" onClick={() => onNavigateTab('terms')} className="hover:text-white">
+              </a>
+              <a href="/?tab=terms" onClick={(e) => handleAnchorNav(e, 'terms')} className="hover:text-white py-1">
                 {language === 'bn' ? 'শর্তাবলী' : 'Terms'}
-              </button>
-              <button type="button" onClick={() => onNavigateTab('privacy')} className="hover:text-white">
+              </a>
+              <a href="/?tab=privacy" onClick={(e) => handleAnchorNav(e, 'privacy')} className="hover:text-white py-1">
                 {language === 'bn' ? 'প্রাইভেসি' : 'Privacy'}
-              </button>
+              </a>
             </div>
           </div>
         </div>

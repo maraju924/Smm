@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { 
   User, 
   signInWithPopup, 
   GoogleAuthProvider, 
+  browserPopupRedirectResolver,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
@@ -15,7 +16,7 @@ import {
   setDoc, 
   onSnapshot 
 } from 'firebase/firestore';
-import { auth, db } from '../firebase/config';
+import { auth, db, clearStaleFirebaseAuthEvents } from '../firebase/config';
 import { UserProfile, Currency, Language } from '../types';
 import {
   handleFirestoreError,
@@ -227,9 +228,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
+  const popupInFlightRef = useRef(false);
+
   const signInWithGoogle = async () => {
-    const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    if (popupInFlightRef.current) return;
+    popupInFlightRef.current = true;
+    try {
+      clearStaleFirebaseAuthEvents();
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      await signInWithPopup(auth, provider, browserPopupRedirectResolver);
+    } catch (err: any) {
+      clearStaleFirebaseAuthEvents();
+      const msg = String(err?.message || '');
+      const code = String(err?.code || '');
+      if (
+        msg.includes('INTERNAL ASSERTION FAILED') ||
+        msg.includes('Pending promise was never set') ||
+        code === 'auth/cancelled-popup-request' ||
+        code === 'auth/popup-closed-by-user'
+      ) {
+        throw new Error(
+          language === 'bn'
+            ? 'গুগল পপ-আপ বন্ধ হয়ে গেছে বা ব্লক হয়েছে। আবার চেষ্টা করুন অথবা ইমেইল ও পাসওয়ার্ড দিয়ে লগইন করুন।'
+            : 'Google sign-in popup was closed or blocked. Please try again or use Email & Password.'
+        );
+      }
+      throw err;
+    } finally {
+      popupInFlightRef.current = false;
+    }
   };
 
   const loginWithEmail = async (email: string, password: string) => {

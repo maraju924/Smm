@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://smm.khatirajbd.com/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="bn-BD" href="https://smm.khatirajbd.com/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://smm.khatirajbd.com/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://smm.khatirajbd.com/" />
+  </url>
+  <url>
+    <loc>https://smm.khatirajbd.com/?tab=services</loc>
+    <changefreq>hourly</changefreq>
+    <priority>0.95</priority>
+  </url>
+  <url>
+    <loc>https://smm.khatirajbd.com/?tab=about</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://smm.khatirajbd.com/?tab=contact</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://smm.khatirajbd.com/?tab=refund</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.80</priority>
+  </url>
+  <url>
+    <loc>https://smm.khatirajbd.com/?tab=terms</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+  </url>
+  <url>
+    <loc>https://smm.khatirajbd.com/?tab=privacy</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+  </url>
+  <url>
+    <loc>https://smm.khatirajbd.com/?tab=api</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://smm.khatirajbd.com/?tab=track</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.80</priority>
+  </url>
+  <url>
+    <loc>https://smm.khatirajbd.com/?tab=add-funds</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.80</priority>
+  </url>
+</urlset>
