@@ -2535,33 +2535,52 @@ export async function getServerGoogleVerificationToken(): Promise<string> {
   return '';
 }
 
-// Automatic Google Search Console HTML File Verification (Works for ANY googleXXXXXXXX.html file)
-const handleGoogleVerificationFile = (req: Request, res: Response) => {
-  const match = req.path.match(/(google[a-zA-Z0-9_-]+\.html)$/i);
-  const fileName = match ? match[1] : String(req.query.file || 'google.html');
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+// Google Search Console HTML File Verification + Strict 404 for Random Probe .html URLs
+// (Prevents Google's "Website verification has failed in a way that indicates that your site might have been hacked" error)
+const ALLOWED_GSC_FILES = new Set<string>(['google9d68b630512313f4.html']);
+
+const handleHtmlVerificationOr404 = async (req: Request, res: Response) => {
+  const match = req.path.match(/([^/]+\.html)$/i);
+  const requestedFile = match ? match[1].trim() : '';
+
+  const configuredToken = await getServerGoogleVerificationToken();
+  const configuredFile = configuredToken
+    ? configuredToken.endsWith('.html')
+      ? configuredToken.startsWith('google')
+        ? configuredToken
+        : `google${configuredToken}`
+      : configuredToken.startsWith('google')
+      ? `${configuredToken}.html`
+      : `google${configuredToken}.html`
+    : '';
+
+  if (
+    requestedFile &&
+    (ALLOWED_GSC_FILES.has(requestedFile.toLowerCase()) ||
+      (configuredFile && requestedFile.toLowerCase() === configuredFile.toLowerCase()))
+  ) {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    res.status(200).send(`google-site-verification: ${requestedFile}`);
+    return;
+  }
+
+  // Return strict HTTP 404 for any other random .html probe so Google Search Console's anti-hack check passes!
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store, max-age=0');
-  res.status(200).send(`google-site-verification: ${fileName}`);
+  res.status(404).send('404 Not Found');
 };
 
-app.get(/^\/(api\/)?google[a-zA-Z0-9_-]+\.html$/i, handleGoogleVerificationFile);
+app.get(/^\/(api\/)?(?!index\.html$)[^/]+\.html$/i, handleHtmlVerificationOr404);
 
 app.get('/api/seo/verify-status', async (_req: Request, res: Response) => {
-  const token = await getServerGoogleVerificationToken();
-  const htmlFileName = token
-    ? token.endsWith('.html')
-      ? token.startsWith('google')
-        ? token
-        : `google${token}`
-      : token.startsWith('google')
-      ? `${token}.html`
-      : `google${token}.html`
-    : 'google1234567890abcdef.html';
+  const token = (await getServerGoogleVerificationToken()) || 'w7Ug6xh6chsouuQ8WzhrdMJ1KvTELUYnYZBG1KAJJrE';
+  const htmlFileName = 'google9d68b630512313f4.html';
 
   res.json({
     status: 'ready',
     token,
-    metaTag: token ? `<meta name="google-site-verification" content="${token}" />` : '',
+    metaTag: `<meta name="google-site-verification" content="${token}" />`,
     htmlFileSupported: true,
     sampleHtmlFileUrl: `/${htmlFileName}`,
     expectedFileResponse: `google-site-verification: ${htmlFileName}`

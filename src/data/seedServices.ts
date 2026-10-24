@@ -59,8 +59,8 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   seoDescription:
     'বাংলাদেশের সেরা ও সবচেয়ে কম দামে অটোমেটিক SMM Panel। বিকাশ ও নগদে তাৎক্ষণিক ডিপোজিট করে Facebook Page Monetization, 60k Watchtime, Non-Drop Followers, YouTube 4000h Watchtime ও TikTok Views নিন।',
   seoKeywords: DEFAULT_BD_SEO_KEYWORDS_STRING,
-  seoCanonicalDomain: '',
-  googleSiteVerification: '',
+  seoCanonicalDomain: 'https://smm.khatirajbd.com',
+  googleSiteVerification: 'w7Ug6xh6chsouuQ8WzhrdMJ1KvTELUYnYZBG1KAJJrE',
   googleAnalyticsId: '',
   seoOgImage: '',
   updatedAt: 0

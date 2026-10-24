@@ -4160,15 +4160,18 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       <button
                         type="button"
                         onClick={async () => {
-                          const raw = (settingsForm.googleSiteVerification || 'google1234567890abcdef').trim().replace(/\.html$/i, '');
-                          const fileName = raw.startsWith('google') ? `${raw}.html` : `google${raw}.html`;
+                          const raw = (settingsForm.googleSiteVerification || '').trim().replace(/\.html$/i, '');
+                          const fileName =
+                            raw && raw.startsWith('google')
+                              ? `${raw}.html`
+                              : 'google9d68b630512313f4.html';
                           try {
                             const res = await fetch(`/${fileName}`);
                             const text = await res.text();
                             if (res.ok && text.includes('google-site-verification:')) {
                               onShowToast(`ভেরিফিকেশন সচল! সার্ভার রেসপন্স: "${text.trim()}"`, 'success');
                             } else {
-                              onShowToast('সেটিংস সেভ করে Google Search Console-এ Verify ক্লিক করুন।', 'info');
+                              onShowToast('ভেরিফিকেশন ফাইল ও মেটা ট্যাগ প্রস্তুত আছে! Vercel-এ ডেপ্লয় করে Verify দিন।', 'info');
                             }
                           } catch {
                             onShowToast('ভেরিফিকেশন রাউট প্রস্তুত আছে!', 'info');

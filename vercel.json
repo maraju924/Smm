@@ -22,8 +22,8 @@
     }
   ],
   "rewrites": [
-    { "source": "/(google[a-zA-Z0-9_-]+\\.html)", "destination": "/api/index" },
+    { "source": "/((?!index\\.html$)[^/]+\\.html)", "destination": "/api/index" },
     { "source": "/api/(.*)", "destination": "/api/index" },
-    { "source": "/((?!api/|assets/|robots\\.txt|sitemap\\.xml|google[a-zA-Z0-9_-]+\\.html).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|assets/|robots\\.txt|sitemap\\.xml|[^/]+\\.html).*)", "destination": "/index.html" }
   ]
 }
