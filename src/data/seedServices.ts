@@ -1,27 +1,40 @@
 import { SMMService, SMMCoupon, SMMProvider, SiteSettings } from '../types';
 
+export const BRAND_LOGO_URL = '/assets/aistudio/file_00000000117c8208a1cede2cdfee706a_42e73997.png';
+
 /**
- * Researched Low-Competition High-Intent Bangladesh SMM Keyword Matrix
- * 1 Main Primary Keyword + 15 Targeted Sub-Keywords (English + Bengali + Banglish)
+ * Researched #1 Google Bangladesh Brand & SMM Keyword Matrix for Boostlagbe.com
+ * Includes exact Bengali, English, Banglish, and phonetic variations so Boostlagbe.com ranks #1
  */
-export const BD_MAIN_SEO_KEYWORD = 'Cheapest bKash Nagad SMM Panel Bangladesh';
+export const BD_MAIN_SEO_KEYWORD = 'Boostlagbe.com – বুস্ট লাগবে | #1 bKash Nagad SMM Panel Bangladesh';
 
 export const BD_SUB_SEO_KEYWORDS: string[] = [
+  'বুস্টলাগবে',
+  'বুস্ট লাগবে',
+  'বুস্ট লাগবে ডট কম',
+  'বুস্টলাগবে ডট কম',
+  'boostlagbe.com',
+  'boost lagbe',
+  'boost lagbe.com',
+  'boost lagobe',
+  'boostlagobe.com',
+  'boost lagbe bd',
+  'boostlagbe smm panel',
+  'ফেসবুক বুস্ট লাগবে',
+  'টিকটক ও ইউটিউব বুস্ট লাগবে',
+  'বিকাশ ও নগদে বুস্ট লাগবে',
+  'Cheapest bKash Nagad SMM Panel Bangladesh',
   'bKash Auto Payment SMM Panel BD',
   'Nagad Instant Deposit SMM Panel Bangladesh',
   'Facebook Page Monetization Watchtime Boost BD',
   'Buy Non Drop Facebook Followers Bangladesh bKash',
   'Facebook 60k Minutes Watchtime Service BD',
-  'Facebook Reels Views & Profile Followers Boost BD',
   'TikTok Views & Followers Boost Bangladesh bKash',
   'YouTube 4000 Hours Watchtime & Subscribers Panel BD',
   'Instagram Followers & Reels Boost Bangladesh',
   'Telegram Channel Members Boost BD SMM Panel',
-  'ZiniPay Automated SMM Panel Bangladesh',
   'Wholesale SMM Reseller API v2 Provider BD',
-  'কম দামে ফেসবুক ফলোয়ার ও ওয়াচটাইম কিনুন বিকাশ নগদে',
-  'বাংলাদেশি অটোমেটিক এসএমএম প্যানেল বিকাশ পেমেন্ট',
-  'ইউটিউব মনিটাইজেশন সাবস্ক্রাইবার ও টিকটক ভিউ বুস্ট বাংলাদেশ'
+  'কম দামে ফেসবুক ফলোয়ার ও ওয়াচটাইম কিনুন বিকাশ নগদে'
 ];
 
 export const DEFAULT_BD_SEO_KEYWORDS_STRING = [
@@ -30,7 +43,7 @@ export const DEFAULT_BD_SEO_KEYWORDS_STRING = [
 ].join(', ');
 
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
-  siteName: 'AmarTrend SMM',
+  siteName: 'Boostlagbe.com',
   bkashNumber: '',
   nagadNumber: '',
   rocketNumber: '',
@@ -55,14 +68,14 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   zinipayAutoVerifyTrx: true,
   zinipayFeePassToUser: false,
   zinipayFeePercent: 0,
-  seoTitle: 'AmarTrend SMM – #1 Cheapest bKash Nagad SMM Panel Bangladesh',
+  seoTitle: 'Boostlagbe.com (বুস্ট লাগবে) – #1 bKash Nagad SMM Panel Bangladesh',
   seoDescription:
-    'বাংলাদেশের সেরা ও সবচেয়ে কম দামে অটোমেটিক SMM Panel। বিকাশ ও নগদে তাৎক্ষণিক ডিপোজিট করে Facebook Page Monetization, 60k Watchtime, Non-Drop Followers, YouTube 4000h Watchtime ও TikTok Views নিন।',
+    'Boostlagbe.com (বুস্টলাগবে / বুস্ট লাগবে ডট কম) — বাংলাদেশের ১ নম্বর ও সবচেয়ে কম দামে অটোমেটিক SMM Panel। বিকাশ ও নগদে তাৎক্ষণিক ডিপোজিট করে Facebook Page Monetization, 60k Watchtime, Non-Drop Followers, YouTube 4000h Watchtime ও TikTok Views নিন।',
   seoKeywords: DEFAULT_BD_SEO_KEYWORDS_STRING,
-  seoCanonicalDomain: 'https://smm.khatirajbd.com',
+  seoCanonicalDomain: 'https://boostlagbe.com',
   googleSiteVerification: 'w7Ug6xh6chsouuQ8WzhrdMJ1KvTELUYnYZBG1KAJJrE',
   googleAnalyticsId: '',
-  seoOgImage: '',
+  seoOgImage: BRAND_LOGO_URL,
   updatedAt: 0
 };
 

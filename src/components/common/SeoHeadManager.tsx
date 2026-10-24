@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { SiteSettings, SMMService } from '../../types';
 import {
+  BRAND_LOGO_URL,
   BD_MAIN_SEO_KEYWORD,
   DEFAULT_BD_SEO_KEYWORDS_STRING
 } from '../../data/seedServices';
@@ -47,7 +48,7 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
   services
 }) => {
   useEffect(() => {
-    const brandName = siteSettings.siteName?.trim() || 'AmarTrend SMM';
+    const brandName = siteSettings.siteName?.trim() || 'Boostlagbe.com';
     const rawDomain = (
       siteSettings.seoCanonicalDomain ||
       siteSettings.zinipayBrandDomain ||
@@ -62,11 +63,11 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
 
     const baseTitle =
       siteSettings.seoTitle?.trim() ||
-      `${brandName} – #1 ${BD_MAIN_SEO_KEYWORD}`;
+      `Boostlagbe.com – বুস্ট লাগবে | #1 Cheapest bKash Nagad SMM Panel Bangladesh (বুস্টলাগবে ডট কম)`;
 
     const baseDescription =
       siteSettings.seoDescription?.trim() ||
-      'বাংলাদেশের সেরা ও সবচেয়ে কম দামে অটোমেটিক SMM Panel। বিকাশ ও নগদে তাৎক্ষণিক ডিপোজিট করে Facebook Page Monetization, 60k Watchtime, Non-Drop Followers, YouTube 4000h Watchtime ও TikTok Views নিন।';
+      'Boostlagbe.com (বুস্ট লাগবে / বুস্টলাগবে ডট কম) — বাংলাদেশের ১ নম্বর ও সবচেয়ে কম দামে অটোমেটিক SMM Panel। বিকাশ ও নগদে তাৎক্ষণিক ডিপোজিট করে Facebook Page Monetization, 60k Watchtime, Non-Drop Followers, YouTube 4000h Watchtime ও TikTok Views নিন। Boost Lagbe BD।';
 
     const keywords = siteSettings.seoKeywords?.trim() || DEFAULT_BD_SEO_KEYWORDS_STRING;
 
@@ -82,13 +83,13 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
 
     if (currentTab === 'services') {
       if (activeCategory && activeCategory !== 'All') {
-        pageTitle = `Buy ${activeCategory} Services in Bangladesh (bKash/Nagad) | ${brandName}`;
-        pageDescription = `বাংলাদেশে সবচেয়ে কম দামে ${activeCategory} Followers, Views, Watchtime ও Monetization সার্ভিস নিন। বিকাশ ও নগদে অটোমেটিক পেমেন্ট ও ইনস্ট্যান্ট ডেলিভারি।`;
+        pageTitle = `Buy ${activeCategory} Boost Services BD (বুস্ট লাগবে) | ${brandName}`;
+        pageDescription = `Boostlagbe.com (বুস্ট লাগবে)-এ সবচেয়ে কম দামে ${activeCategory} Followers, Views, Watchtime ও Monetization সার্ভিস নিন। বিকাশ ও নগদে অটোমেটিক পেমেন্ট ও ইনস্ট্যান্ট ডেলিভারি।`;
         canonicalUrl = `${baseOrigin}/?tab=services&category=${encodeURIComponent(activeCategory)}`;
         breadcrumbLabel = `${activeCategory} SMM Services BD`;
       } else {
-        pageTitle = `SMM Services & BDT Price List Bangladesh (bKash/Nagad) | ${brandName}`;
-        pageDescription = `লাইভ SMM সার্ভিস ক্যাটালগ ও বাংলাদেশের সর্বনিম্ন রেট লিস্ট (BDT)। Facebook Monetization, YouTube 4000h Watchtime, TikTok Views ও Instagram Followers।`;
+        pageTitle = `SMM Services & BDT Price List (বুস্ট লাগবে ডট কম) | ${brandName}`;
+        pageDescription = `Boostlagbe.com (বুস্টলাগবে) লাইভ SMM সার্ভিস ক্যাটালগ ও বাংলাদেশের সর্বনিম্ন রেট লিস্ট (BDT)। Facebook Monetization, YouTube 4000h Watchtime, TikTok Views ও Instagram Followers।`;
         canonicalUrl = `${baseOrigin}/?tab=services`;
         breadcrumbLabel = 'Services & Price List';
       }
@@ -98,7 +99,7 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
       canonicalUrl = `${baseOrigin}/?tab=api`;
       breadcrumbLabel = 'Developer API v2';
     } else if (currentTab === 'track' || currentTab === 'track-order') {
-      pageTitle = `Live SMM Order Tracker Bangladesh | ${brandName}`;
+      pageTitle = `Live SMM Order Tracker Bangladesh (বুস্ট লাগবে) | ${brandName}`;
       pageDescription = `আপনার অর্ডার আইডি দিয়ে রিয়েল-টাইম স্টার্ট কাউন্ট, ডেলিভারি প্রগ্রেস এবং রিমেইনস স্ট্যাটাস ট্র্যাক করুন।`;
       canonicalUrl = `${baseOrigin}/?tab=track`;
       breadcrumbLabel = 'Live Order Tracker';
@@ -108,7 +109,7 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
       canonicalUrl = `${baseOrigin}/?tab=add-funds`;
       breadcrumbLabel = 'bKash & Nagad Auto Deposit';
     } else if (currentTab === 'new-order') {
-      pageTitle = `Place Instant SMM Order in Bangladesh (bKash/Nagad) | ${brandName}`;
+      pageTitle = `Place Instant SMM Order in Bangladesh (বুস্ট লাগবে) | ${brandName}`;
       pageDescription = `ফেসবুক মনিটাইজেশন, ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম ও টিকটক ভিউ অর্ডার করুন তাৎক্ষণিক অটোমেটিক ডেলিভারিতে।`;
       canonicalUrl = `${baseOrigin}/?tab=new-order`;
       breadcrumbLabel = 'New Order';
@@ -118,8 +119,8 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
       canonicalUrl = `${baseOrigin}/?tab=affiliates`;
       breadcrumbLabel = 'Affiliates & Vouchers';
     } else if (currentTab === 'about') {
-      pageTitle = `About ${brandName} – #1 Automated bKash Nagad SMM Panel Bangladesh`;
-      pageDescription = `${brandName} সম্পর্কে জানুন — বাংলাদেশের ১ নম্বর অটোমেটিক SMM ও মনিটাইজেশন ইনফ্রাস্ট্রাকচার। ZiniPay ইনস্ট্যান্ট পেমেন্ট ও ক্লাউড API v2।`;
+      pageTitle = `About ${brandName} (বুস্ট লাগবে) – #1 Automated bKash Nagad SMM Panel Bangladesh`;
+      pageDescription = `${brandName} (বুস্ট লাগবে ডট কম) সম্পর্কে জানুন — বাংলাদেশের ১ নম্বর অটোমেটিক SMM ও মনিটাইজেশন ইনফ্রাস্ট্রাকচার। ZiniPay ইনস্ট্যান্ট পেমেন্ট ও ক্লাউড API v2।`;
       canonicalUrl = `${baseOrigin}/?tab=about`;
       breadcrumbLabel = 'About Us';
       pageSchemaType = 'AboutPage';
@@ -168,14 +169,14 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
     upsertMetaTag('property', 'og:title', pageTitle);
     upsertMetaTag('property', 'og:description', pageDescription);
     upsertMetaTag('property', 'og:url', canonicalUrl);
-    upsertMetaTag('property', 'og:site_name', `${brandName} Bangladesh`);
+    upsertMetaTag('property', 'og:site_name', `${brandName} – বুস্ট লাগবে`);
     upsertMetaTag('name', 'twitter:title', pageTitle);
     upsertMetaTag('name', 'twitter:description', pageDescription);
 
-    if (siteSettings.seoOgImage?.trim()) {
-      upsertMetaTag('property', 'og:image', siteSettings.seoOgImage.trim());
-      upsertMetaTag('name', 'twitter:image', siteSettings.seoOgImage.trim());
-    }
+    const ogImg = siteSettings.seoOgImage?.trim() || BRAND_LOGO_URL;
+    upsertMetaTag('property', 'og:image', ogImg);
+    upsertMetaTag('name', 'twitter:image', ogImg);
+    upsertLinkTag('icon', BRAND_LOGO_URL);
 
     // Google Search Console verification tag (prepended to top of <head> & supports raw token, <meta> tag, or google*.html)
     if (siteSettings.googleSiteVerification?.trim()) {
@@ -291,8 +292,19 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
         {
           '@type': 'WebApplication',
           '@id': `${baseOrigin}/#webapp`,
-          name: `${brandName} Bangladesh`,
-          alternateName: BD_MAIN_SEO_KEYWORD,
+          name: `${brandName} – বুস্ট লাগবে`,
+          alternateName: [
+            'বুস্টলাগবে',
+            'বুস্ট লাগবে',
+            'বুস্ট লাগবে ডট কম',
+            'বুস্টলাগবে ডট কম',
+            'boostlagbe.com',
+            'boost lagbe',
+            'boost lagobe',
+            'boost lagbe.com',
+            'boostlagobe.com',
+            BD_MAIN_SEO_KEYWORD
+          ],
           url: `${baseOrigin}/`,
           applicationCategory: 'BusinessApplication',
           operatingSystem: 'All',
@@ -319,7 +331,16 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
         {
           '@type': 'Organization',
           '@id': `${baseOrigin}/#organization`,
-          name: `${brandName} Bangladesh`,
+          name: `${brandName} (বুস্ট লাগবে)`,
+          alternateName: [
+            'বুস্টলাগবে',
+            'বুস্ট লাগবে',
+            'বুস্ট লাগবে ডট কম',
+            'boostlagbe.com',
+            'boost lagbe',
+            'boost lagobe'
+          ],
+          logo: `${baseOrigin}${BRAND_LOGO_URL}`,
           url: `${baseOrigin}/`,
           areaServed: 'BD',
           knowsLanguage: ['bn-BD', 'en'],

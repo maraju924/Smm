@@ -93,6 +93,7 @@ import {
   fetchServerHealthStatus
 } from '../../services/db';
 import {
+  BRAND_LOGO_URL,
   DEFAULT_SITE_SETTINGS,
   BD_MAIN_SEO_KEYWORD,
   BD_SUB_SEO_KEYWORDS,
@@ -955,7 +956,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     try {
       await addTicketMessage(t.id, t.messages, {
         senderId: profile.uid,
-        senderName: 'AmarTrend Admin',
+        senderName: 'Boostlagbe.com Admin',
         senderRole: 'admin',
         message: adminReplyText.trim(),
         timestamp: Date.now()
@@ -1066,14 +1067,16 @@ export const AdminView: React.FC<AdminViewProps> = ({
             onClick={() => navigateSection('overview')}
             className="flex items-center gap-3 cursor-pointer"
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#8B5CF6] to-[#22D3EE] p-[1px] shadow-lg shadow-[#8B5CF6]/20">
-              <div className="w-full h-full rounded-[11px] bg-[#080B14] flex items-center justify-center">
-                <ShieldCheck className="w-4 h-4 text-[#22D3EE]" />
-              </div>
-            </div>
+            <img
+              src={BRAND_LOGO_URL}
+              alt="Boostlagbe.com Admin"
+              width={36}
+              height={36}
+              className="w-9 h-9 rounded-xl object-contain bg-[#080B14] border border-white/10 p-0.5 shadow-lg shadow-[#8B5CF6]/20"
+            />
             <div>
               <h2 className="text-sm font-bold text-[#F1F5F9] tracking-tight leading-none">
-                Admin Suite
+                Boostlagbe Admin
               </h2>
               <p className="text-[10px] font-mono text-[#22D3EE] mt-1">
                 {serverHealth ? `Node ${serverHealth.nodeVersion}` : 'Cloud Server Live'}

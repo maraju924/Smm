@@ -2478,10 +2478,40 @@ export function subscribeSiteSettings(
     docRef,
     (snap) => {
       if (snap.exists()) {
+        const raw = snap.data() as SiteSettings;
+        const isLegacyName =
+          !raw.siteName ||
+          raw.siteName.trim().toLowerCase().includes('amartrend');
+        const normalizedSiteName = isLegacyName ? 'Boostlagbe.com' : raw.siteName;
+
+        const isLegacyTitle =
+          !raw.seoTitle ||
+          raw.seoTitle.toLowerCase().includes('amartrend');
+        const normalizedSeoTitle = isLegacyTitle
+          ? DEFAULT_SITE_SETTINGS.seoTitle
+          : raw.seoTitle;
+
+        const isLegacyDesc =
+          !raw.seoDescription ||
+          !raw.seoDescription.toLowerCase().includes('boostlagbe');
+        const normalizedSeoDesc = isLegacyDesc
+          ? DEFAULT_SITE_SETTINGS.seoDescription
+          : raw.seoDescription;
+
+        const existingKw = raw.seoKeywords || '';
+        const normalizedKeywords = existingKw.includes('বুস্টলাগবে')
+          ? existingKw
+          : DEFAULT_SITE_SETTINGS.seoKeywords;
+
         cachedGlobalSettings = {
           ...DEFAULT_SITE_SETTINGS,
-          ...(snap.data() as SiteSettings),
-          ...(cachedGlobalSettings.updatedAt > ((snap.data() as SiteSettings)?.updatedAt || 0)
+          ...raw,
+          siteName: normalizedSiteName,
+          seoTitle: normalizedSeoTitle,
+          seoDescription: normalizedSeoDesc,
+          seoKeywords: normalizedKeywords,
+          seoOgImage: raw.seoOgImage || DEFAULT_SITE_SETTINGS.seoOgImage,
+          ...(cachedGlobalSettings.updatedAt > (raw?.updatedAt || 0)
             ? cachedGlobalSettings
             : {})
         };

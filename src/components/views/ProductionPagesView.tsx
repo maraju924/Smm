@@ -32,7 +32,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { SiteSettings, SMMService } from '../../types';
 import { createTicket } from '../../services/db';
-import { BD_MAIN_SEO_KEYWORD, BD_SUB_SEO_KEYWORDS } from '../../data/seedServices';
+import { BRAND_LOGO_URL, BD_MAIN_SEO_KEYWORD, BD_SUB_SEO_KEYWORDS } from '../../data/seedServices';
 
 export type ProductionPageType =
   | 'about'
@@ -64,7 +64,7 @@ export const ProductionPagesView: React.FC<ProductionPagesViewProps> = ({
 }) => {
   const { user, profile, isAdmin, language, setLanguage, currency, setCurrency, formatPrice } = useAuth();
 
-  const brandName = siteSettings?.siteName?.trim() || 'AmarTrend SMM';
+  const brandName = siteSettings?.siteName?.trim() || 'Boostlagbe.com';
   const activeServicesCount = services.filter((s) => s.status !== 'disabled').length || 150;
   const categoriesCount = new Set(services.map((s) => s.category)).size || 24;
 
@@ -139,9 +139,9 @@ export const ProductionPagesView: React.FC<ProductionPagesViewProps> = ({
     { badge: string; titleBn: string; titleEn: string; subtitleBn: string; subtitleEn: string }
   > = {
     about: {
-      badge: 'ABOUT AMARTREND SMM BANGLADESH',
-      titleBn: `${brandName} সম্পর্কে — বাংলাদেশের ১ নম্বর অটোমেটিক SMM ও মনিটাইজেশন ইনফ্রাস্ট্রাকচার`,
-      titleEn: `About ${brandName} — Bangladesh's #1 Automated SMM & Monetization Infrastructure`,
+      badge: 'ABOUT BOOSTLAGBE.COM (বুস্ট লাগবে)',
+      titleBn: `${brandName} (বুস্ট লাগবে) সম্পর্কে — বাংলাদেশের ১ নম্বর অটোমেটিক SMM ও মনিটাইজেশন ইনফ্রাস্ট্রাকচার`,
+      titleEn: `About ${brandName} (Boost Lagbe) — Bangladesh's #1 Automated SMM & Monetization Infrastructure`,
       subtitleBn:
         'বাংলাদেশের কন্টেন্ট ক্রিয়েটর, ডিজিটাল মার্কেটিং এজেন্সি এবং রিসেলারদের জন্য সবচেয়ে কম দামে বিকাশ ও নগদ অটো-পেমেন্টসহ ক্লাউড API v2 সোশ্যাল মিডিয়া গ্রোথ প্ল্যাটফর্ম।',
       subtitleEn:
@@ -283,16 +283,20 @@ export const ProductionPagesView: React.FC<ProductionPagesViewProps> = ({
               onClick={() => onNavigateTab('landing')}
               className="flex items-center gap-2.5 text-left group"
             >
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#8B5CF6] via-[#6D28D9] to-[#22D3EE] flex items-center justify-center text-white font-black text-xs shadow-lg shadow-[#8B5CF6]/25">
-                AT
-              </div>
+              <img
+                src={BRAND_LOGO_URL}
+                alt="Boostlagbe.com – বুস্ট লাগবে"
+                width={36}
+                height={36}
+                className="w-9 h-9 rounded-xl object-contain bg-[#0D1220] border border-white/10 p-0.5 shadow-lg shadow-[#8B5CF6]/20"
+              />
               <div>
                 <div className="flex items-center gap-1.5">
                   <span className="font-extrabold text-sm sm:text-base text-white tracking-tight">
                     {brandName}
                   </span>
                   <span className="px-1.5 py-0.5 rounded bg-[#22D3EE]/15 text-[#22D3EE] font-mono text-[9px] font-bold">
-                    BD
+                    বুস্ট লাগবে
                   </span>
                 </div>
                 <p className="text-[10px] text-[#94A3B8] hidden sm:block">

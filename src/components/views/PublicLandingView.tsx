@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { SMMService, Announcement, SiteSettings } from '../../types';
-import { BD_MAIN_SEO_KEYWORD, BD_SUB_SEO_KEYWORDS } from '../../data/seedServices';
+import { BRAND_LOGO_URL, BD_MAIN_SEO_KEYWORD, BD_SUB_SEO_KEYWORDS } from '../../data/seedServices';
 
 interface PublicLandingViewProps {
   services: SMMService[];
@@ -207,7 +207,7 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
     [announcements]
   );
 
-  const apiCodeSample = `curl -X POST https://smm.khatirajbd.com/api/v2 \\
+  const apiCodeSample = `curl -X POST https://boostlagbe.com/api/v2 \\
   -d "key=YOUR_LIVE_API_KEY" \\
   -d "action=add" \\
   -d "service=${selectedCalcService?.id || '101'}" \\
@@ -229,12 +229,12 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
     {
       q:
         language === 'bn'
-          ? 'বাংলাদেশে সবচেয়ে কম দামে বিকাশ ও নগদে অটোমেটিক SMM Panel কোনটি?'
-          : 'Which is the cheapest bKash & Nagad automated SMM Panel in Bangladesh?',
+          ? 'বুস্ট লাগবে (Boostlagbe.com / বুস্টলাগবে ডট কম) কেন বাংলাদেশের ১ নম্বর অটোমেটিক SMM Panel?'
+          : 'Why is Boostlagbe.com (Boost Lagbe) the #1 cheapest bKash & Nagad SMM Panel in Bangladesh?',
       a:
         language === 'bn'
-          ? `${siteSettings?.siteName || 'AmarTrend SMM'} হলো বাংলাদেশের সেরা ও সবচেয়ে কম দামের অটোমেটিক SMM Panel। এখানে ZiniPay অটোমেটিক পেমেন্ট গেটওয়ের মাধ্যমে বিকাশ (bKash), নগদ (Nagad), রকেট (Rocket) এবং উপায় (Upay) দিয়ে ১ ক্লিকে তাৎক্ষণিক ডিপোজিট করে সকল সোশ্যাল মিডিয়া সার্ভিস নেওয়া যায়।`
-          : `${siteSettings?.siteName || 'AmarTrend SMM'} is Bangladesh's #1 cheapest automated SMM panel supporting instant 1-click bKash, Nagad, Rocket, and Upay deposits via ZiniPay Gateway with wholesale BDT pricing.`
+          ? `${siteSettings?.siteName || 'Boostlagbe.com'} (বুস্ট লাগবে / বুস্টলাগবে ডট কম) হলো বাংলাদেশের সেরা ও সবচেয়ে কম দামের ১০০% অটোমেটিক SMM Panel। এখানে ZiniPay অটোমেটিক পেমেন্ট গেটওয়ের মাধ্যমে বিকাশ (bKash), নগদ (Nagad), রকেট (Rocket) এবং উপায় (Upay) দিয়ে ১ ক্লিকে তাৎক্ষণিক ডিপোজিট করে সকল সোশ্যাল মিডিয়া বুস্ট সার্ভিস নেওয়া যায়।`
+          : `${siteSettings?.siteName || 'Boostlagbe.com'} (Boost Lagbe / Boost Lagobe) is Bangladesh's #1 cheapest automated SMM panel supporting instant 1-click bKash, Nagad, Rocket, and Upay deposits via ZiniPay Gateway with wholesale BDT pricing.`
     },
     {
       q:
@@ -322,18 +322,19 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
             onClick={(e) => handleAnchorNav(e, 'landing')}
             className="flex items-center gap-3 focus:outline-none"
           >
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#8B5CF6] to-[#22D3EE] p-[1px]">
-              <div className="w-full h-full rounded-[15px] bg-[#080B14] flex items-center justify-center">
-                <Zap className="w-5 h-5 text-[#67E8F9]" aria-hidden="true" />
-              </div>
-            </div>
+            <img
+              src={BRAND_LOGO_URL}
+              alt="Boostlagbe.com – বুস্ট লাগবে অফিশিয়াল লোগো"
+              width={40}
+              height={40}
+              className="w-10 h-10 rounded-xl object-contain bg-[#0D1220] border border-white/10 p-0.5 shrink-0"
+            />
             <div>
               <span className="text-base sm:text-lg font-black tracking-tight text-[#F1F5F9] block leading-none">
-                {siteSettings?.siteName || 'AmarTrend'}
-                <span className="text-[#67E8F9] ml-1 font-mono text-xs font-bold">SMM</span>
+                {siteSettings?.siteName || 'Boostlagbe.com'}
               </span>
-              <span className="text-[10px] font-mono text-[#CBD5E1] tracking-wider uppercase block mt-0.5">
-                Automated Growth Engine
+              <span className="text-[10px] font-mono text-[#67E8F9] tracking-wider block mt-0.5">
+                বুস্ট লাগবে • #1 Auto SMM BD
               </span>
             </div>
           </a>
@@ -438,30 +439,28 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
                 </span>
               </div>
 
-              <h1 className="text-3xl sm:text-5xl lg:text-[54px] font-black text-[#F1F5F9] tracking-tight leading-[1.08]">
+              <h1 className="text-3xl sm:text-5xl lg:text-[52px] font-black text-[#F1F5F9] tracking-tight leading-[1.1]">
                 {language === 'bn' ? (
                   <>
-                    সোশ্যাল মিডিয়া গ্রোথ ও{' '}
                     <span className="bg-gradient-to-r from-[#C4B5FD] via-[#A78BFA] to-[#67E8F9] bg-clip-text text-transparent">
-                      অটোমেটেড SMM API
+                      Boostlagbe.com (বুস্ট লাগবে)
                     </span>{' '}
-                    ওয়ার্কস্পেস
+                    — বাংলাদেশের ১ নম্বর অটোমেটেড SMM প্যানেল
                   </>
                 ) : (
                   <>
-                    Precision Social Growth &{' '}
                     <span className="bg-gradient-to-r from-[#C4B5FD] via-[#A78BFA] to-[#67E8F9] bg-clip-text text-transparent">
-                      Automated SMM API
+                      Boostlagbe.com (Boost Lagbe)
                     </span>{' '}
-                    Infrastructure
+                    — #1 Automated SMM API Panel BD
                   </>
                 )}
               </h1>
 
               <p className="text-sm sm:text-base text-[#CBD5E1] max-w-2xl leading-relaxed">
                 {language === 'bn'
-                  ? 'কন্টেন্ট ক্রিয়েটর, মার্কেটিং এজেন্সি এবং রিসেলারদের জন্য বাংলাদেশের সবচেয়ে আধুনিক ক্লাউড SMM প্ল্যাটফর্ম। সরাসরি পাইকারি API রেটে Facebook, Instagram, YouTube, TikTok ও Telegram সার্ভিস অর্ডার করুন বিকাশ, নগদ ও USDT পেমেন্টের মাধ্যমে।'
-                  : 'Built for agencies, creators, and high-volume resellers. Dispatch instant orders across Facebook, Instagram, YouTube, TikTok, and Telegram at wholesale API rates with atomic wallet protection and real-time delivery telemetry.'}
+                  ? 'বুস্টলাগবে ডট কম (Boostlagbe.com / বুস্ট লাগবে): কন্টেন্ট ক্রিয়েটর, মার্কেটিং এজেন্সি এবং রিসেলারদের জন্য বাংলাদেশের সবচেয়ে আধুনিক ও সাশ্রয়ী অটোমেটিক ক্লাউড SMM প্ল্যাটফর্ম। সরাসরি পাইকারি API রেটে Facebook, Instagram, YouTube, TikTok ও Telegram বুস্ট সার্ভিস অর্ডার করুন বিকাশ ও নগদে।'
+                  : 'Boostlagbe.com (Boost Lagbe / Boost Lagobe): Built for Bangladeshi creators, agencies, and high-volume resellers. Dispatch instant orders across Facebook, Instagram, YouTube, TikTok, and Telegram at wholesale API rates with instant ZiniPay bKash & Nagad funding.'}
               </p>
 
               {/* Primary & Secondary Hero CTAs */}
@@ -1015,17 +1014,17 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
         >
           <div className="max-w-3xl mb-8">
             <span className="text-xs font-mono text-[#67E8F9] tracking-wider font-bold">
-              Bangladesh SMM Growth & Monetization Hub
+              Boostlagbe.com • বুস্ট লাগবে ডট কম • #1 Bangladesh SMM Hub
             </span>
             <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1">
               {language === 'bn'
-                ? 'বাংলাদেশের সেরা ও সবচেয়ে কম দামে অটোমেটিক SMM Panel (বিকাশ ও নগদ পেমেন্ট)'
-                : '#1 Cheapest bKash & Nagad Automated SMM Panel in Bangladesh'}
+                ? 'বুস্ট লাগবে (Boostlagbe.com) — বাংলাদেশের সেরা ও সবচেয়ে কম দামে অটোমেটিক SMM Panel'
+                : 'Boostlagbe.com (Boost Lagbe) — #1 Cheapest bKash & Nagad SMM Panel in Bangladesh'}
             </h2>
             <p className="text-xs sm:text-sm text-[#CBD5E1] leading-relaxed mt-2">
               {language === 'bn'
-                ? 'ফেসবুক পেজ মনিটাইজেশন, ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম, টিকটক ভাইরাল ভিউ এবং ইনস্টাগ্রাম ফলোয়ার বুস্ট করার জন্য বাংলাদেশের কন্টেন্ট ক্রিয়েটর, এজেন্সি ও রিসেলারদের প্রথম পছন্দ।'
-                : 'Engineered specifically for Bangladeshi creators, e-commerce brands, and digital agencies with instant ZiniPay bKash/Nagad deposits and direct API v2 wholesale rates.'}
+                ? 'আপনি কি গুগলে "বুস্টলাগবে", "বুস্ট লাগবে", "বুস্ট লাগবে ডট কম", "boost lagbe", "boost lagobe" অথবা "boostlagbe.com" লিখে সার্চ করছেন? ফেসবুক পেজ মনিটাইজেশন, ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম, টিকটক ভাইরাল ভিউ এবং ইনস্টাগ্রাম ফলোয়ার বুস্ট করার জন্য বাংলাদেশের ১ নম্বর অফিশিয়াল প্ল্যাটফর্ম হলো Boostlagbe.com।'
+                : 'Searching for বুস্টলাগবে, বুস্ট লাগবে, বুস্ট লাগবে ডট কম, boostlagbe.com, boost lagbe, or boost lagobe? Boostlagbe.com is Bangladesh’s #1 official automated social media boost & monetization platform with instant ZiniPay bKash/Nagad deposits.'}
             </p>
           </div>
 
@@ -1302,9 +1301,18 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#CBD5E1]">
-            <p className="font-mono">
-              © {new Date().getFullYear()} {siteSettings?.siteName || 'AmarTrend SMM'} Bangladesh. Cloud API v2 Infrastructure.
-            </p>
+            <div className="flex items-center gap-2.5">
+              <img
+                src={BRAND_LOGO_URL}
+                alt="Boostlagbe.com – বুস্ট লাগবে"
+                width={28}
+                height={28}
+                className="w-7 h-7 rounded-lg object-contain bg-[#080B14] border border-white/10 p-0.5"
+              />
+              <p className="font-mono">
+                © {new Date().getFullYear()} {siteSettings?.siteName || 'Boostlagbe.com'} (বুস্ট লাগবে ডট কম). Cloud API v2 Infrastructure.
+              </p>
+            </div>
             <div className="flex flex-wrap items-center gap-4">
               <a href="/?tab=about" onClick={(e) => handleAnchorNav(e, 'about')} className="hover:text-white py-1">
                 {language === 'bn' ? 'আমাদের সম্পর্কে' : 'About'}

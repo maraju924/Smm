@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
+import { BRAND_LOGO_URL } from '../../data/seedServices';
 
 interface DesktopSidebarProps {
   currentTab: string;
@@ -182,21 +183,25 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
           onClick={() => onSelectTab('home')}
           className="flex items-center gap-2.5 min-w-0 focus:outline-none group"
         >
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#8B5CF6] via-[#6D28D9] to-[#22D3EE] flex items-center justify-center text-white font-black text-xs shadow-lg shadow-violet-500/20 shrink-0 group-hover:scale-105 transition-transform">
-            AT
-          </div>
+          <img
+            src={BRAND_LOGO_URL}
+            alt="Boostlagbe.com"
+            width={36}
+            height={36}
+            className="w-9 h-9 rounded-xl object-contain bg-[#080B14] border border-white/10 p-0.5 shadow-lg shadow-violet-500/20 shrink-0 group-hover:scale-105 transition-transform"
+          />
           {!collapsed && (
             <div className="text-left min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="font-extrabold text-sm tracking-tight text-[#F1F5F9] truncate">
-                  AmarTrend
+                  Boostlagbe.com
                 </span>
                 <span className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">
                   PRO
                 </span>
               </div>
-              <p className="text-[10px] text-[#94A3B8] truncate">
-                Cloud SMM Workstation
+              <p className="text-[10px] text-[#67E8F9] truncate">
+                বুস্ট লাগবে • Auto SMM
               </p>
             </div>
           )}

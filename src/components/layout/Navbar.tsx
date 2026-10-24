@@ -18,6 +18,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
 import { Announcement } from '../../types';
+import { BRAND_LOGO_URL } from '../../data/seedServices';
 
 interface NavbarProps {
   onOpenAuth: () => void;
@@ -143,15 +144,16 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={() => onNavigateTab('home')}
             className="flex lg:hidden items-center gap-2 cursor-pointer select-none min-w-0"
           >
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#8B5CF6] via-[#6D28D9] to-[#22D3EE] flex items-center justify-center text-white font-black text-xs shadow-md shadow-violet-500/25 active:scale-95 transition-transform shrink-0">
-              AT
-            </div>
+            <img
+              src={BRAND_LOGO_URL}
+              alt="Boostlagbe.com"
+              width={32}
+              height={32}
+              className="w-8 h-8 rounded-xl object-contain bg-[#0D1220] border border-white/10 p-0.5 shadow-md shadow-violet-500/20 active:scale-95 transition-transform shrink-0"
+            />
             <div className="min-w-0">
               <span className="font-extrabold text-sm tracking-tight text-[#F1F5F9] flex items-center gap-1 whitespace-nowrap">
-                AmarTrend
-                <span className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.2 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">
-                  SMM
-                </span>
+                Boostlagbe.com
               </span>
             </div>
           </div>

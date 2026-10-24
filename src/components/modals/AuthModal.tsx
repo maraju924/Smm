@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
+import { BRAND_LOGO_URL } from '../../data/seedServices';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -160,15 +161,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <div className="hidden lg:flex lg:col-span-5 p-7 glass-hero flex-col justify-between border-r border-slate-800/80">
               <div className="space-y-4">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#8B5CF6] to-[#22D3EE] flex items-center justify-center text-slate-950 font-black text-sm shadow-lg">
-                    AT
-                  </div>
+                  <img
+                    src={BRAND_LOGO_URL}
+                    alt="Boostlagbe.com – বুস্ট লাগবে"
+                    width={40}
+                    height={40}
+                    className="w-10 h-10 rounded-2xl object-contain bg-[#080B14] border border-white/10 p-0.5 shadow-lg"
+                  />
                   <div>
                     <h3 className="text-sm font-extrabold text-white tracking-tight">
-                      AmarTrend SMM
+                      Boostlagbe.com
                     </h3>
-                    <span className="text-[10px] font-mono text-[#22D3EE] uppercase tracking-wider">
-                      Cloud SaaS Workspace
+                    <span className="text-[10px] font-mono text-[#22D3EE] tracking-wider">
+                      বুস্ট লাগবে • Cloud SMM
                     </span>
                   </div>
                 </div>
