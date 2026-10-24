@@ -25,7 +25,7 @@ import {
   isQuotaError,
   markFirestoreQuotaExhausted
 } from '../firebase/error-handler';
-import { sanitizeForFirestore } from '../services/db';
+import { sanitizeForFirestore, applyReferralCode } from '../services/db';
 
 interface AuthContextType {
   user: User | null;
@@ -163,7 +163,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           language: 'bn',
           darkMode: true,
           apiKey: '',
-          referralCode: `AMT-${currentUser.uid.substring(0, 6).toUpperCase()}`,
+          referralCode: `BL-${currentUser.uid.substring(0, 6).toUpperCase()}`,
           referralCount: 0,
           referralEarnings: 0,
           unpaidReferralEarnings: 0,
@@ -193,9 +193,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (data.language) setLanguageState(data.language);
             if (data.darkMode !== undefined) setDarkModeState(data.darkMode);
 
+            const normalizedRefCode =
+              data.referralCode && !data.referralCode.startsWith('AMT-')
+                ? data.referralCode
+                : `BL-${currentUser.uid.substring(0, 6).toUpperCase()}`;
+
             setProfile({
               ...data,
-              referralCode: data.referralCode || `AMT-${currentUser.uid.substring(0, 6).toUpperCase()}`,
+              referralCode: normalizedRefCode,
               role: isEmailAdmin ? 'admin' : data.role
             });
           } else {
@@ -212,7 +217,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               language: 'bn',
               darkMode: true,
               apiKey: 'amt_live_' + Array.from({ length: 24 }, () => Math.floor(Math.random() * 36).toString(36)).join(''),
-              referralCode: `AMT-${currentUser.uid.substring(0, 6).toUpperCase()}`,
+              referralCode: `BL-${currentUser.uid.substring(0, 6).toUpperCase()}`,
               referralCount: 0,
               referralEarnings: 0,
               unpaidReferralEarnings: 0,
@@ -232,6 +237,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     email: currentUser.email,
                     active: true
                   }, { merge: true });
+                }
+                // Automatically link referral code if user signed up with a referral code
+                try {
+                  const pendingRefCode = sessionStorage.getItem('boostlagbe_ref_code');
+                  if (pendingRefCode && pendingRefCode.trim()) {
+                    await applyReferralCode(newProfile, pendingRefCode.trim());
+                  }
+                } catch {
+                  // Ignore invalid or expired referral code during signup
                 }
               } catch (err) {
                 if (isQuotaError(err)) markFirestoreQuotaExhausted();

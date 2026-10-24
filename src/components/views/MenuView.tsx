@@ -14,7 +14,8 @@ import {
   LogOut,
   ChevronRight,
   Zap,
-  Package
+  Package,
+  BookOpen
 } from 'lucide-react';
 import { SiteSettings } from '../../types';
 import { useAuth } from '../../context/AuthContext';
@@ -80,22 +81,22 @@ export const MenuView: React.FC<MenuViewProps> = ({
     },
     {
       id: 'affiliates',
-      label: t('রেফারেল ও ভাউচার', 'Affiliates & Vouchers'),
-      desc: t('বন্ধুদের আমন্ত্রণ জানিয়ে কমিশন আয় করুন', 'Invite friends and redeem promo vouchers'),
+      label: t('প্রোমো, রিওয়ার্ড ও অ্যাফিলিয়েট', 'Promo, Rewards & Affiliates'),
+      desc: t('প্রোমো কোড, ডেইলি বোনাস এবং রেফারেল আয়', 'Redeem promo codes, daily rewards & invite friends'),
       icon: Gift,
       accent: 'text-[#8B5CF6] bg-[#8B5CF6]/10 border-[#8B5CF6]/25'
     },
     {
-      id: 'api-docs',
-      label: t('ডেভেলপার API স্টুডিও', 'Developer API v2'),
-      desc: t('REST API ডকুমেন্টেশন ও স্যান্ডবক্স টেস্টার', 'Connect external panels with your API key'),
-      icon: Code2,
-      accent: 'text-[#22C55E] bg-[#22C55E]/10 border-[#22C55E]/25'
+      id: 'blog',
+      label: t('ব্লগ ও এসএমএম গাইড', 'SMM Blog & Guides'),
+      desc: t('ফেসবুক মনিটাইজেশন, টিকটক ও ইউটিউব গ্রোথ গাইড', 'Facebook monetization, TikTok & YouTube growth tutorials'),
+      icon: BookOpen,
+      accent: 'text-[#EC4899] bg-[#EC4899]/10 border-[#EC4899]/25'
     },
     {
       id: 'profile',
-      label: t('প্রোফাইল ও সিকিউরিটি', 'Profile & Settings'),
-      desc: t('পাসওয়ার্ড, API Key এবং অ্যাকাউন্ট প্রিফারেন্স', 'Manage account security and API credentials'),
+      label: t('প্রোফাইল ও সেটিংস', 'Profile & Settings'),
+      desc: t('অ্যাকাউন্ট তথ্য, পাসওয়ার্ড এবং ভাষা সেটিংস', 'Manage account profile, password and preferences'),
       icon: User,
       accent: 'text-[#94A3B8] bg-white/[0.06] border-white/[0.12]'
     }
@@ -113,7 +114,7 @@ export const MenuView: React.FC<MenuViewProps> = ({
               </div>
               <div>
                 <h2 className="text-base font-bold text-[#F1F5F9]">
-                  {profile?.displayName || 'SMM Member'}
+                  {profile?.displayName || 'Boostlagbe Member'}
                 </h2>
                 <p className="text-xs text-[#94A3B8]">{user.email}</p>
                 <div className="flex items-center gap-2 mt-1.5">
@@ -137,7 +138,7 @@ export const MenuView: React.FC<MenuViewProps> = ({
                 className="px-4 py-2.5 rounded-2xl bg-[#8B5CF6]/15 hover:bg-[#8B5CF6]/25 border border-[#8B5CF6]/35 text-[#F1F5F9] text-xs font-bold flex items-center justify-center gap-2"
               >
                 <ShieldCheck className="w-4 h-4 text-[#22D3EE]" />
-                {t('অ্যাডমিন কন্ট্রোল প্যানেল', 'Open Admin Control Center')}
+                {t('অ্যাডমিন কন্ট্রোল প্যানেল', 'Admin Control Panel')}
               </button>
             )}
           </div>
@@ -145,10 +146,10 @@ export const MenuView: React.FC<MenuViewProps> = ({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-base font-bold text-[#F1F5F9]">
-                {t('আপনার অ্যাকাউন্টে লগইন করুন', 'Sign In to Your Workspace')}
+                {t('আপনার অ্যাকাউন্টে লগইন করুন', 'Sign In to Your Account')}
               </h2>
               <p className="text-xs text-[#94A3B8] mt-0.5">
-                {t('অর্ডার ট্র্যাকিং, ওয়ালেট এবং এপিআই সুবিধা পেতে লগইন করুন', 'Access live order tracking, wallet deposits, and API integration')}
+                {t('অর্ডার ট্র্যাকিং, ওয়ালেট এবং প্রোমো বোনাস সুবিধা পেতে লগইন করুন', 'Access order tracking, wallet deposits, and promo rewards')}
               </p>
             </div>
             <button

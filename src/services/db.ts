@@ -36,11 +36,14 @@ import {
   SMMCoupon,
   SiteSettings,
   ZiniPayGatewayLog,
-  ServerHealthStatus
+  ServerHealthStatus,
+  SMMBlogPost,
+  SMMBlogFaqItem
 } from '../types';
 import { 
   DEFAULT_SITE_SETTINGS,
-  LEGACY_DEMO_IDS
+  LEGACY_DEMO_IDS,
+  INITIAL_SEO_BLOG_POSTS
 } from '../data/seedServices';
 
 /**
@@ -748,28 +751,43 @@ export async function approvePaymentDeposit(
 
       const userDocSnap = await tx.get(userRef);
       let referredByUid: string | undefined;
+      let alreadyVerified = false;
+      let becomesVerifiedNow = false;
 
       if (userDocSnap.exists()) {
         const uData = userDocSnap.data() as UserProfile;
         referredByUid = uData.referredBy;
-        const creditAmount = payment.amount + (payment.bonus || 0);
+        alreadyVerified = Boolean(uData.referralVerified);
+        const newTotalDeposited = Number(((uData.totalDeposited || 0) + payment.amount).toFixed(2));
+        becomesVerifiedNow = Boolean(referredByUid && !alreadyVerified && newTotalDeposited >= 100);
+        const welcomeVerifyBonus = becomesVerifiedNow ? 10 : 0;
+        const creditAmount = payment.amount + (payment.bonus || 0) + welcomeVerifyBonus;
+
         tx.update(userRef, sanitizeForFirestore({
           balance: Number(((uData.balance || 0) + creditAmount).toFixed(2)),
+          totalDeposited: newTotalDeposited,
+          ...(becomesVerifiedNow ? { referralVerified: true } : {}),
           updatedAt: Date.now()
         }));
       }
 
-      // If user was referred by someone, credit referrer commission
-      if (referredByUid) {
+      // Only credit referrer if referred user is verified (totalDeposited >= 100 BDT)
+      if (referredByUid && (alreadyVerified || becomesVerifiedNow)) {
         const referrerRef = doc(db, 'users', referredByUid);
         const refSnap = await tx.get(referrerRef);
         if (refSnap.exists()) {
           const refData = refSnap.data() as UserProfile;
           const commission = Math.round((payment.amount * referralCommissionPercent) / 100);
-          if (commission > 0) {
+          const verifiedReferralReward = becomesVerifiedNow ? 10 : 0; // ৳10 per verified referral
+          const totalReferrerCredit = commission + verifiedReferralReward;
+
+          if (totalReferrerCredit > 0 || becomesVerifiedNow) {
             tx.update(referrerRef, sanitizeForFirestore({
-              referralEarnings: (refData.referralEarnings || 0) + commission,
-              unpaidReferralEarnings: (refData.unpaidReferralEarnings || 0) + commission,
+              referralCount: becomesVerifiedNow
+                ? (refData.referralCount || 0) + 1
+                : (refData.referralCount || 0),
+              referralEarnings: (refData.referralEarnings || 0) + totalReferrerCredit,
+              unpaidReferralEarnings: (refData.unpaidReferralEarnings || 0) + totalReferrerCredit,
               updatedAt: Date.now()
             }));
           }
@@ -1045,27 +1063,42 @@ export async function verifyAndCreditZiniPayInvoice(params: {
 
       const userDocSnap = await tx.get(userRef);
       let referredByUid: string | undefined;
+      let alreadyVerified = false;
+      let becomesVerifiedNow = false;
 
       if (userDocSnap.exists()) {
         const uData = userDocSnap.data() as UserProfile;
         referredByUid = uData.referredBy;
-        const creditAmount = payment.amount + (payment.bonus || 0);
+        alreadyVerified = Boolean(uData.referralVerified);
+        const newTotalDeposited = Number(((uData.totalDeposited || 0) + payment.amount).toFixed(2));
+        becomesVerifiedNow = Boolean(referredByUid && !alreadyVerified && newTotalDeposited >= 100);
+        const welcomeVerifyBonus = becomesVerifiedNow ? 10 : 0;
+        const creditAmount = payment.amount + (payment.bonus || 0) + welcomeVerifyBonus;
+
         tx.update(userRef, sanitizeForFirestore({
           balance: Number(((uData.balance || 0) + creditAmount).toFixed(2)),
+          totalDeposited: newTotalDeposited,
+          ...(becomesVerifiedNow ? { referralVerified: true } : {}),
           updatedAt: Date.now()
         }));
       }
 
-      if (referredByUid) {
+      if (referredByUid && (alreadyVerified || becomesVerifiedNow)) {
         const referrerRef = doc(db, 'users', referredByUid);
         const refSnap = await tx.get(referrerRef);
         if (refSnap.exists()) {
           const refData = refSnap.data() as UserProfile;
           const commission = Math.round((payment.amount * referralCommissionPercent) / 100);
-          if (commission > 0) {
+          const verifiedReferralReward = becomesVerifiedNow ? 10 : 0; // ৳10 per verified referral
+          const totalReferrerCredit = commission + verifiedReferralReward;
+
+          if (totalReferrerCredit > 0 || becomesVerifiedNow) {
             tx.update(referrerRef, sanitizeForFirestore({
-              referralEarnings: (refData.referralEarnings || 0) + commission,
-              unpaidReferralEarnings: (refData.unpaidReferralEarnings || 0) + commission,
+              referralCount: becomesVerifiedNow
+                ? (refData.referralCount || 0) + 1
+                : (refData.referralCount || 0),
+              referralEarnings: (refData.referralEarnings || 0) + totalReferrerCredit,
+              unpaidReferralEarnings: (refData.unpaidReferralEarnings || 0) + totalReferrerCredit,
               updatedAt: Date.now()
             }));
           }
@@ -1168,27 +1201,42 @@ export async function verifyAndCreditZiniPayTwoStepTrx(params: {
     await runTransaction(db, async (tx) => {
       const userDocSnap = await tx.get(userRef);
       let referredByUid: string | undefined;
+      let alreadyVerified = false;
+      let becomesVerifiedNow = false;
 
       if (userDocSnap.exists()) {
         const uData = userDocSnap.data() as UserProfile;
         referredByUid = uData.referredBy;
-        const creditAmount = params.amount + (params.bonus || 0);
+        alreadyVerified = Boolean(uData.referralVerified);
+        const newTotalDeposited = Number(((uData.totalDeposited || 0) + params.amount).toFixed(2));
+        becomesVerifiedNow = Boolean(referredByUid && !alreadyVerified && newTotalDeposited >= 100);
+        const welcomeVerifyBonus = becomesVerifiedNow ? 10 : 0;
+        const creditAmount = params.amount + (params.bonus || 0) + welcomeVerifyBonus;
+
         tx.update(userRef, sanitizeForFirestore({
           balance: Number(((uData.balance || 0) + creditAmount).toFixed(2)),
+          totalDeposited: newTotalDeposited,
+          ...(becomesVerifiedNow ? { referralVerified: true } : {}),
           updatedAt: Date.now()
         }));
       }
 
-      if (referredByUid) {
+      if (referredByUid && (alreadyVerified || becomesVerifiedNow)) {
         const referrerRef = doc(db, 'users', referredByUid);
         const refSnap = await tx.get(referrerRef);
         if (refSnap.exists()) {
           const refData = refSnap.data() as UserProfile;
           const commission = Math.round((params.amount * referralCommissionPercent) / 100);
-          if (commission > 0) {
+          const verifiedReferralReward = becomesVerifiedNow ? 10 : 0; // ৳10 per verified referral
+          const totalReferrerCredit = commission + verifiedReferralReward;
+
+          if (totalReferrerCredit > 0 || becomesVerifiedNow) {
             tx.update(referrerRef, sanitizeForFirestore({
-              referralEarnings: (refData.referralEarnings || 0) + commission,
-              unpaidReferralEarnings: (refData.unpaidReferralEarnings || 0) + commission,
+              referralCount: becomesVerifiedNow
+                ? (refData.referralCount || 0) + 1
+                : (refData.referralCount || 0),
+              referralEarnings: (refData.referralEarnings || 0) + totalReferrerCredit,
+              unpaidReferralEarnings: (refData.unpaidReferralEarnings || 0) + totalReferrerCredit,
               updatedAt: Date.now()
             }));
           }
@@ -1529,6 +1577,10 @@ export async function redeemCouponCode(
     throw new Error('প্রোমো কোডটি সঠিক নয় বা মেয়াদ শেষ হয়েছে! (Invalid or inactive promo code)');
   }
 
+  if (targetCoupon.expiresAt && Date.now() > targetCoupon.expiresAt) {
+    throw new Error('এই প্রোমো কোডের মেয়াদ শেষ হয়ে গেছে! (Promo code has expired)');
+  }
+
   if (targetCoupon.usedCount >= targetCoupon.maxUses) {
     throw new Error('এই প্রোমো কোডের সর্বোচ্চ ব্যবহার সীমা শেষ হয়ে গেছে! (Max redemptions reached)');
   }
@@ -1566,8 +1618,19 @@ export async function redeemCouponCode(
 
       if (uSnap.exists()) {
         const uData = uSnap.data() as UserProfile;
+        const newRecord: AffiliatePayoutRecord = {
+          id: 'PRM-' + Math.floor(100000 + Math.random() * 900000),
+          type: 'coupon_redeem',
+          amount: targetCoupon.rewardAmount,
+          method: 'Promo Voucher',
+          note: `কুপন কোড: ${targetCoupon.code}`,
+          status: 'completed',
+          createdAt: Date.now()
+        };
+        const history = [newRecord, ...(uData.payoutHistory || []).slice(0, 49)];
         tx.update(userRef, sanitizeForFirestore({
           balance: Number(((uData.balance || 0) + targetCoupon.rewardAmount).toFixed(2)),
+          payoutHistory: history,
           updatedAt: Date.now()
         }));
       }
@@ -1586,23 +1649,27 @@ export async function redeemCouponCode(
 export async function applyReferralCode(
   referralCodeInput: string,
   currentUser: UserProfile
-): Promise<number> {
+): Promise<{ verified: boolean; bonus: number }> {
   const cleanCode = referralCodeInput.trim().toUpperCase();
-  const myCode = currentUser.referralCode || `AMT-${currentUser.uid.substring(0, 6).toUpperCase()}`;
+  const myDefaultBl = `BL-${currentUser.uid.substring(0, 6).toUpperCase()}`;
+  const myDefaultAmt = `AMT-${currentUser.uid.substring(0, 6).toUpperCase()}`;
+  const myCode = (currentUser.referralCode || myDefaultBl).toUpperCase();
 
-  if (cleanCode === myCode) {
+  if (cleanCode === myCode || cleanCode === myDefaultBl || cleanCode === myDefaultAmt) {
     throw new Error('আপনি নিজের রেফারেল কোড ব্যবহার করতে পারবেন না! (Cannot use own referral code)');
   }
   if (currentUser.referredBy) {
     throw new Error('আপনি ইতিমধ্যে একটি রেফারেল কোড যুক্ত করেছেন! (Referral already linked)');
   }
 
-  const welcomeReward = 25; // Instant ৳25 welcome bonus for linking a referral code
   const usersSnap = await getDocs(collection(db, 'users'));
   const referrerDoc = usersSnap.docs.find(d => {
+    if (d.id === currentUser.uid) return false;
     const u = d.data() as UserProfile;
-    const code = (u.referralCode || `AMT-${d.id.substring(0, 6).toUpperCase()}`).toUpperCase();
-    return code === cleanCode;
+    const storedCode = (u.referralCode || '').toUpperCase();
+    const blCode = `BL-${d.id.substring(0, 6).toUpperCase()}`;
+    const amtCode = `AMT-${d.id.substring(0, 6).toUpperCase()}`;
+    return cleanCode === storedCode || cleanCode === blCode || cleanCode === amtCode;
   });
 
   if (!referrerDoc) {
@@ -1611,39 +1678,127 @@ export async function applyReferralCode(
 
   const referrerUid = referrerDoc.id;
   const referrerData = referrerDoc.data() as UserProfile;
+  const hasDeposited100 = (currentUser.totalDeposited || 0) >= 100;
+  const verifiedReward = 10; // ৳10 per verified referral (requires >= ৳100 deposit)
 
   try {
     const myRef = doc(db, 'users', currentUser.uid);
     const refUserRef = doc(db, 'users', referrerUid);
 
     await runTransaction(db, async (tx) => {
-      tx.update(myRef, sanitizeForFirestore({
-        referredBy: referrerUid,
-        balance: Number(((currentUser.balance || 0) + welcomeReward).toFixed(2)),
-        updatedAt: Date.now()
-      }));
-      tx.update(refUserRef, sanitizeForFirestore({
-        referralCount: (referrerData.referralCount || 0) + 1,
-        referralEarnings: (referrerData.referralEarnings || 0) + 15,
-        unpaidReferralEarnings: (referrerData.unpaidReferralEarnings || 0) + 15,
-        updatedAt: Date.now()
-      }));
+      if (hasDeposited100) {
+        const welcomeRecord: AffiliatePayoutRecord = {
+          id: 'REF-' + Math.floor(100000 + Math.random() * 900000),
+          type: 'referral_welcome',
+          amount: verifiedReward,
+          method: 'Main Wallet',
+          note: `ভেরিফাইড রেফারেল বোনাস (${cleanCode})`,
+          status: 'completed',
+          createdAt: Date.now()
+        };
+        const myHistory = [welcomeRecord, ...(currentUser.payoutHistory || []).slice(0, 49)];
+
+        tx.update(myRef, sanitizeForFirestore({
+          referredBy: referrerUid,
+          referralVerified: true,
+          balance: Number(((currentUser.balance || 0) + verifiedReward).toFixed(2)),
+          payoutHistory: myHistory,
+          updatedAt: Date.now()
+        }));
+
+        tx.update(refUserRef, sanitizeForFirestore({
+          referralCount: (referrerData.referralCount || 0) + 1,
+          referralEarnings: (referrerData.referralEarnings || 0) + verifiedReward,
+          unpaidReferralEarnings: (referrerData.unpaidReferralEarnings || 0) + verifiedReward,
+          updatedAt: Date.now()
+        }));
+      } else {
+        // User has not deposited ৳100 yet: link referrer as Pending (unverified)
+        tx.update(myRef, sanitizeForFirestore({
+          referredBy: referrerUid,
+          referralVerified: false,
+          updatedAt: Date.now()
+        }));
+      }
     });
 
-    return welcomeReward;
+    try {
+      sessionStorage.removeItem('boostlagbe_ref_code');
+    } catch {
+      // ignore
+    }
+
+    return {
+      verified: hasDeposited100,
+      bonus: hasDeposited100 ? verifiedReward : 0
+    };
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `users/${currentUser.uid}`);
     throw error;
   }
 }
 
+export async function updateCustomReferralCode(
+  userProfile: UserProfile,
+  customCodeRaw: string
+): Promise<string> {
+  const cleaned = customCodeRaw
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_-]/g, '');
+
+  if (cleaned.length < 4 || cleaned.length > 16) {
+    throw new Error('কাস্টম রেফারেল কোড ৪ থেকে ১৬ অক্ষরের হতে হবে (ইংরেজি অক্ষর ও সংখ্যা)');
+  }
+
+  const usersSnap = await getDocs(collection(db, 'users'));
+  const duplicate = usersSnap.docs.find(d => {
+    if (d.id === userProfile.uid) return false;
+    const u = d.data() as UserProfile;
+    const existing = (u.referralCode || `BL-${d.id.substring(0, 6).toUpperCase()}`).toUpperCase();
+    return existing === cleaned;
+  });
+
+  if (duplicate) {
+    throw new Error('এই রেফারেল কোডটি অন্য একজন ব্যবহার করছেন! অন্য একটি নাম চেষ্টা করুন।');
+  }
+
+  const path = `users/${userProfile.uid}`;
+  try {
+    await updateDoc(doc(db, 'users', userProfile.uid), sanitizeForFirestore({
+      referralCode: cleaned,
+      updatedAt: Date.now()
+    }));
+    return cleaned;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+    throw error;
+  }
+}
+
 export async function claimAffiliateEarnings(
   userProfile: UserProfile,
-  minPayout: number = 100
+  minPayout: number = 100,
+  options?: {
+    payoutType?: 'wallet_transfer' | 'mobile_banking_withdraw';
+    method?: string;
+    accountNumber?: string;
+    customAmount?: number;
+  }
 ): Promise<number> {
   const unpaid = userProfile.unpaidReferralEarnings || 0;
-  if (unpaid < minPayout) {
-    throw new Error(`সর্বনিম্ন ৳${minPayout} হলে মেইন ওয়ালেটে ট্রান্সফার করা যাবে! (Minimum payout is ৳${minPayout})`);
+  const requestedAmount = options?.customAmount ? Number(options.customAmount) : unpaid;
+
+  if (requestedAmount < minPayout || unpaid < minPayout) {
+    throw new Error(`সর্বনিম্ন ৳${minPayout} হলে ট্রান্সফার বা উত্তোলন করা যাবে! (Minimum payout is ৳${minPayout})`);
+  }
+  if (requestedAmount > unpaid) {
+    throw new Error('আপনার উত্তোলনযোগ্য রেফারেল ব্যালেন্সের চেয়ে বেশি পরিমাণ দেওয়া হয়েছে!');
+  }
+
+  const isMobileWithdraw = options?.payoutType === 'mobile_banking_withdraw';
+  if (isMobileWithdraw && (!options?.accountNumber || options.accountNumber.trim().length < 11)) {
+    throw new Error('সঠিক ১১ সংখ্যার বিকাশ/নগদ/রকেট নম্বর দিন!');
   }
 
   const path = `users/${userProfile.uid}`;
@@ -1654,19 +1809,200 @@ export async function claimAffiliateEarnings(
       if (!snap.exists()) return;
       const data = snap.data() as UserProfile;
       const currentUnpaid = data.unpaidReferralEarnings || 0;
-      if (currentUnpaid < minPayout) {
+      const finalClaim = Math.min(requestedAmount, currentUnpaid);
+      if (finalClaim < minPayout) {
         throw new Error('অপর্যাপ্ত রেফারেল ব্যালেন্স!');
       }
+
+      const record: AffiliatePayoutRecord = {
+        id: 'PAY-' + Math.floor(100000 + Math.random() * 900000),
+        type: isMobileWithdraw ? 'mobile_banking_withdraw' : 'wallet_transfer',
+        amount: finalClaim,
+        method: isMobileWithdraw ? (options?.method || 'bKash') : 'Main Wallet',
+        accountNumber: isMobileWithdraw ? options?.accountNumber?.trim() : undefined,
+        note: isMobileWithdraw
+          ? `${options?.method || 'bKash'} (${options?.accountNumber?.trim()}) এ ক্যাশআউট রিকোয়েস্ট`
+          : 'মেইন ওয়ালেটে তাৎক্ষণিক ট্রান্সফার',
+        status: isMobileWithdraw ? 'pending' : 'completed',
+        createdAt: Date.now()
+      };
+
+      const history = [record, ...(data.payoutHistory || []).slice(0, 49)];
+      const nextUnpaid = Math.max(0, Number((currentUnpaid - finalClaim).toFixed(2)));
+      const nextBalance = isMobileWithdraw
+        ? Number((data.balance || 0).toFixed(2))
+        : Number(((data.balance || 0) + finalClaim).toFixed(2));
+
       tx.update(userRef, sanitizeForFirestore({
-        balance: Number(((data.balance || 0) + currentUnpaid).toFixed(2)),
-        unpaidReferralEarnings: 0,
+        balance: nextBalance,
+        unpaidReferralEarnings: nextUnpaid,
+        payoutHistory: history,
         updatedAt: Date.now()
       }));
     });
-    return unpaid;
+    return requestedAmount;
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
     throw error;
+  }
+}
+
+export async function claimMilestoneReward(
+  userProfile: UserProfile,
+  milestoneId: string,
+  requiredReferrals: number,
+  bonusAmount: number,
+  milestoneTitle: string
+): Promise<number> {
+  const currentReferrals = userProfile.referralCount || 0;
+  if (currentReferrals < requiredReferrals) {
+    throw new Error(`এই বোনাসটি নিতে কমপক্ষে ${requiredReferrals} জন রেফারেল প্রয়োজন!`);
+  }
+  if (userProfile.claimedMilestones?.includes(milestoneId)) {
+    throw new Error('আপনি ইতিমধ্যে এই মাইলস্টোন বোনাসটি গ্রহণ করেছেন!');
+  }
+
+  const path = `users/${userProfile.uid}`;
+  try {
+    const userRef = doc(db, 'users', userProfile.uid);
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(userRef);
+      if (!snap.exists()) return;
+      const data = snap.data() as UserProfile;
+      const claimed = data.claimedMilestones || [];
+      if (claimed.includes(milestoneId)) {
+        throw new Error('আপনি ইতিমধ্যে এই মাইলস্টোন বোনাসটি গ্রহণ করেছেন!');
+      }
+      if ((data.referralCount || 0) < requiredReferrals) {
+        throw new Error('রেফারেল লক্ষ্যমাত্রা এখনো পূর্ণ হয়নি!');
+      }
+
+      const record: AffiliatePayoutRecord = {
+        id: 'MLS-' + Math.floor(100000 + Math.random() * 900000),
+        type: 'milestone_bonus',
+        amount: bonusAmount,
+        method: 'Main Wallet',
+        note: `মাইলস্টোন বোনাস: ${milestoneTitle}`,
+        status: 'completed',
+        createdAt: Date.now()
+      };
+      const history = [record, ...(data.payoutHistory || []).slice(0, 49)];
+
+      tx.update(userRef, sanitizeForFirestore({
+        balance: Number(((data.balance || 0) + bonusAmount).toFixed(2)),
+        referralEarnings: Number(((data.referralEarnings || 0) + bonusAmount).toFixed(2)),
+        claimedMilestones: [...claimed, milestoneId],
+        payoutHistory: history,
+        updatedAt: Date.now()
+      }));
+    });
+    return bonusAmount;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+    throw error;
+  }
+}
+
+export async function claimDailyPromoBonus(
+  userProfile: UserProfile
+): Promise<{ reward: number; newStreak: number }> {
+  const now = Date.now();
+  const lastAt = userProfile.dailyCheckInLastAt || 0;
+  const TWENTY_HOURS_MS = 20 * 60 * 60 * 1000;
+  const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
+
+  if (now - lastAt < TWENTY_HOURS_MS) {
+    throw new Error('আপনি আজকের ডেইলি বোনাস ইতিমধ্যে নিয়েছেন! আগামীকাল আবার চেষ্টা করুন।');
+  }
+
+  const prevStreak = userProfile.dailyCheckInStreak || 0;
+  const isConsecutive = lastAt > 0 && (now - lastAt) <= FORTY_EIGHT_HOURS_MS;
+  const nextStreak = isConsecutive ? ((prevStreak % 7) + 1) : 1;
+
+  // 7-day progressive reward schedule in BDT
+  const streakRewards: Record<number, number> = {
+    1: 1,
+    2: 2,
+    3: 2,
+    4: 3,
+    5: 4,
+    6: 5,
+    7: 10
+  };
+  const reward = streakRewards[nextStreak] || 2;
+
+  const path = `users/${userProfile.uid}`;
+  try {
+    const userRef = doc(db, 'users', userProfile.uid);
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(userRef);
+      if (!snap.exists()) return;
+      const data = snap.data() as UserProfile;
+      if (now - (data.dailyCheckInLastAt || 0) < TWENTY_HOURS_MS) {
+        throw new Error('আপনি আজকের ডেইলি বোনাস ইতিমধ্যে নিয়েছেন!');
+      }
+
+      const record: AffiliatePayoutRecord = {
+        id: 'CHK-' + Math.floor(100000 + Math.random() * 900000),
+        type: 'daily_checkin',
+        amount: reward,
+        method: 'Main Wallet',
+        note: `ডেইলি চেক-ইন বোনাস (ডে ${nextStreak})`,
+        status: 'completed',
+        createdAt: now
+      };
+      const history = [record, ...(data.payoutHistory || []).slice(0, 49)];
+
+      tx.update(userRef, sanitizeForFirestore({
+        balance: Number(((data.balance || 0) + reward).toFixed(2)),
+        dailyCheckInLastAt: now,
+        dailyCheckInStreak: nextStreak,
+        payoutHistory: history,
+        updatedAt: now
+      }));
+    });
+    return { reward, newStreak: nextStreak };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+    throw error;
+  }
+}
+
+export async function fetchReferredUsersList(referrerUid: string): Promise<Array<{
+  uid: string;
+  displayName: string;
+  maskedEmail: string;
+  totalDeposited: number;
+  referralVerified: boolean;
+  totalSpent: number;
+  createdAt: number;
+}>> {
+  try {
+    const q = query(collection(db, 'users'), where('referredBy', '==', referrerUid));
+    const snap = await getDocs(q);
+    const list = snap.docs.map(d => {
+      const u = d.data() as UserProfile;
+      const email = u.email || 'user@boostlagbe.com';
+      const [local, domain] = email.split('@');
+      const maskedEmail = local && domain
+        ? `${local.slice(0, 2)}***@${domain}`
+        : '***@boostlagbe.com';
+      const totalDeposited = u.totalDeposited || 0;
+      const referralVerified = Boolean(u.referralVerified || totalDeposited >= 100);
+      return {
+        uid: d.id,
+        displayName: u.displayName || 'Boostlagbe Member',
+        maskedEmail,
+        totalDeposited,
+        referralVerified,
+        totalSpent: u.totalSpent || 0,
+        createdAt: u.createdAt || Date.now()
+      };
+    });
+    list.sort((a, b) => b.createdAt - a.createdAt);
+    return list;
+  } catch {
+    return [];
   }
 }
 
@@ -2556,3 +2892,355 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
 }
+
+// ==========================================
+// 11. ADVANCED SEO BLOG CMS & GOOGLE GEMINI AI ENGINE
+// ==========================================
+
+let cachedBlogsList: SMMBlogPost[] = [...INITIAL_SEO_BLOG_POSTS];
+const blogSubscribers = new Set<(blogs: SMMBlogPost[]) => void>();
+
+export function syncBlogsToServerSitemap(blogs: SMMBlogPost[]): void {
+  const publishedPayload = blogs
+    .filter((b) => b.status === 'published' && b.slug)
+    .map((b) => ({
+      slug: b.slug,
+      updatedAt: b.updatedAt || b.publishedAt || Date.now(),
+      status: b.status,
+      title: b.title
+    }));
+
+  fetch('/api/seo/sync-blogs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ blogs: publishedPayload })
+  }).catch(() => {});
+}
+
+export function computeSeoScoreForBlogPost(post: Partial<SMMBlogPost>): {
+  score: number;
+  checks: { id: string; label: string; passed: boolean; points: number; tip: string }[];
+  wordCount: number;
+  readingTimeMinutes: number;
+} {
+  const title = (post.title || '').trim();
+  const seoTitle = (post.seoTitle || title).trim();
+  const slug = (post.slug || '').trim().toLowerCase();
+  const focusKw = (post.focusKeyword || '').trim().toLowerCase();
+  const metaDesc = (post.seoDescription || post.excerpt || '').trim();
+  const rawHtml = (post.content || '').trim();
+  const plainText = rawHtml
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const words = plainText ? plainText.split(/\s+/).filter(Boolean) : [];
+  const wordCount = words.length;
+  const readingTimeMinutes = Math.max(1, Math.ceil(wordCount / 180));
+
+  const hasFocusInTitle = focusKw
+    ? title.toLowerCase().includes(focusKw) || seoTitle.toLowerCase().includes(focusKw)
+    : title.length >= 25;
+
+  const firstParagraphText = plainText.slice(0, 450).toLowerCase();
+  const hasFocusInIntro = focusKw
+    ? firstParagraphText.includes(focusKw) ||
+      plainText.toLowerCase().includes('boostlagbe') ||
+      plainText.includes('বুস্ট লাগবে')
+    : plainText.length > 120;
+
+  const h2Matches = rawHtml.match(/<h2[\s>]/gi) || [];
+  const h3Matches = rawHtml.match(/<h3[\s>]/gi) || [];
+  const hasSubheadings = h2Matches.length >= 2 && (h2Matches.length + h3Matches.length >= 3);
+
+  const hasOptimalMetaTitle = seoTitle.length >= 30 && seoTitle.length <= 75;
+  const hasOptimalMetaDesc = metaDesc.length >= 90 && metaDesc.length <= 180;
+  const hasSeoFriendlySlug = /^[a-z0-9-]+$/.test(slug) && slug.length >= 6 && slug.length <= 90;
+  const hasRichWordCount = wordCount >= 300;
+  const hasInternalLinks =
+    rawHtml.includes('?tab=') ||
+    rawHtml.includes('boostlagbe.com') ||
+    rawHtml.includes('href="/');
+  const hasCoverAndAlt = Boolean(post.coverImage?.trim()) && Boolean(post.coverImageAlt?.trim());
+  const hasFaqSchema = Array.isArray(post.faqItems) && post.faqItems.length >= 2;
+  const hasSecondaryKeywords = Array.isArray(post.secondaryKeywords) && post.secondaryKeywords.length >= 3;
+  const hasCanonicalAndSchema =
+    Boolean(post.schemaType) && (post.tags?.length || 0) >= 2;
+
+  const checks = [
+    {
+      id: 'focus_in_title',
+      label: 'Focus Keyword in Blog Title & Meta Title',
+      passed: hasFocusInTitle,
+      points: 12,
+      tip: 'টাইটেল এবং SEO Meta Title-এ মূল টার্গেট কীওয়ার্ড রাখুন।'
+    },
+    {
+      id: 'optimal_meta_title',
+      label: 'Optimal SEO Title Length (30–75 chars)',
+      passed: hasOptimalMetaTitle,
+      points: 8,
+      tip: 'SEO Title ৩০ থেকে ৭৫ ক্যারেক্টারের মধ্যে রাখলে গুগল সার্চে সম্পূর্ণ দেখায়।'
+    },
+    {
+      id: 'optimal_meta_desc',
+      label: 'High-CTR Meta Description (90–180 chars)',
+      passed: hasOptimalMetaDesc,
+      points: 10,
+      tip: 'মেটা ডেসক্রিপশন ৯০ থেকে ১৮০ ক্যারেক্টারের মধ্যে আকর্ষণীয়ভাবে লিখুন।'
+    },
+    {
+      id: 'seo_slug',
+      label: 'Clean Search-Friendly URL Slug',
+      passed: hasSeoFriendlySlug,
+      points: 8,
+      tip: 'URL Slug-এ ছোট হাতের ইংরেজি অক্ষর এবং হাইফেন (-) ব্যবহার করুন।'
+    },
+    {
+      id: 'focus_in_intro',
+      label: 'Focus Keyword & Brand in First 100 Words',
+      passed: hasFocusInIntro,
+      points: 10,
+      tip: 'প্রথম প্যারাগ্রাফেই মূল কীওয়ার্ড এবং Boostlagbe.com উল্লেখ করুন।'
+    },
+    {
+      id: 'heading_hierarchy',
+      label: 'Structured H2 & H3 Subheadings (3+ Headings)',
+      passed: hasSubheadings,
+      points: 10,
+      tip: 'কমপক্ষে ২টি <h2> এবং ১টি <h3> সাবহেডিং ব্যবহার করুন।'
+    },
+    {
+      id: 'word_count',
+      label: `In-Depth Pillar Content (${wordCount} words / 300+ target)`,
+      passed: hasRichWordCount,
+      points: 12,
+      tip: 'গুগলে দ্রুত র‍্যাংক করতে কমপক্ষে ৩০০+ শব্দের বিস্তারিত আর্টিকেল লিখুন।'
+    },
+    {
+      id: 'internal_links',
+      label: 'Internal Backlinks to Boostlagbe Services',
+      passed: hasInternalLinks,
+      points: 8,
+      tip: 'আর্টিকেলের ভেতরে /?tab=services বা /?tab=new_order এর ইন্টারনাল লিংক রাখুন।'
+    },
+    {
+      id: 'image_alt',
+      label: 'Featured Image & Keyword-Rich Alt Attribute',
+      passed: hasCoverAndAlt,
+      points: 6,
+      tip: 'কভার ইমেজ এবং SEO ইমেজ Alt Text যুক্ত করুন।'
+    },
+    {
+      id: 'faq_schema',
+      label: 'Google Rich Snippet FAQPage Schema (2+ FAQs)',
+      passed: hasFaqSchema,
+      points: 8,
+      tip: 'গুগল সার্চে Rich FAQ দেখাতে কমপক্ষে ২টি প্রশ্ন ও উত্তর (FAQ) যোগ করুন।'
+    },
+    {
+      id: 'lsi_keywords',
+      label: 'LSI & Secondary Ranking Keywords (3+ Keywords)',
+      passed: hasSecondaryKeywords,
+      points: 4,
+      tip: 'কমপক্ষে ৩টি সেকেন্ডারি/LSI কীওয়ার্ড যুক্ত করুন।'
+    },
+    {
+      id: 'schema_tags',
+      label: 'JSON-LD BlogPosting Schema & Topic Tags',
+      passed: hasCanonicalAndSchema,
+      points: 4,
+      tip: 'Schema Type এবং কমপক্ষে ২টি টপিক ট্যাগ নির্বাচন করুন।'
+    }
+  ];
+
+  const totalScore = checks.reduce((sum, item) => sum + (item.passed ? item.points : 0), 0);
+
+  return {
+    score: Math.min(100, totalScore),
+    checks,
+    wordCount,
+    readingTimeMinutes
+  };
+}
+
+export function subscribeBlogs(
+  callback: (blogs: SMMBlogPost[]) => void
+): () => void {
+  blogSubscribers.add(callback);
+  const colRef = collection(db, 'blogs');
+
+  const unsub = onSnapshot(
+    colRef,
+    (snapshot) => {
+      const firestoreBlogs = snapshot.docs.map((d) => ({
+        ...(d.data() as SMMBlogPost),
+        id: d.id
+      }));
+
+      // Merge initial 100% SEO pillar posts if they haven't been saved to Firestore yet
+      const firestoreIds = new Set(firestoreBlogs.map((b) => b.id));
+      const firestoreSlugs = new Set(firestoreBlogs.map((b) => b.slug));
+      const merged: SMMBlogPost[] = [...firestoreBlogs];
+
+      for (const seedPost of INITIAL_SEO_BLOG_POSTS) {
+        if (!firestoreIds.has(seedPost.id) && !firestoreSlugs.has(seedPost.slug)) {
+          merged.push(seedPost);
+        }
+      }
+
+      merged.sort((a, b) => (b.publishedAt || b.createdAt || 0) - (a.publishedAt || a.createdAt || 0));
+      cachedBlogsList = merged;
+      syncBlogsToServerSitemap(merged);
+      callback(merged);
+    },
+    () => {
+      syncBlogsToServerSitemap(cachedBlogsList);
+      callback(cachedBlogsList);
+    }
+  );
+
+  return () => {
+    blogSubscribers.delete(callback);
+    unsub();
+  };
+}
+
+export async function saveBlogPost(post: SMMBlogPost): Promise<void> {
+  const path = `blogs/${post.id}`;
+  const seoEval = computeSeoScoreForBlogPost(post);
+  const normalizedPost: SMMBlogPost = {
+    ...post,
+    seoScore: seoEval.score,
+    wordCount: seoEval.wordCount,
+    readingTimeMinutes: seoEval.readingTimeMinutes,
+    updatedAt: Date.now()
+  };
+
+  const existingIdx = cachedBlogsList.findIndex((b) => b.id === normalizedPost.id);
+  if (existingIdx >= 0) {
+    cachedBlogsList = cachedBlogsList.map((b, i) => (i === existingIdx ? normalizedPost : b));
+  } else {
+    cachedBlogsList = [normalizedPost, ...cachedBlogsList];
+  }
+  cachedBlogsList.sort((a, b) => (b.publishedAt || b.createdAt || 0) - (a.publishedAt || a.createdAt || 0));
+
+  blogSubscribers.forEach((cb) => cb(cachedBlogsList));
+  syncBlogsToServerSitemap(cachedBlogsList);
+
+  if (isFirestoreQuotaExhausted()) return;
+
+  try {
+    await setDoc(doc(db, 'blogs', normalizedPost.id), sanitizeForFirestore(normalizedPost), { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+    throw error;
+  }
+}
+
+export async function removeBlogPost(blogId: string): Promise<void> {
+  const path = `blogs/${blogId}`;
+  cachedBlogsList = cachedBlogsList.filter((b) => b.id !== blogId);
+  blogSubscribers.forEach((cb) => cb(cachedBlogsList));
+  syncBlogsToServerSitemap(cachedBlogsList);
+
+  if (isFirestoreQuotaExhausted()) return;
+
+  try {
+    await deleteDoc(doc(db, 'blogs', blogId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+    throw error;
+  }
+}
+
+export async function incrementBlogViews(blogId: string, currentViews: number = 0): Promise<void> {
+  if (isFirestoreQuotaExhausted()) return;
+  try {
+    await updateDoc(doc(db, 'blogs', blogId), {
+      views: currentViews + 1
+    });
+  } catch {
+    // Guests or unseeded posts can safely ignore view counter write failures
+  }
+}
+
+export async function testGeminiConnectionOnServer(params?: {
+  apiKey?: string;
+  model?: string;
+}): Promise<{
+  status: string;
+  configured: boolean;
+  source: string;
+  model: string;
+  maskedKey: string;
+  message?: string;
+}> {
+  const resp = await fetch('/api/gemini/status', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params || {})
+  });
+  return await safeParseJsonResponse(resp, 'Gemini status check failed');
+}
+
+export async function generateBlogWithGeminiOnServer(params: {
+  topic: string;
+  focusKeyword?: string;
+  category?: string;
+  language?: 'bn' | 'en' | 'mixed';
+  tone?: string;
+  targetWordCount?: number;
+  apiKey?: string;
+  model?: string;
+  includeInternalLinks?: boolean;
+  includeFaqSchema?: boolean;
+}): Promise<{
+  status: string;
+  source: string;
+  modelUsed: string;
+  blog: Partial<SMMBlogPost> & { faqItems?: SMMBlogFaqItem[] };
+}> {
+  const resp = await fetch('/api/gemini/generate-blog', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params)
+  });
+  const data = await safeParseJsonResponse(resp, 'Failed to generate SEO blog post');
+  if (!resp.ok || data.error) {
+    throw new Error(data.error || 'Gemini AI blog generation failed');
+  }
+  return data;
+}
+
+export async function optimizeBlogSeoWithGeminiOnServer(params: {
+  title: string;
+  content: string;
+  focusKeyword?: string;
+  apiKey?: string;
+  model?: string;
+}): Promise<{
+  status: string;
+  seoTitle: string;
+  seoDescription: string;
+  slug: string;
+  focusKeyword: string;
+  secondaryKeywords: string[];
+  tags: string[];
+  coverImageAlt: string;
+  faqItems: SMMBlogFaqItem[];
+}> {
+  const resp = await fetch('/api/gemini/optimize-seo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params)
+  });
+  const data = await safeParseJsonResponse(resp, 'Failed to optimize SEO metadata');
+  if (!resp.ok || data.error) {
+    throw new Error(data.error || 'Gemini SEO optimization failed');
+  }
+  return data;
+}
+

@@ -19,6 +19,7 @@ import {
   completeZiniPaySandboxSession,
   verifyAndCreditZiniPayInvoice
 } from '../../services/db';
+import { BRAND_LOGO_URL } from '../../data/seedServices';
 
 interface AddFundsViewProps {
   payments: SMMPayment[];
@@ -36,13 +37,11 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
 }) => {
   const { user, profile, formatPrice, t } = useAuth();
 
-  // Step 1: Deposit button toggle -> opens amount input field
   const [isDepositOpen, setIsDepositOpen] = useState(false);
   const [amount, setAmount] = useState<string>('');
   const [isLaunchingGateway, setIsLaunchingGateway] = useState(false);
   const [verifyingPaymentId, setVerifyingPaymentId] = useState<string | null>(null);
 
-  // ZiniPay Hosted Gateway Overlay (used when Sandbox mode is active or inside iframe preview)
   const [activeGatewaySession, setActiveGatewaySession] = useState<{
     paymentId: string;
     invoiceId: string;
@@ -67,12 +66,12 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
       ? Math.floor((numericAmount * bonusPercent) / 100)
       : 0;
 
-  // Auto-detect redirect callback from ZiniPay (?zinipay_status=success&payment_id=...)
+  // Auto-detect redirect callback after online payment
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const ziniStatus = params.get('zinipay_status');
+    const paymentStatus = params.get('zinipay_status');
     const returnedPaymentId = params.get('payment_id');
-    if (!ziniStatus || !returnedPaymentId || payments.length === 0) return;
+    if (!paymentStatus || !returnedPaymentId || payments.length === 0) return;
 
     const targetPayment = payments.find((p) => p.id === returnedPaymentId);
     if (!targetPayment || targetPayment.status !== 'pending') return;
@@ -80,18 +79,17 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
     const cleanUrl = window.location.pathname;
     window.history.replaceState({}, document.title, cleanUrl);
 
-    if (ziniStatus === 'success') {
-      handleVerifyZiniPayment(targetPayment);
-    } else if (ziniStatus === 'cancel') {
+    if (paymentStatus === 'success') {
+      handleVerifyOnlinePayment(targetPayment);
+    } else if (paymentStatus === 'cancel') {
       onShowToast(
-        t('জিনিপে পেমেন্ট বাতিল করা হয়েছে।', 'ZiniPay payment was canceled.'),
+        t('পেমেন্ট বাতিল করা হয়েছে।', 'Payment was canceled.'),
         'info'
       );
     }
   }, [payments]);
 
-  // Direct ZiniPay Gateway Launch after entering amount
-  const handleProceedToZiniPay = async (e: React.FormEvent) => {
+  const handleProceedToPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
       onOpenAuth();
@@ -100,7 +98,7 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
 
     if (!numericAmount || numericAmount < 10) {
       onShowToast(
-        t('সর্বনিম্ন ১০ টাকা ডিপোজিট পরিমাণ লিখুন।', 'Please enter at least ৳10 to deposit.'),
+        t('সর্বনিম্ন ১০ টাকা লিখুন।', 'Please enter at least ৳10 to add balance.'),
         'error'
       );
       return;
@@ -117,17 +115,15 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
         preferredMethod: 'bKash'
       });
 
-      // If Live ZiniPay returned a real external payment_url, redirect directly to ZiniPay Gateway
       if (!res.sandboxSimulation && res.paymentUrl && res.paymentUrl.startsWith('http')) {
         onShowToast(
-          t('জিনিপে পেমেন্ট গেটওয়েতে নিয়ে যাওয়া হচ্ছে...', 'Redirecting to ZiniPay Payment Gateway...'),
+          t('নিরাপদ পেমেন্ট পেজে নিয়ে যাওয়া হচ্ছে...', 'Redirecting to secure payment page...'),
           'info'
         );
         window.location.href = res.paymentUrl;
         return;
       }
 
-      // Otherwise open the ZiniPay Gateway Checkout Terminal directly
       setActiveGatewaySession({
         paymentId: res.paymentId,
         invoiceId: res.invoiceId,
@@ -139,7 +135,7 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
       });
     } catch (err: any) {
       onShowToast(
-        err?.message || t('জিনিপে পেমেন্ট শুরু করতে সমস্যা হয়েছে।', 'Failed to launch ZiniPay gateway.'),
+        err?.message || t('পেমেন্ট শুরু করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।', 'Could not start payment. Please try again.'),
         'error'
       );
     } finally {
@@ -147,8 +143,7 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
     }
   };
 
-  // Complete ZiniPay Gateway Checkout (Sandbox / Integrated Gateway Flow)
-  const handleCompleteZiniPayGateway = async () => {
+  const handleCompleteOnlinePayment = async () => {
     if (!activeGatewaySession || !user) return;
     setIsCompletingGateway(true);
     try {
@@ -165,7 +160,7 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
         id: activeGatewaySession.paymentId,
         userId: user.uid,
         userEmail: user.email || '',
-        gateway: 'ZiniPay',
+        gateway: gatewayMethod,
         amount: activeGatewaySession.amount,
         bonus: activeGatewaySession.bonus,
         transactionId: activeGatewaySession.invoiceId,
@@ -201,14 +196,13 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
         );
       }
     } catch (err: any) {
-      onShowToast(err?.message || 'ZiniPay payment failed', 'error');
+      onShowToast(err?.message || 'Payment verification failed', 'error');
     } finally {
       setIsCompletingGateway(false);
     }
   };
 
-  // Verify any pending ZiniPay deposit
-  const handleVerifyZiniPayment = async (payment: SMMPayment) => {
+  const handleVerifyOnlinePayment = async (payment: SMMPayment) => {
     if (!user) return;
     const invId = payment.zinipayInvoiceId || payment.transactionId;
     if (!invId) return;
@@ -223,8 +217,8 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
       if (res.verified) {
         onShowToast(
           t(
-            `জিনিপে পেমেন্ট ভেরিফাইড! ৳${payment.amount + (payment.bonus || 0)} আপনার ব্যালেন্সে যোগ হয়েছে।`,
-            `ZiniPay payment verified! ৳${payment.amount + (payment.bonus || 0)} credited to your balance.`
+            `পেমেন্ট যাচাই সম্পন্ন! ৳${payment.amount + (payment.bonus || 0)} আপনার ব্যালেন্সে যোগ হয়েছে।`,
+            `Payment verified! ৳${payment.amount + (payment.bonus || 0)} credited to your balance.`
           ),
           'success'
         );
@@ -245,33 +239,40 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
   };
 
   return (
-    <div className="max-w-xl mx-auto py-4 sm:py-8 px-2 sm:px-0 space-y-6">
+    <div className="max-w-xl mx-auto py-3 sm:py-6 px-1 sm:px-0 space-y-5">
       {/* =====================================================================
-          CLEAN WALLET CARD: TOP BALANCE + DEPOSIT BUTTON -> AMOUNT INPUT
+          NATIVE MOBILE WALLET CARD
          ===================================================================== */}
-      <div className="relative rounded-3xl bg-[#0D1220]/90 border border-white/[0.08] p-6 sm:p-9 shadow-[0_24px_60px_rgba(0,0,0,0.65)] backdrop-blur-2xl overflow-hidden">
-        <div className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 w-80 h-80 rounded-full bg-violet-600/15 blur-3xl" />
-
+      <div className="relative rounded-3xl bg-[#111726] border border-white/[0.08] p-6 sm:p-8 shadow-xl overflow-hidden">
         <div className="relative z-10 flex flex-col items-center text-center">
-          {/* Subtle Label */}
-          <div className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.2em] text-slate-400 mb-3">
-            <Wallet className="w-3.5 h-3.5 text-cyan-400" />
-            <span>{t('ওয়ালেট ব্যালেন্স', 'Available Wallet Balance')}</span>
+          <div className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 mb-2">
+            <Wallet className="w-4 h-4 text-emerald-400" />
+            <span>{t('বর্তমান ওয়ালেট ব্যালেন্স', 'Available Wallet Balance')}</span>
           </div>
 
-          {/* Main Balance Display */}
-          <div className="text-4xl sm:text-5xl font-display font-bold text-white font-mono tabular-nums tracking-tight my-1">
+          <div className="text-4xl sm:text-5xl font-extrabold text-white font-mono tabular-nums tracking-tight my-1">
             {formatPrice(profile?.balance || 0)}
           </div>
 
-          <p className="text-xs text-slate-400 mt-1.5">
+          <p className="text-xs text-slate-400 mt-1.5 max-w-sm">
             {t(
-              'জিনিপে অটোমেটিক পেমেন্ট গেটওয়ের মাধ্যমে তাৎক্ষণিক ফান্ড অ্যাড করুন',
-              'Instant automated wallet top-up powered by ZiniPay Gateway'
+              'বিকাশ, নগদ, রকেট ও উপায়ে তাৎক্ষণিক ব্যালেন্স যোগ করুন',
+              'Instant wallet top-up via bKash, Nagad, Rocket & Upay'
             )}
           </p>
 
-          {/* Deposit Button (when input is closed) */}
+          {/* Supported Mobile Banking Badges */}
+          <div className="flex items-center justify-center gap-2 flex-wrap mt-4">
+            {['bKash', 'Nagad', 'Rocket', 'Upay'].map((method) => (
+              <span
+                key={method}
+                className="px-3 py-1 rounded-xl bg-[#090D16] border border-white/[0.08] text-[11px] font-bold text-slate-200"
+              >
+                {method}
+              </span>
+            ))}
+          </div>
+
           {!isDepositOpen ? (
             <button
               type="button"
@@ -282,32 +283,31 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
                 }
                 setIsDepositOpen(true);
               }}
-              className="mt-7 w-full sm:w-auto min-w-[220px] inline-flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 text-white font-display font-bold text-sm tracking-wide shadow-[0_12px_32px_rgba(139,92,246,0.35)] transition-all active:scale-[0.99] cursor-pointer"
+              className="mt-6 w-full sm:w-auto min-w-[230px] inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/25 transition-all active:scale-[0.98] cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
-              <span>{t('ডিপোজিট করুন', 'Deposit Funds')}</span>
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>{t('ব্যালেন্স যোগ করুন', 'Add Balance')}</span>
             </button>
           ) : (
-            /* Expandable Deposit Input Field */
             <form
-              onSubmit={handleProceedToZiniPay}
-              className="w-full mt-7 pt-6 border-t border-white/[0.08] text-left space-y-4 animate-in fade-in slide-in-from-top-2 duration-200"
+              onSubmit={handleProceedToPayment}
+              className="w-full mt-6 pt-5 border-t border-white/[0.08] text-left space-y-4 animate-in fade-in duration-150"
             >
               <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                  {t('ডিপোজিট টাকার পরিমাণ লিখুন (৳)', 'Enter Deposit Amount (BDT)')}
+                <label className="text-xs font-bold text-slate-200">
+                  {t('টাকার পরিমাণ লিখুন (৳)', 'Enter Amount (BDT)')}
                 </label>
                 <button
                   type="button"
                   onClick={() => setIsDepositOpen(false)}
                   className="text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
                 >
-                  {t('বন্ধ করুন', 'Cancel')}
+                  {t('বাতিল', 'Cancel')}
                 </button>
               </div>
 
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-mono font-bold text-cyan-400">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-mono font-bold text-emerald-400">
                   ৳
                 </span>
                 <input
@@ -318,22 +318,22 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
                   required
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  placeholder={t('টাকার পরিমাণ লিখুন (যেমন: 500)', 'Enter amount (e.g. 500)')}
-                  className="w-full pl-11 pr-4 py-4 rounded-2xl bg-[#080B14] border border-white/15 focus:border-cyan-400/60 text-xl font-mono font-bold text-white placeholder:text-slate-600 placeholder:text-sm placeholder:font-sans focus:outline-none transition-colors tabular-nums"
+                  placeholder={t('যেমন: 500', 'e.g. 500')}
+                  className="w-full pl-11 pr-4 py-3.5 rounded-2xl bg-[#090D16] border border-white/15 focus:border-indigo-500 text-xl font-mono font-bold text-white placeholder:text-slate-600 placeholder:text-sm placeholder:font-sans focus:outline-none transition-colors tabular-nums"
                 />
               </div>
 
-              {/* Quick Amount Chips */}
-              <div className="flex items-center gap-2 flex-wrap">
+              {/* Quick Amount Presets */}
+              <div className="grid grid-cols-5 gap-1.5">
                 {[100, 300, 500, 1000, 2000].map((preset) => (
                   <button
                     key={preset}
                     type="button"
                     onClick={() => setAmount(String(preset))}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-mono font-semibold border transition-all cursor-pointer ${
+                    className={`py-2 rounded-xl text-xs font-mono font-bold border transition-all cursor-pointer ${
                       Number(amount) === preset
-                        ? 'bg-cyan-500/15 border-cyan-400/50 text-cyan-300'
-                        : 'bg-[#080B14]/70 border-white/[0.07] text-slate-400 hover:text-white hover:border-white/20'
+                        ? 'bg-indigo-600 border-indigo-500 text-white'
+                        : 'bg-[#090D16] border-white/[0.08] text-slate-300 hover:text-white'
                     }`}
                   >
                     ৳{preset}
@@ -343,7 +343,7 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
 
               {calculatedBonus > 0 && (
                 <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300">
-                  <span>{t('ডিপোজিট বোনাস যোগ হবে', 'Bonus Included')}</span>
+                  <span>{t('বোনাস যোগ হবে', 'Bonus Included')}</span>
                   <span className="font-mono font-bold">+৳{calculatedBonus}</span>
                 </div>
               )}
@@ -351,16 +351,16 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
               <button
                 type="submit"
                 disabled={isLaunchingGateway}
-                className="w-full py-4 rounded-2xl bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 disabled:opacity-50 text-white font-display font-bold text-sm tracking-wide shadow-[0_12px_32px_rgba(34,211,238,0.25)] transition-all flex items-center justify-center gap-2.5 cursor-pointer"
+                className="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-sm shadow-lg shadow-indigo-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
               >
                 {isLaunchingGateway ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>{t('জিনিপে গেটওয়ে ওপেন হচ্ছে...', 'Connecting to ZiniPay...')}</span>
+                    <span>{t('পেমেন্ট পেজ ওপেন হচ্ছে...', 'Opening payment page...')}</span>
                   </>
                 ) : (
                   <>
-                    <span>{t('জিনিপে পেমেন্ট গেটওয়েতে যান', 'Proceed to ZiniPay Gateway')}</span>
+                    <span>{t('পেমেন্ট সম্পন্ন করুন', 'Proceed to Payment')}</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
@@ -371,23 +371,27 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
       </div>
 
       {/* =====================================================================
-          MINIMAL RECENT DEPOSITS LIST
+          RECENT DEPOSITS HISTORY
          ===================================================================== */}
       {payments.length > 0 && (
-        <div className="rounded-3xl bg-[#0D1220]/75 border border-white/[0.07] p-5 sm:p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-display font-bold text-white">
-              {t('সাম্প্রতিক ডিপোজিট', 'Recent Deposits')}
+        <div className="rounded-3xl bg-[#111726] border border-white/[0.07] p-5">
+          <div className="flex items-center justify-between mb-3.5">
+            <h3 className="text-sm font-bold text-white">
+              {t('সাম্প্রতিক লেনদেন', 'Recent Transactions')}
             </h3>
-            <span className="text-xs text-slate-500 font-mono tabular-nums">
-              {payments.length} {t('টি লেনদেন', 'transactions')}
+            <span className="text-xs text-slate-400 font-mono tabular-nums">
+              {payments.length} {t('টি', 'items')}
             </span>
           </div>
 
           <div className="divide-y divide-white/[0.06]">
             {payments.slice(0, 6).map((p) => {
-              const isPendingZini =
+              const isPendingOnline =
                 p.status === 'pending' && (p.gateway === 'ZiniPay' || Boolean(p.zinipayInvoiceId));
+              const displayMethod =
+                p.zinipayMethod ||
+                (p.gateway === 'ZiniPay' ? t('অনলাইন পেমেন্ট', 'Online Payment') : p.gateway);
+
               return (
                 <div
                   key={p.id}
@@ -401,8 +405,8 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
                       {p.bonus && p.bonus > 0 ? (
                         <span className="text-xs font-mono text-emerald-400">+৳{p.bonus}</span>
                       ) : null}
-                      <span className="text-xs text-slate-500">·</span>
-                      <span className="text-xs text-slate-400">{p.gateway}</span>
+                      <span className="text-xs text-slate-500">•</span>
+                      <span className="text-xs font-medium text-slate-300">{displayMethod}</span>
                     </div>
                     <div className="text-[11px] text-slate-500 font-mono truncate mt-0.5">
                       {p.transactionId} · {new Date(p.createdAt).toLocaleDateString()}
@@ -410,34 +414,34 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    {isPendingZini && (
+                    {isPendingOnline && (
                       <button
                         type="button"
                         disabled={verifyingPaymentId === p.id}
-                        onClick={() => handleVerifyZiniPayment(p)}
-                        className="px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/30 text-[11px] font-semibold text-cyan-300 flex items-center gap-1 cursor-pointer"
+                        onClick={() => handleVerifyOnlinePayment(p)}
+                        className="px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/30 text-[11px] font-semibold text-indigo-300 flex items-center gap-1 cursor-pointer"
                       >
                         <RefreshCw
                           className={`w-3 h-3 ${verifyingPaymentId === p.id ? 'animate-spin' : ''}`}
                         />
-                        <span>{t('ভেরিফাই', 'Verify')}</span>
+                        <span>{t('যাচাই', 'Verify')}</span>
                       </button>
                     )}
 
                     {p.status === 'approved' ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-400">
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400">
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>{t('সম্পন্ন', 'Completed')}</span>
+                        <span>{t('সফল', 'Completed')}</span>
                       </span>
                     ) : p.status === 'rejected' ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-rose-400">
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-rose-400">
                         <XCircle className="w-3.5 h-3.5" />
                         <span>{t('বাতিল', 'Canceled')}</span>
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-400">
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-400">
                         <Clock className="w-3.5 h-3.5" />
-                        <span>{t('পেন্ডিং', 'Pending')}</span>
+                        <span>{t('অপেক্ষমান', 'Pending')}</span>
                       </span>
                     )}
                   </div>
@@ -449,50 +453,49 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
       )}
 
       {/* =====================================================================
-          ZINIPAY PAYMENT GATEWAY CHECKOUT SCREEN (OPENS DIRECTLY ON PROCEED)
+          NATIVE MOBILE PAYMENT CHECKOUT SHEET
          ===================================================================== */}
       {activeGatewaySession && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md rounded-3xl bg-[#0D1220] border border-cyan-500/30 shadow-[0_25px_70px_rgba(0,0,0,0.85)] overflow-hidden">
-            {/* ZiniPay Gateway Header */}
-            <div className="bg-gradient-to-r from-[#141B2B] via-[#192337] to-[#141B2B] px-6 py-5 border-b border-white/[0.08] flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
+          <div className="relative w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-[#111726] border border-white/[0.1] shadow-2xl overflow-hidden">
+            {/* Checkout Header */}
+            <div className="bg-[#171F32] px-5 py-4 border-b border-white/[0.08] flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-violet-600 flex items-center justify-center text-white font-display font-bold text-lg shadow-md">
-                  Z
-                </div>
+                <img
+                  src={BRAND_LOGO_URL}
+                  alt="Boostlagbe.com"
+                  className="w-10 h-10 rounded-xl object-contain bg-[#090D16] border border-white/10 p-0.5"
+                />
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-display font-bold text-white">ZiniPay Checkout</h4>
-                    <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
-                      {activeGatewaySession.mode === 'live' ? 'LIVE' : 'GATEWAY'}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 font-mono">
-                    Invoice: {activeGatewaySession.invoiceId}
+                  <h4 className="text-sm font-bold text-white">
+                    {t('নিরাপদ অনলাইন পেমেন্ট', 'Secure Mobile Payment')}
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    Boostlagbe.com • {t('অটোমেটিক ওয়ালেট রিচার্জ', 'Instant Top-Up')}
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setActiveGatewaySession(null)}
-                className="p-1.5 rounded-xl bg-white/[0.05] text-slate-400 hover:text-white cursor-pointer"
+                className="p-2 rounded-xl bg-white/[0.06] text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-6 space-y-5">
+            <div className="p-5 space-y-4">
               {/* Payable Total Banner */}
-              <div className="flex items-center justify-between px-4 py-3.5 rounded-2xl bg-[#080B14] border border-white/[0.07]">
+              <div className="flex items-center justify-between px-4 py-3.5 rounded-2xl bg-[#090D16] border border-white/[0.08]">
                 <div>
-                  <div className="text-[11px] text-slate-400">
+                  <div className="text-xs text-slate-400">
                     {t('পরিশোধযোগ্য পরিমাণ', 'Payable Amount')}
                   </div>
-                  <div className="text-xs text-slate-500 font-mono mt-0.5">
-                    {siteSettings.siteName || 'AmarTrend SMM'}
+                  <div className="text-[11px] text-slate-500 mt-0.5">
+                    {siteSettings.siteName || 'Boostlagbe.com'}
                   </div>
                 </div>
-                <div className="text-2xl font-display font-bold text-cyan-400 font-mono tabular-nums">
+                <div className="text-2xl font-extrabold text-emerald-400 font-mono tabular-nums">
                   ৳{activeGatewaySession.amount.toLocaleString()}
                 </div>
               </div>
@@ -501,26 +504,25 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
                 <div className="space-y-4 text-center py-3">
                   <p className="text-xs text-slate-300 leading-relaxed">
                     {t(
-                      'নিচের বাটনে ক্লিক করে জিনিপে পেমেন্ট সম্পন্ন করুন। পেমেন্ট শেষ হলে অটোমেটিক আপনার ব্যালেন্স যোগ হবে।',
-                      'Complete your payment on ZiniPay. Your balance will be credited automatically.'
+                      'নিচের বাটনে ট্যাপ করে আপনার পছন্দের মোবাইল ব্যাংকিং (বিকাশ/নগদ/রকেট) দিয়ে পেমেন্ট সম্পন্ন করুন। পেমেন্ট শেষ হলে স্বয়ংক্রিয়ভাবে ব্যালেন্স যোগ হবে।',
+                      'Tap below to complete your mobile payment. Your wallet balance will be credited automatically.'
                     )}
                   </p>
                   <a
                     href={activeGatewaySession.paymentUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-violet-600 text-white font-display font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg"
+                    className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg"
                   >
-                    <span>{t('জিনিপে পেমেন্ট পেজ খুলুন', 'Open ZiniPay Checkout')}</span>
+                    <span>{t('পেমেন্ট পেজ খুলুন', 'Open Payment Page')}</span>
                     <ExternalLink className="w-4 h-4" />
                   </a>
                 </div>
               ) : (
-                /* ZiniPay Gateway Method & Instant Checkout Flow */
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                      {t('পেমেন্ট মেথড নির্বাচন করুন', 'Select Mobile Banking')}
+                    <label className="block text-xs font-bold text-slate-300 mb-2">
+                      {t('মোবাইল ব্যাংকিং নির্বাচন করুন', 'Select Mobile Banking')}
                     </label>
                     <div className="grid grid-cols-4 gap-2">
                       {(['bKash', 'Nagad', 'Rocket', 'Upay'] as const).map((m) => (
@@ -530,8 +532,8 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
                           onClick={() => setGatewayMethod(m)}
                           className={`py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                             gatewayMethod === m
-                              ? 'bg-cyan-500/20 border-cyan-400 text-white'
-                              : 'bg-[#080B14] border-white/[0.08] text-slate-400 hover:text-white'
+                              ? 'bg-indigo-600 border-indigo-500 text-white'
+                              : 'bg-[#090D16] border-white/[0.08] text-slate-400 hover:text-white'
                           }`}
                         >
                           {m}
@@ -542,33 +544,33 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
 
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-[11px] text-slate-400 mb-1">
-                        {gatewayMethod} {t('অ্যাকাউন্ট নম্বর', 'Account Number')}
+                      <label className="block text-xs text-slate-400 mb-1">
+                        {gatewayMethod} {t('নম্বর', 'Account Number')}
                       </label>
                       <input
                         type="text"
                         value={gatewayPhone}
                         onChange={(e) => setGatewayPhone(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#080B14] border border-white/10 text-sm font-mono text-white focus:outline-none focus:border-cyan-400/50"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#090D16] border border-white/10 text-sm font-mono text-white focus:outline-none focus:border-indigo-500"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-2.5">
                       <div>
-                        <label className="block text-[11px] text-slate-400 mb-1">OTP</label>
+                        <label className="block text-xs text-slate-400 mb-1">OTP কোড</label>
                         <input
                           type="text"
                           value={gatewayOtp}
                           onChange={(e) => setGatewayOtp(e.target.value)}
-                          className="w-full px-3.5 py-2 rounded-xl bg-[#080B14] border border-white/10 text-xs font-mono text-white focus:outline-none"
+                          className="w-full px-3.5 py-2 rounded-xl bg-[#090D16] border border-white/10 text-xs font-mono text-white focus:outline-none"
                         />
                       </div>
                       <div>
-                        <label className="block text-[11px] text-slate-400 mb-1">PIN</label>
+                        <label className="block text-xs text-slate-400 mb-1">পিন (PIN)</label>
                         <input
                           type="password"
                           value={gatewayPin}
                           onChange={(e) => setGatewayPin(e.target.value)}
-                          className="w-full px-3.5 py-2 rounded-xl bg-[#080B14] border border-white/10 text-xs font-mono text-white focus:outline-none"
+                          className="w-full px-3.5 py-2 rounded-xl bg-[#090D16] border border-white/10 text-xs font-mono text-white focus:outline-none"
                         />
                       </div>
                     </div>
@@ -577,8 +579,8 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
                   <button
                     type="button"
                     disabled={isCompletingGateway}
-                    onClick={handleCompleteZiniPayGateway}
-                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 disabled:opacity-50 text-slate-950 font-display font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+                    onClick={handleCompleteOnlinePayment}
+                    className="w-full py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg cursor-pointer"
                   >
                     {isCompletingGateway ? (
                       <>
@@ -590,7 +592,7 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
                         <ShieldCheck className="w-4 h-4" />
                         <span>
                           {t(
-                            `পেমেন্ট সম্পন্ন করুন (৳${activeGatewaySession.amount})`,
+                            `পেমেন্ট নিশ্চিত করুন (৳${activeGatewaySession.amount})`,
                             `Confirm Payment (৳${activeGatewaySession.amount})`
                           )}
                         </span>
@@ -600,12 +602,9 @@ export const AddFundsView: React.FC<AddFundsViewProps> = ({
                 </div>
               )}
 
-              <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between text-[11px] text-slate-500">
-                <span className="inline-flex items-center gap-1">
-                  <Lock className="w-3 h-3 text-emerald-400" />
-                  <span>Secured by ZiniPay Gateway</span>
-                </span>
-                <span className="font-mono">SSL 256-Bit</span>
+              <div className="pt-3 border-t border-white/[0.06] flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+                <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                <span>{t('১০০% নিরাপদ ও তাৎক্ষণিক অটোমেটিক পেমেন্ট', '100% Secure & Instant Mobile Payment')}</span>
               </div>
             </div>
           </div>

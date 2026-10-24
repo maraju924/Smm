@@ -2,6 +2,17 @@ export type UserRole = 'user' | 'admin';
 export type Currency = 'BDT' | 'USD';
 export type Language = 'en' | 'bn';
 
+export interface AffiliatePayoutRecord {
+  id: string;
+  type: 'wallet_transfer' | 'mobile_banking_withdraw' | 'milestone_bonus' | 'coupon_redeem' | 'referral_welcome' | 'daily_checkin';
+  amount: number;
+  method?: string;
+  accountNumber?: string;
+  note?: string;
+  status: 'completed' | 'pending';
+  createdAt: number;
+}
+
 export interface UserProfile {
   uid: string;
   email: string;
@@ -16,9 +27,15 @@ export interface UserProfile {
   apiKey: string;
   referralCode?: string;
   referredBy?: string;
+  referralVerified?: boolean;
+  totalDeposited?: number;
   referralCount?: number;
   referralEarnings?: number;
   unpaidReferralEarnings?: number;
+  claimedMilestones?: string[];
+  dailyCheckInLastAt?: number;
+  dailyCheckInStreak?: number;
+  payoutHistory?: AffiliatePayoutRecord[];
   favoriteServices?: string[];
   createdAt: number;
   updatedAt?: number;
@@ -233,6 +250,49 @@ export interface SiteSettings {
   googleSiteVerification?: string;
   googleAnalyticsId?: string;
   seoOgImage?: string;
+  // Google Gemini AI Blog & SEO Writer Configuration
+  geminiEnabled?: boolean;
+  geminiApiKey?: string;
+  geminiModel?: string;
+  geminiDefaultLanguage?: 'bn' | 'bn_en' | 'en';
+  geminiAutoInternalLinks?: boolean;
+  geminiAutoFaqSchema?: boolean;
+  updatedAt: number;
+}
+
+export interface SMMBlogFaqItem {
+  question: string;
+  answer: string;
+}
+
+export interface SMMBlogPost {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  content: string; // Rich HTML or structured sections
+  coverImage: string;
+  coverImageAlt: string;
+  category: string;
+  tags: string[];
+  focusKeyword: string;
+  secondaryKeywords: string[];
+  metaTitle: string;
+  metaDescription: string;
+  canonicalUrl?: string;
+  faqItems: SMMBlogFaqItem[];
+  authorName: string;
+  authorRole?: string;
+  readingTimeMinutes: number;
+  wordCount?: number;
+  seoScore: number; // 0 - 100
+  status: 'published' | 'draft';
+  featured?: boolean;
+  views: number;
+  relatedCategory?: string;
+  aiGenerated?: boolean;
+  publishedAt: number;
+  createdAt: number;
   updatedAt: number;
 }
 
@@ -259,3 +319,4 @@ export interface ServerHealthStatus {
   apiV2Active: boolean;
   totalApiCalls?: number;
 }
+

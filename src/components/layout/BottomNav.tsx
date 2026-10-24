@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Package, Zap, Wallet, User } from 'lucide-react';
+import { Home, Package, PlusCircle, Wallet, LayoutGrid } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -16,21 +16,20 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 }) => {
   const { language, isAdmin } = useAuth();
 
-  // Map secondary views to the 5 primary mobile destinations
+  // Map secondary views to the 5 primary native mobile tabs
   const getEffectiveTab = (tab: string) => {
-    if (tab === 'mass-order' || tab === 'services') return 'new-order';
+    if (tab === 'mass-order') return 'new-order';
     if (tab === 'track-order') return 'orders';
-    if (tab === 'affiliates') return 'add-funds';
-    if (['menu', 'tickets', 'api-docs', 'analytics', 'admin'].includes(tab)) {
-      return 'profile';
+    if (['menu', 'services', 'tickets', 'affiliates', 'analytics', 'profile', 'api-docs', 'admin', 'about', 'contact', 'terms', 'privacy', 'refund'].includes(tab)) {
+      return 'menu';
     }
     return tab;
   };
 
   const effectiveActiveTab = getEffectiveTab(currentTab);
 
-  // Exact 5 primary mobile destinations specified in the architecture:
-  // 1. Home, 2. Orders, 3. New Order (Central Action), 4. Wallet, 5. Profile
+  // 5 Native Mobile App Bottom Tabs:
+  // 1. Home, 2. Orders, 3. New Order (Primary Center Action), 4. Wallet, 5. Menu
   const tabs = [
     {
       id: 'home',
@@ -46,7 +45,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     {
       id: 'new-order',
       label: language === 'bn' ? 'নতুন অর্ডার' : 'New Order',
-      icon: Zap,
+      icon: PlusCircle,
       isCenter: true
     },
     {
@@ -55,9 +54,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       icon: Wallet
     },
     {
-      id: 'profile',
-      label: language === 'bn' ? 'প্রোফাইল' : 'Profile',
-      icon: User,
+      id: 'menu',
+      label: language === 'bn' ? 'মেনু' : 'Menu',
+      icon: LayoutGrid,
       hasDot: isAdmin
     }
   ];
@@ -65,9 +64,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   return (
     <nav
       aria-label="Mobile Primary Navigation"
-      className="lg:hidden fixed bottom-0 inset-x-0 z-40 pointer-events-none flex justify-center pb-[max(8px,env(safe-area-inset-bottom))] px-3"
+      className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[#0D1322]/96 backdrop-blur-2xl border-t border-white/[0.08] pb-[max(6px,env(safe-area-inset-bottom))] pt-1.5 px-2 shadow-[0_-10px_30px_rgba(0,0,0,0.6)]"
     >
-      <div className="pointer-events-auto w-full max-w-md bg-[#0D1220]/92 backdrop-blur-2xl border border-slate-800/90 rounded-[26px] shadow-[0_18px_48px_rgba(3,6,16,0.9),0_0_24px_rgba(139,92,246,0.12)] p-1.5 flex items-center justify-between relative">
+      <div className="max-w-md mx-auto flex items-center justify-between relative">
         {tabs.map(tab => {
           const isActive = effectiveActiveTab === tab.id;
           const Icon = tab.icon;
@@ -80,26 +79,26 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               >
                 <motion.button
                   type="button"
-                  whileTap={{ scale: 0.91 }}
+                  whileTap={{ scale: 0.92 }}
                   onClick={() => onSelectTab('new-order')}
-                  className="relative -top-4 flex flex-col items-center group focus:outline-none"
+                  className="relative -top-3.5 flex flex-col items-center group focus:outline-none"
                   title={tab.label}
                 >
                   <div
-                    className={`relative w-12 h-12 rounded-2xl flex items-center justify-center shadow-xl transition-all duration-200 ${
+                    className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg transition-all duration-200 ${
                       isActive
-                        ? 'bg-gradient-to-tr from-[#6D28D9] via-[#8B5CF6] to-[#22D3EE] text-white shadow-violet-500/40 ring-4 ring-[#080B14]'
-                        : 'bg-gradient-to-tr from-[#6D28D9] to-[#8B5CF6] text-white ring-4 ring-[#080B14] shadow-violet-900/40'
+                        ? 'bg-indigo-600 text-white shadow-indigo-500/40 ring-4 ring-[#090D16]'
+                        : 'bg-indigo-600/90 text-white ring-4 ring-[#090D16]'
                     }`}
                   >
-                    <Icon className="w-5 h-5 stroke-[2.6]" />
+                    <Icon className="w-5 h-5 stroke-[2.5]" />
                   </div>
 
                   <span
                     className={`text-[10px] mt-0.5 tracking-tight transition-colors duration-150 ${
                       isActive
-                        ? 'text-[#22D3EE] font-extrabold'
-                        : 'text-[#F1F5F9] font-semibold'
+                        ? 'text-white font-extrabold'
+                        : 'text-slate-300 font-semibold'
                     }`}
                   >
                     {tab.label}
@@ -115,42 +114,42 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               type="button"
               whileTap={{ scale: 0.92 }}
               onClick={() => onSelectTab(tab.id)}
-              className="relative flex-1 py-1.5 px-1 rounded-2xl transition-all flex flex-col items-center justify-center focus:outline-none min-h-[46px]"
+              className="relative flex-1 py-1.5 px-1 rounded-2xl transition-all flex flex-col items-center justify-center focus:outline-none min-h-[48px]"
               title={tab.label}
             >
               {isActive && (
                 <motion.div
-                  layoutId="bottomNavHybridPill"
+                  layoutId="bottomNavNativePill"
                   transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-                  className="absolute inset-0 bg-gradient-to-b from-[#8B5CF6]/20 to-[#22D3EE]/5 border border-[#8B5CF6]/35 rounded-2xl"
+                  className="absolute inset-x-2 inset-y-1 bg-indigo-500/15 rounded-xl"
                 />
               )}
 
               <div className="relative z-10 flex flex-col items-center">
                 <div className="relative">
                   <Icon
-                    className={`w-4 h-4 transition-colors duration-150 ${
+                    className={`w-5 h-5 transition-colors duration-150 ${
                       isActive
-                        ? 'text-[#22D3EE] stroke-[2.5]'
-                        : 'text-[#94A3B8] stroke-[2]'
+                        ? 'text-indigo-400 stroke-[2.4]'
+                        : 'text-[#94A3B8] stroke-[1.9]'
                     }`}
                   />
 
                   {tab.badge && (
-                    <span className="absolute -top-1.5 -right-2.5 min-w-4 h-4 px-1 rounded-full bg-[#8B5CF6] text-white font-extrabold text-[9px] flex items-center justify-center shadow font-mono">
+                    <span className="absolute -top-1.5 -right-2.5 min-w-4 h-4 px-1 rounded-full bg-indigo-600 text-white font-extrabold text-[9px] flex items-center justify-center shadow font-mono">
                       {tab.badge}
                     </span>
                   )}
 
                   {tab.hasDot && !tab.badge && (
-                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-[#22D3EE] ring-2 ring-[#0D1220]" />
+                    <span className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#0D1322]" />
                   )}
                 </div>
 
                 <span
-                  className={`text-[10px] mt-0.5 tracking-tight transition-colors duration-150 ${
+                  className={`text-[10px] mt-1 tracking-tight transition-colors duration-150 ${
                     isActive
-                      ? 'text-[#F1F5F9] font-bold'
+                      ? 'text-white font-bold'
                       : 'text-[#94A3B8] font-medium'
                   }`}
                 >

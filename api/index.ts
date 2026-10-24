@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import { GoogleGenAI, Type } from '@google/genai';
 import { initializeApp, getApps } from 'firebase/app';
 import {
   getFirestore,
@@ -2410,26 +2411,73 @@ const handleSitemapXml = async (req: Request, res: Response) => {
         .replace(/'/g, '&apos;');
 
     const staticEntries = [
-      { loc: `${baseOrigin}/`, priority: '1.0', changefreq: 'daily' },
-      { loc: `${baseOrigin}/?tab=services`, priority: '0.95', changefreq: 'hourly' },
-      { loc: `${baseOrigin}/?tab=about`, priority: '0.85', changefreq: 'monthly' },
-      { loc: `${baseOrigin}/?tab=contact`, priority: '0.85', changefreq: 'weekly' },
-      { loc: `${baseOrigin}/?tab=refund`, priority: '0.80', changefreq: 'monthly' },
-      { loc: `${baseOrigin}/?tab=terms`, priority: '0.70', changefreq: 'monthly' },
-      { loc: `${baseOrigin}/?tab=privacy`, priority: '0.70', changefreq: 'monthly' },
-      { loc: `${baseOrigin}/?tab=api`, priority: '0.85', changefreq: 'weekly' },
-      { loc: `${baseOrigin}/?tab=track`, priority: '0.80', changefreq: 'daily' },
-      { loc: `${baseOrigin}/?tab=add-funds`, priority: '0.80', changefreq: 'weekly' },
-      { loc: `${baseOrigin}/?tab=affiliates`, priority: '0.75', changefreq: 'weekly' }
+      { loc: `${baseOrigin}/`, priority: '1.0', changefreq: 'daily', lastmod: todayIso },
+      { loc: `${baseOrigin}/?tab=services`, priority: '0.95', changefreq: 'hourly', lastmod: todayIso },
+      { loc: `${baseOrigin}/?tab=blog`, priority: '0.95', changefreq: 'daily', lastmod: todayIso },
+      { loc: `${baseOrigin}/?tab=about`, priority: '0.85', changefreq: 'monthly', lastmod: todayIso },
+      { loc: `${baseOrigin}/?tab=contact`, priority: '0.85', changefreq: 'weekly', lastmod: todayIso },
+      { loc: `${baseOrigin}/?tab=refund`, priority: '0.80', changefreq: 'monthly', lastmod: todayIso },
+      { loc: `${baseOrigin}/?tab=terms`, priority: '0.70', changefreq: 'monthly', lastmod: todayIso },
+      { loc: `${baseOrigin}/?tab=privacy`, priority: '0.70', changefreq: 'monthly', lastmod: todayIso },
+      { loc: `${baseOrigin}/?tab=api`, priority: '0.85', changefreq: 'weekly', lastmod: todayIso },
+      { loc: `${baseOrigin}/?tab=track`, priority: '0.80', changefreq: 'daily', lastmod: todayIso },
+      { loc: `${baseOrigin}/?tab=add-funds`, priority: '0.80', changefreq: 'weekly', lastmod: todayIso },
+      { loc: `${baseOrigin}/?tab=affiliates`, priority: '0.75', changefreq: 'weekly', lastmod: todayIso }
     ];
 
     const categoryEntries = categories.map((cat) => ({
       loc: `${baseOrigin}/?tab=services&category=${encodeURIComponent(cat)}`,
       priority: '0.85',
-      changefreq: 'daily'
+      changefreq: 'daily',
+      lastmod: todayIso
     }));
 
-    const allUrls = [...staticEntries, ...categoryEntries];
+    // Merge server-cached blogs + Firestore blogs collection + default seed slugs
+    const blogSlugMap = new Map<string, { slug: string; updatedAt: number; title?: string }>();
+    const defaultSeedSlugs = [
+      'boostlagbe-best-automatic-smm-panel-bangladesh',
+      'facebook-page-monetization-60k-watchtime-bangladesh-guide',
+      'youtube-4000-hours-watchtime-tiktok-views-boost-bd'
+    ];
+    for (const s of defaultSeedSlugs) {
+      blogSlugMap.set(s, { slug: s, updatedAt: Date.now() });
+    }
+    for (const b of serverBlogsCache.values()) {
+      if (b.status === 'published' && b.slug) {
+        blogSlugMap.set(b.slug, { slug: b.slug, updatedAt: b.updatedAt || Date.now(), title: b.title });
+      }
+    }
+    try {
+      const blogsSnap = await getDocs(collection(serverDb, 'blogs'));
+      blogsSnap.docs.forEach((d) => {
+        const data = d.data() || {};
+        if (data.status === 'published' && data.slug) {
+          const cleanSlug = String(data.slug).trim();
+          blogSlugMap.set(cleanSlug, {
+            slug: cleanSlug,
+            updatedAt: Number(data.updatedAt || data.publishedAt || Date.now()),
+            title: String(data.title || '')
+          });
+          serverBlogsCache.set(cleanSlug, data);
+        }
+      });
+    } catch {
+      // use serverBlogsCache + seed slugs
+    }
+
+    const blogEntries = Array.from(blogSlugMap.values()).map((b) => {
+      const postDate = b.updatedAt
+        ? new Date(b.updatedAt).toISOString().split('T')[0]
+        : todayIso;
+      return {
+        loc: `${baseOrigin}/?tab=blog&slug=${encodeURIComponent(b.slug)}`,
+        priority: '0.90',
+        changefreq: 'weekly',
+        lastmod: postDate
+      };
+    });
+
+    const allUrls = [...staticEntries, ...categoryEntries, ...blogEntries];
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
@@ -2438,7 +2486,7 @@ ${allUrls
   .map(
     (u) => `  <url>
     <loc>${escapeXml(u.loc)}</loc>
-    <lastmod>${todayIso}</lastmod>
+    <lastmod>${u.lastmod || todayIso}</lastmod>
     <changefreq>${u.changefreq}</changefreq>
     <priority>${u.priority}</priority>
     <xhtml:link rel="alternate" hreflang="bn-BD" href="${escapeXml(u.loc)}" />
@@ -2450,7 +2498,7 @@ ${allUrls
 </urlset>`;
 
     res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600');
+    res.setHeader('Cache-Control', 'no-cache, max-age=0');
     res.status(200).send(xml);
   } catch (err: any) {
     res.status(500).send(`<!-- Sitemap Error: ${err?.message || 'Failed'} -->`);
@@ -2470,7 +2518,7 @@ const handleRobotsTxt = async (req: Request, res: Response) => {
   }
 
   const forwardedProto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
-  const hostHeader = (req.headers['x-forwarded-host'] as string) || req.get('host') || 'smm.khatirajbd.com';
+  const hostHeader = (req.headers['x-forwarded-host'] as string) || req.get('host') || 'boostlagbe.com';
   const baseOrigin = customDomain
     ? customDomain.startsWith('http')
       ? customDomain.replace(/\/+$/, '')
@@ -2479,6 +2527,8 @@ const handleRobotsTxt = async (req: Request, res: Response) => {
 
   const robotsContent = `User-agent: *
 Allow: /
+Allow: /?tab=blog
+Allow: /blog
 Allow: /?tab=services
 Allow: /?tab=about
 Allow: /?tab=contact
@@ -2502,6 +2552,485 @@ Sitemap: ${baseOrigin}/sitemap.xml
   res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600');
   res.status(200).send(robotsContent);
 };
+
+// ============================================================================
+// 6. GOOGLE GEMINI AI 100% SEO BLOG GENERATOR & OPTIMIZER (/api/gemini/*)
+// ============================================================================
+const serverBlogsCache = new Map<string, any>();
+
+export async function getServerBlogMetaBySlug(slug: string): Promise<{
+  title: string;
+  description: string;
+  slug: string;
+  coverImage?: string;
+} | null> {
+  const cleanSlug = String(slug || '').trim();
+  if (!cleanSlug) return null;
+  if (serverBlogsCache.has(cleanSlug)) {
+    const b = serverBlogsCache.get(cleanSlug);
+    return {
+      title: b.metaTitle || b.title,
+      description: b.metaDescription || b.excerpt,
+      slug: cleanSlug,
+      coverImage: b.coverImage
+    };
+  }
+  try {
+    const snap = await getDocs(collection(serverDb, 'blogs'));
+    for (const d of snap.docs) {
+      const data = d.data() || {};
+      if (data.slug) {
+        serverBlogsCache.set(String(data.slug).trim(), data);
+      }
+      if (String(data.slug).trim() === cleanSlug) {
+        return {
+          title: data.metaTitle || data.title,
+          description: data.metaDescription || data.excerpt,
+          slug: cleanSlug,
+          coverImage: data.coverImage
+        };
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+app.post('/api/seo/sync-blogs', (req: Request, res: Response) => {
+  try {
+    const { blogs } = req.body || {};
+    if (Array.isArray(blogs)) {
+      serverBlogsCache.clear();
+      for (const b of blogs) {
+        if (b && b.slug && b.status === 'published') {
+          serverBlogsCache.set(String(b.slug).trim(), b);
+        }
+      }
+    } else if (req.body?.blog && req.body.blog.slug) {
+      const b = req.body.blog;
+      if (b.status === 'published') {
+        serverBlogsCache.set(String(b.slug).trim(), b);
+      } else {
+        serverBlogsCache.delete(String(b.slug).trim());
+      }
+    }
+    res.json({
+      status: 'success',
+      indexedCount: serverBlogsCache.size,
+      sitemapUrl: '/sitemap.xml'
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Blog sitemap sync failed' });
+  }
+});
+
+async function resolveGeminiConfig(overrides?: Record<string, any>): Promise<{
+  apiKey: string;
+  model: string;
+  hasCustomKey: boolean;
+  hasSystemKey: boolean;
+}> {
+  let dbSettings: Record<string, any> = { ...serverSettingsCache };
+  if (!dbSettings.geminiApiKey) {
+    try {
+      const snap = await getDoc(doc(serverDb, 'settings', 'global'));
+      if (snap.exists()) {
+        dbSettings = { ...(snap.data() || {}), ...serverSettingsCache };
+        serverSettingsCache = dbSettings;
+      }
+    } catch {
+      // use memory cache
+    }
+  }
+
+  const customKey = String(overrides?.apiKey || overrides?.geminiApiKey || dbSettings.geminiApiKey || '').trim();
+  const systemKey = String(process.env.GEMINI_API_KEY || '').trim();
+  const effectiveKey = customKey || systemKey;
+
+  let rawModel = String(overrides?.model || overrides?.geminiModel || dbSettings.geminiModel || 'gemini-3.8-flash').trim();
+  if (!rawModel || rawModel.includes('1.5') || rawModel.includes('2.0')) {
+    rawModel = 'gemini-3.8-flash';
+  }
+
+  return {
+    apiKey: effectiveKey,
+    model: rawModel,
+    hasCustomKey: Boolean(customKey),
+    hasSystemKey: Boolean(systemKey)
+  };
+}
+
+function buildFallbackSeoBlog(params: {
+  topic: string;
+  focusKeyword: string;
+  category: string;
+  language: string;
+}): any {
+  const kw = params.focusKeyword.trim() || params.topic.trim() || 'Boostlagbe.com';
+  const cat = params.category || 'SMM Guide BD';
+  const cleanSlug =
+    kw
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') ||
+    `boostlagbe-${cat.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Math.floor(100 + Math.random() * 900)}`;
+  const finalSlug = cleanSlug.length >= 6 ? cleanSlug : `boostlagbe-smm-bd-${cleanSlug}-${Date.now().toString(36)}`;
+
+  const title = `${kw} — বাংলাদেশের সেরা ও সবচেয়ে কম দামে অটোমেটিক গাইড | Boostlagbe.com`;
+  const metaTitle = `${kw} | বুস্ট লাগবে (Boostlagbe.com) #1 SMM Panel BD`.slice(0, 62);
+  const metaDescription = `${kw} সম্পর্কে সম্পূর্ণ গাইড। Boostlagbe.com (বুস্ট লাগবে ডট কম)-এ বিকাশ ও নগদে তাৎক্ষণিক ডিপোজিট করে সবচেয়ে কম দামে নন-ড্রপ সোশ্যাল মিডিয়া বুস্ট নিন।`.slice(
+    0,
+    158
+  );
+
+  const content = `<h2>${kw} — কেন Boostlagbe.com (বুস্ট লাগবে) বাংলাদেশের সেরা প্ল্যাটফর্ম?</h2>
+<p>বর্তমান ডিজিটাল যুগে সোশ্যাল মিডিয়া ব্র্যান্ডিং ও মনিটাইজেশনের জন্য <strong>${kw}</strong> অত্যন্ত গুরুত্বপূর্ণ একটি বিষয়। আপনি যদি বাংলাদেশে সবচেয়ে কম দামে, নিরাপদে এবং ১০০% অটোমেটিক উপায়ে <strong>${kw}</strong> সার্ভিস খুঁজে থাকেন, তবে <strong>Boostlagbe.com (বুস্ট লাগবে / বুস্টলাগবে ডট কম)</strong> আপনার জন্য ১ নম্বর নির্ভরযোগ্য প্ল্যাটফর্ম।</p>
+
+<h2>কীভাবে ${kw} আপনার পেজ ও চ্যানেলের গ্রোথ বাড়ায়?</h2>
+<p>আমাদের ক্লাউড API v2 প্রযুক্তির মাধ্যমে প্রতিটি অর্ডার সাবমিট করার কয়েক সেকেন্ডের মধ্যেই স্বয়ংক্রিয়ভাবে ডেলিভারি শুরু হয়। বিকাশ (bKash), নগদ (Nagad), রকেট (Rocket) এবং উপায় (Upay) ব্যবহার করে তাৎক্ষণিক অটো ডিপোজিট করে আপনি যেকোনো সময় সার্ভিস অর্ডার করতে পারবেন।</p>
+<ul>
+  <li><strong>১০০% নন-ড্রপ ও রিফিল গ্যারান্টি:</strong> আমাদের প্রতিটি প্রিমিয়াম সার্ভিসে রয়েছে ৩০ দিনের অটোমেটিক রিফিল সুরক্ষা।</li>
+  <li><strong>তাৎক্ষণিক বিকাশ ও নগদ পেমেন্ট:</strong> কোনো ম্যানুয়াল অপেক্ষার ঝামেলা ছাড়াই ১ ক্লিকে ওয়ালেটে ব্যালেন্স যুক্ত হয়।</li>
+  <li><strong>সর্বনিম্ন পাইকারি বিডিটি (BDT) রেট:</strong> সরাসরি মেইন প্রোভাইডার সার্ভারের সাথে সংযুক্ত থাকায় আপনি পাচ্ছেন বাজারের সবচেয়ে সস্তা রেট।</li>
+</ul>
+
+<h2>ধাপে ধাপে ${kw} অর্ডার করার নিয়ম</h2>
+<h3>ধাপ ১: ফ্রি অ্যাকাউন্ট ও ওয়ালেট রিচার্জ</h3>
+<p>প্রথমে Boostlagbe.com-এ লগইন করে <a href="/?tab=add-funds">Add Balance</a> সেকশন থেকে বিকাশ বা নগদে প্রয়োজনীয় টাকা রিচার্জ করুন।</p>
+
+<h3>ধাপ ২: সার্ভিস নির্বাচন ও লিংক প্রদান</h3>
+<p>এরপর <a href="/?tab=services">Services &amp; Pricing</a> ক্যাটালগ থেকে আপনার পছন্দের প্যাকেজটি বেছে নিন অথবা সরাসরি <a href="/?tab=new-order">New Order</a> পেজে গিয়ে পাবলিক লিংক ও পরিমাণ বসিয়ে অর্ডার কনফার্ম করুন।</p>
+
+<h3>ধাপ ৩: লাইভ অর্ডার ট্র্যাকিং</h3>
+<p>অর্ডার করার পর আমাদের <a href="/?tab=track">Live Order Tracker</a> ব্যবহার করে রিয়েল-টাইম স্টার্ট কাউন্ট ও ডেলিভারি প্রগ্রেস ট্র্যাক করতে পারবেন।</p>`;
+
+  return {
+    title,
+    slug: finalSlug,
+    excerpt: `${kw} নিয়ে আমাদের বিশেষজ্ঞ গাইড। জানুন কীভাবে Boostlagbe.com (বুস্ট লাগবে) থেকে বিকাশ ও নগদে সবচেয়ে কম দামে ${cat} সার্ভিস নিবেন।`,
+    content,
+    coverImageAlt: `${kw} - Boostlagbe.com (বুস্ট লাগবে) অফিশিয়াল গাইড`,
+    category: cat,
+    tags: [kw, 'Boostlagbe.com', 'বুস্ট লাগবে', 'বুস্ট লাগবে ডট কম', cat, 'SMM Panel Bangladesh'],
+    focusKeyword: kw,
+    secondaryKeywords: ['বুস্ট লাগবে', 'Boostlagbe.com', 'boost lagbe', cat, 'bKash SMM Panel BD'],
+    metaTitle,
+    metaDescription,
+    faqItems: [
+      {
+        question: `${kw} সার্ভিস নিতে কত সময় লাগে?`,
+        answer: `Boostlagbe.com-এ ${kw} অর্ডার করার ৫ থেকে ১৫ মিনিটের মধ্যে স্বয়ংক্রিয়ভাবে কাজ শুরু হয় এবং নির্ধারিত সময়ের মধ্যে সম্পূর্ণ ডেলিভারি সম্পন্ন হয়।`
+      },
+      {
+        question: `বিকাশ ও নগদে কীভাবে ${kw} অর্ডার করব?`,
+        answer: `ওয়ালেট সেকশন থেকে বিকাশ বা নগদে তাৎক্ষণিক ব্যালেন্স যোগ করে New Order অপশন থেকে আপনার লিংক দিয়ে খুব সহজেই অর্ডার করতে পারবেন।`
+      },
+      {
+        question: `${kw} সার্ভিস কি সম্পূর্ণ নিরাপদ ও নন-ড্রপ?`,
+        answer: `হ্যাঁ, আমাদের সকল সার্ভিস ১০০% অর্গানিক-প্যাটার্ন এবং রিফিল গ্যারান্টিযুক্ত। কোনো পাসওয়ার্ডের প্রয়োজন হয় না, শুধু পাবলিক লিংক দিলেই কাজ হয়।`
+      }
+    ]
+  };
+}
+
+app.post('/api/gemini/status', async (req: Request, res: Response) => {
+  const startTime = Date.now();
+  try {
+    const cfg = await resolveGeminiConfig(req.body || {});
+    if (!cfg.apiKey) {
+      res.json({
+        status: 'ready_fallback',
+        connected: true,
+        model: cfg.model,
+        hasCustomKey: false,
+        hasSystemKey: false,
+        latencyMs: Date.now() - startTime,
+        message: 'Built-in SEO Blog Engine is active. Add a custom Gemini API key in Settings for live custom LLM generation.'
+      });
+      return;
+    }
+
+    const ai = new GoogleGenAI({
+      apiKey: cfg.apiKey,
+      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+    });
+
+    const response = await ai.models.generateContent({
+      model: cfg.model,
+      contents: 'Reply with OK if you are online.'
+    });
+
+    res.json({
+      status: 'online',
+      connected: true,
+      model: cfg.model,
+      hasCustomKey: cfg.hasCustomKey,
+      hasSystemKey: cfg.hasSystemKey,
+      latencyMs: Date.now() - startTime,
+      sampleReply: (response.text || 'OK').trim().slice(0, 60)
+    });
+  } catch (err: any) {
+    res.json({
+      status: 'fallback_active',
+      connected: true,
+      model: 'gemini-3.8-flash',
+      latencyMs: Date.now() - startTime,
+      warning: err?.message || 'Using built-in SEO generator fallback'
+    });
+  }
+});
+
+app.post('/api/gemini/generate-blog', async (req: Request, res: Response) => {
+  const startTime = Date.now();
+  const {
+    topic = '',
+    focusKeyword = '',
+    category = 'Facebook Monetization',
+    language = 'bn',
+    tone = 'expert_seo',
+    customApiKey = '',
+    model = ''
+  } = req.body || {};
+
+  const cleanTopic = String(topic || focusKeyword || 'Boostlagbe.com – বুস্ট লাগবে #1 SMM Panel Bangladesh').trim();
+  const cleanKeyword = String(focusKeyword || cleanTopic).trim();
+
+  try {
+    const cfg = await resolveGeminiConfig({ apiKey: customApiKey, model });
+
+    if (cfg.apiKey) {
+      try {
+        const ai = new GoogleGenAI({
+          apiKey: cfg.apiKey,
+          httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+        });
+
+        const langInstruction =
+          language === 'en'
+            ? 'Write in clear, high-converting English tailored for Bangladesh SMM customers.'
+            : language === 'bn_en'
+            ? 'Write in natural bilingual Bengali + English (Banglish/Bengali mix) optimized for Google Bangladesh search queries.'
+            : 'Write in fluent, engaging, professional Bengali (বাংলা) with strategic English SEO terms (like Facebook Page Monetization, 60k Watchtime, YouTube 4000h Watchtime, bKash, Nagad, Boostlagbe.com).';
+
+        const prompt = `You are a Senior Google SEO Strategist & Content Writer for "Boostlagbe.com" (বুস্ট লাগবে / বুস্টলাগবে ডট কম), Bangladesh's #1 Automated Social Media Marketing (SMM) Panel.
+
+Write a 100% Google-ranking, comprehensive, deeply helpful SEO blog post on the following topic:
+- Topic / Headline Idea: "${cleanTopic}"
+- Primary Focus Keyword: "${cleanKeyword}"
+- Category: "${category}"
+- Tone: "${tone}"
+- Language Instruction: ${langInstruction}
+
+STRICT 100% ON-PAGE SEO REQUIREMENTS (No compromises):
+1. "title": Must include the exact Focus Keyword ("${cleanKeyword}") near the beginning. Length: 45-65 characters.
+2. "slug": Clean lowercase English URL slug with hyphens (e.g. "facebook-monetization-60k-watchtime-boostlagbe-bd"), 3-8 words.
+3. "metaTitle": High-CTR Google SERP title containing "${cleanKeyword}" and "Boostlagbe.com", 45-60 characters.
+4. "metaDescription": Compelling meta description containing "${cleanKeyword}", "Boostlagbe.com (বুস্ট লাগবে)", and a clear Call-To-Action. Length: 125-158 characters.
+5. "excerpt": 2-sentence summary containing "${cleanKeyword}".
+6. "content": Rich semantic HTML article (use ONLY <h2>, <h3>, <p>, <ul>, <li>, <strong>, <code>, and <a href="..."> tags; DO NOT include <h1> or <html>/<body> wrappers).
+   - Must be at least 450-700 words long with 4+ <h2> sections and 2+ <h3> sub-sections.
+   - Mention the Focus Keyword "${cleanKeyword}" in the first paragraph, in at least two <h2> headings, and naturally throughout the body.
+   - Include internal HTML anchor links to:
+     - <a href="/?tab=services">সার্ভিস ও রেট লিস্ট (Services Catalog)</a>
+     - <a href="/?tab=new-order">নতুন অর্ডার করুন (New Order)</a>
+     - <a href="/?tab=add-funds">বিকাশ ও নগদ অটো ডিপোজিট (Add Funds)</a>
+7. "coverImageAlt": Descriptive image alt text containing "${cleanKeyword}" and "Boostlagbe.com".
+8. "tags": Array of 6-8 highly relevant Bangladesh SEO tags (including "Boostlagbe.com", "বুস্ট লাগবে", "বুস্ট লাগবে ডট কম", "boost lagbe").
+9. "secondaryKeywords": Array of 5-7 LSI/secondary keywords.
+10. "faqItems": Array of 4 highly relevant Question & Answer pairs for Schema.org FAQPage rich snippets.`;
+
+        const response = await ai.models.generateContent({
+          model: cfg.model,
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                slug: { type: Type.STRING },
+                excerpt: { type: Type.STRING },
+                content: { type: Type.STRING },
+                coverImageAlt: { type: Type.STRING },
+                category: { type: Type.STRING },
+                tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+                focusKeyword: { type: Type.STRING },
+                secondaryKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+                metaTitle: { type: Type.STRING },
+                metaDescription: { type: Type.STRING },
+                faqItems: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      question: { type: Type.STRING },
+                      answer: { type: Type.STRING }
+                    },
+                    required: ['question', 'answer']
+                  }
+                }
+              },
+              required: [
+                'title',
+                'slug',
+                'excerpt',
+                'content',
+                'coverImageAlt',
+                'tags',
+                'focusKeyword',
+                'secondaryKeywords',
+                'metaTitle',
+                'metaDescription',
+                'faqItems'
+              ]
+            }
+          }
+        });
+
+        const rawJson = (response.text || '').trim();
+        if (rawJson) {
+          const parsed = JSON.parse(rawJson);
+          res.json({
+            status: 'success',
+            aiEngine: cfg.model,
+            latencyMs: Date.now() - startTime,
+            blog: {
+              ...parsed,
+              focusKeyword: parsed.focusKeyword || cleanKeyword,
+              category: parsed.category || category
+            }
+          });
+          return;
+        }
+      } catch (geminiErr: any) {
+        console.warn('Gemini generation fallback notice:', geminiErr?.message);
+      }
+    }
+
+    // Deterministic 100% SEO fallback if API key is missing or quota reached
+    const fallbackBlog = buildFallbackSeoBlog({
+      topic: cleanTopic,
+      focusKeyword: cleanKeyword,
+      category,
+      language
+    });
+
+    res.json({
+      status: 'success',
+      aiEngine: 'boostlagbe-seo-engine',
+      latencyMs: Date.now() - startTime,
+      blog: fallbackBlog
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error?.message || 'Failed to generate SEO blog post' });
+  }
+});
+
+app.post('/api/gemini/optimize-seo', async (req: Request, res: Response) => {
+  const startTime = Date.now();
+  try {
+    const {
+      title = '',
+      content = '',
+      focusKeyword = '',
+      category = 'SMM Guide BD',
+      customApiKey = '',
+      model = ''
+    } = req.body || {};
+
+    const kw = String(focusKeyword || title || 'Boostlagbe.com').trim();
+    const cfg = await resolveGeminiConfig({ apiKey: customApiKey, model });
+
+    if (cfg.apiKey && (title || content)) {
+      try {
+        const ai = new GoogleGenAI({
+          apiKey: cfg.apiKey,
+          httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+        });
+
+        const prompt = `Optimize this blog post for 100/100 Google Bangladesh SEO ranking on Boostlagbe.com (বুস্ট লাগবে).
+Focus Keyword: "${kw}"
+Current Title: "${title}"
+Category: "${category}"
+Current Content: "${String(content).slice(0, 2500)}"
+
+Return JSON with:
+- metaTitle (45-60 chars, must include "${kw}" and "Boostlagbe.com")
+- metaDescription (130-158 chars, must include "${kw}" and a call to action)
+- slug (clean lowercase English hyphenated slug)
+- coverImageAlt (alt text including "${kw}")
+- tags (array of 6-8 SEO keywords)
+- secondaryKeywords (array of 5 LSI keywords)
+- faqItems (3 Q&A pairs for FAQPage schema)`;
+
+        const response = await ai.models.generateContent({
+          model: cfg.model,
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                metaTitle: { type: Type.STRING },
+                metaDescription: { type: Type.STRING },
+                slug: { type: Type.STRING },
+                coverImageAlt: { type: Type.STRING },
+                tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+                secondaryKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+                faqItems: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      question: { type: Type.STRING },
+                      answer: { type: Type.STRING }
+                    },
+                    required: ['question', 'answer']
+                  }
+                }
+              },
+              required: ['metaTitle', 'metaDescription', 'slug', 'coverImageAlt', 'tags', 'secondaryKeywords', 'faqItems']
+            }
+          }
+        });
+
+        const parsed = JSON.parse((response.text || '{}').trim());
+        res.json({
+          status: 'success',
+          latencyMs: Date.now() - startTime,
+          optimized: parsed
+        });
+        return;
+      } catch {
+        // fallback below
+      }
+    }
+
+    const fb = buildFallbackSeoBlog({
+      topic: title || kw,
+      focusKeyword: kw,
+      category,
+      language: 'bn'
+    });
+
+    res.json({
+      status: 'success',
+      latencyMs: Date.now() - startTime,
+      optimized: {
+        metaTitle: fb.metaTitle,
+        metaDescription: fb.metaDescription,
+        slug: fb.slug,
+        coverImageAlt: fb.coverImageAlt,
+        tags: fb.tags,
+        secondaryKeywords: fb.secondaryKeywords,
+        faqItems: fb.faqItems
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'SEO optimization failed' });
+  }
+});
 
 export function extractCleanGscToken(rawInput?: string): string {
   if (!rawInput) return '';
@@ -2593,3 +3122,4 @@ app.get('/robots.txt', handleRobotsTxt);
 app.get('/api/robots.txt', handleRobotsTxt);
 
 export default app;
+

@@ -115,7 +115,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onShowToast, onOpenAut
           {t('প্রোফাইল ও অ্যাকাউন্ট সেটিংস', 'Profile & Account Settings')}
         </h1>
         <p className="text-xs text-[#94A3B8] mt-0.5">
-          {t('আপনার ব্যক্তিগত তথ্য, সিকিউরিটি, ভাষা এবং ডেভেলপার এপিআই কী পরিচালনা করুন', 'Manage your identity, security credentials, workspace preferences, and API access')}
+          {t('আপনার ব্যক্তিগত তথ্য, ভাষা, কারেন্সি এবং সিকিউরিটি পরিচালনা করুন', 'Manage your identity, language preferences, and account security')}
         </p>
       </div>
 
@@ -133,7 +133,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onShowToast, onOpenAut
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-base sm:text-lg font-bold text-[#F1F5F9] truncate">
-                    {profile.displayName || 'SMM Member'}
+                    {profile.displayName || 'Boostlagbe Member'}
                   </h2>
                   <span className="px-2.5 py-0.5 rounded-lg bg-[#22C55E]/10 border border-[#22C55E]/25 text-[#22C55E] text-[10px] font-semibold">
                     {profile.role === 'admin' ? 'Administrator' : 'Verified Member'}
@@ -161,7 +161,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onShowToast, onOpenAut
               </div>
             </div>
           </div>
+        </div>
 
+        {/* Right Column: Preferences & Security (6 cols) */}
+        <div className="lg:col-span-6 space-y-5">
           {/* Workspace Preferences */}
           <div className="rounded-3xl bg-[#0D1220] border border-white/[0.07] p-5 sm:p-6 space-y-4">
             <h3 className="text-sm font-bold text-[#F1F5F9] flex items-center gap-2">
@@ -249,85 +252,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onShowToast, onOpenAut
                 />
               </button>
             </div>
-          </div>
-        </div>
-
-        {/* Right Column: Developer API Key & Security (6 cols) */}
-        <div className="lg:col-span-6 space-y-5">
-          {/* API Key Section */}
-          <div className="rounded-3xl bg-[#0D1220] border border-white/[0.07] p-5 sm:p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-[#F1F5F9] flex items-center gap-2">
-                <KeyRound className="w-4 h-4 text-[#22D3EE]" />
-                {t('ডেভেলপার API Key (v2)', 'Developer API Key (REST v2)')}
-              </h3>
-              <span className="text-[10px] font-mono text-[#22C55E]">ACTIVE</span>
-            </div>
-
-            <p className="text-xs text-[#94A3B8] leading-relaxed">
-              {t(
-                'অন্যান্য প্যানেল বা নিজস্ব ওয়েবসাইটের সাথে আমাদের সার্ভিস সংযুক্ত করতে নিচের সিক্রেট API Key ব্যবহার করুন।',
-                'Use this secret key to authenticate automated order requests from external panels or scripts.'
-              )}
-            </p>
-
-            <div className="p-3.5 rounded-2xl bg-[#141B2B] border border-white/[0.08] flex items-center justify-between gap-2">
-              <span className="font-mono text-xs text-[#F1F5F9] truncate select-all">
-                {showApiKey ? profile.apiKey : maskedApiKey}
-              </span>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="p-2 rounded-xl bg-[#192337] text-[#94A3B8] hover:text-white"
-                  title={showApiKey ? 'Hide Key' : 'Show Key'}
-                >
-                  {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCopyKey}
-                  className="px-3 py-2 rounded-xl bg-[#192337] hover:bg-[#8B5CF6] text-[#F1F5F9] hover:text-white text-xs font-semibold flex items-center gap-1 transition-colors"
-                >
-                  {copiedKey ? <Check className="w-3.5 h-3.5 text-[#22C55E]" /> : <Copy className="w-3.5 h-3.5" />}
-                  {copiedKey ? t('কপি হয়েছে', 'Copied') : t('কপি', 'Copy')}
-                </button>
-              </div>
-            </div>
-
-            {!confirmRegenerate ? (
-              <button
-                type="button"
-                onClick={() => setConfirmRegenerate(true)}
-                className="text-xs font-semibold text-[#94A3B8] hover:text-[#F1F5F9] flex items-center gap-1.5"
-              >
-                <RefreshCw className="w-3.5 h-3.5 text-[#8B5CF6]" />
-                {t('নতুন API Key জেনারেট করুন', 'Regenerate API Key')}
-              </button>
-            ) : (
-              <div className="p-3.5 rounded-2xl bg-[#F59E0B]/10 border border-[#F59E0B]/30 space-y-2.5">
-                <p className="text-xs text-[#F59E0B] font-medium">
-                  {t('সতর্কতা: নতুন কী তৈরি করলে আগের API Key আর কাজ করবে না।', 'Warning: Regenerating will immediately invalidate your current API key.')}
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={isRegenerating}
-                    onClick={handleRegenerateKey}
-                    className="px-3.5 py-1.5 rounded-xl bg-[#F59E0B] text-slate-950 font-bold text-xs"
-                  >
-                    {isRegenerating ? t('তৈরি হচ্ছে...', 'Generating...') : t('হ্যাঁ, পরিবর্তন করুন', 'Confirm Regenerate')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmRegenerate(false)}
-                    className="px-3.5 py-1.5 rounded-xl bg-[#141B2B] text-[#94A3B8] text-xs font-semibold"
-                  >
-                    {t('বাতিল', 'Cancel')}
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Security & Session Card */}

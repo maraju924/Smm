@@ -26,7 +26,7 @@ interface PublicLandingViewProps {
   announcements: Announcement[];
   siteSettings?: SiteSettings;
   onNavigateTab: (tabId: string, params?: any) => void;
-  onOpenAuth: () => void;
+  onOpenAuth: (mode?: 'login' | 'register') => void;
   onEnterWorkspace?: () => void;
 }
 
@@ -354,6 +354,13 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
               {language === 'bn' ? 'প্রশ্নোত্তর' : 'FAQ'}
             </a>
             <a
+              href="/?tab=blog"
+              onClick={(e) => handleAnchorNav(e, 'blog')}
+              className="hover:text-white py-2 transition-colors text-[#67E8F9]"
+            >
+              {language === 'bn' ? 'ব্লগ ও গাইড' : 'Blog & Guides'}
+            </a>
+            <a
               href="/?tab=about"
               onClick={(e) => handleAnchorNav(e, 'about')}
               className="hover:text-white py-2 transition-colors"
@@ -407,7 +414,7 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
 
                 <button
                   type="button"
-                  onClick={onOpenAuth}
+                  onClick={() => onOpenAuth('login')}
                   className="h-10 px-4 rounded-xl bg-[#6D28D9] hover:bg-[#5B21B6] text-white text-xs font-extrabold flex items-center gap-1.5 transition-colors"
                 >
                   <LogIn className="w-3.5 h-3.5" aria-hidden="true" />
@@ -467,7 +474,7 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
               <div className="flex flex-wrap items-center gap-3 pt-1">
                 <button
                   type="button"
-                  onClick={() => (profile ? onNavigateTab('new-order') : onOpenAuth())}
+                  onClick={() => (profile ? onNavigateTab('new-order') : onOpenAuth('register'))}
                   className="h-12 px-6 rounded-2xl bg-[#6D28D9] hover:bg-[#5B21B6] text-white font-extrabold text-sm flex items-center gap-2.5 transition-colors"
                 >
                   <UserPlus className="w-4 h-4" aria-hidden="true" />
@@ -1189,6 +1196,11 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
                 <li>
                   <a href="/?tab=services" onClick={(e) => handleAnchorNav(e, 'services')} className="hover:text-[#67E8F9] py-1 inline-block">
                     {language === 'bn' ? 'সার্ভিস ও BDT রেট লিস্ট' : 'Services & BDT Rate List'}
+                  </a>
+                </li>
+                <li>
+                  <a href="/?tab=blog" onClick={(e) => handleAnchorNav(e, 'blog')} className="hover:text-[#67E8F9] py-1 inline-block font-bold text-[#67E8F9]">
+                    {language === 'bn' ? 'অফিসিয়াল ব্লগ ও গাইড (Blog)' : 'Official SMM Blog & Guides'}
                   </a>
                 </li>
                 <li>

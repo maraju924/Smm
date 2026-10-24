@@ -216,9 +216,48 @@
         "googleSiteVerification": { "type": "string" },
         "googleAnalyticsId": { "type": "string" },
         "seoOgImage": { "type": "string" },
+        "geminiEnabled": { "type": "boolean" },
+        "geminiApiKey": { "type": "string" },
+        "geminiModel": { "type": "string" },
+        "geminiDefaultLanguage": { "type": "string" },
+        "geminiAutoInternalLinks": { "type": "boolean" },
+        "geminiAutoFaqSchema": { "type": "boolean" },
         "updatedAt": { "type": "number" }
       },
       "required": ["usdToBdtRate"]
+    },
+    "BlogPost": {
+      "title": "BlogPost",
+      "description": "100% SEO-optimized blog article for Google Bangladesh search ranking and dynamic sitemap indexing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "slug": { "type": "string" },
+        "excerpt": { "type": "string" },
+        "content": { "type": "string" },
+        "coverImage": { "type": "string" },
+        "coverImageAlt": { "type": "string" },
+        "category": { "type": "string" },
+        "tags": { "type": "array" },
+        "focusKeyword": { "type": "string" },
+        "secondaryKeywords": { "type": "array" },
+        "metaTitle": { "type": "string" },
+        "metaDescription": { "type": "string" },
+        "canonicalUrl": { "type": "string" },
+        "faqItems": { "type": "array" },
+        "authorName": { "type": "string" },
+        "readingTimeMinutes": { "type": "number" },
+        "wordCount": { "type": "number" },
+        "seoScore": { "type": "number" },
+        "status": { "type": "string", "enum": ["published", "draft"] },
+        "featured": { "type": "boolean" },
+        "views": { "type": "number" },
+        "publishedAt": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "title", "slug", "content", "status"]
     }
   },
   "firestore": {
@@ -262,9 +301,14 @@
       "schema": "SiteSettings",
       "description": "Global site settings"
     },
+    "/blogs/{blogId}": {
+      "schema": "BlogPost",
+      "description": "SEO blog posts and guides"
+    },
     "/admins/{adminId}": {
       "schema": "User",
       "description": "Admin identity markers"
     }
   }
 }
+

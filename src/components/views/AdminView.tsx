@@ -39,7 +39,9 @@ import {
   Cpu,
   AlertTriangle,
   TrendingUp,
-  Globe
+  Globe,
+  BookOpen,
+  Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
@@ -57,7 +59,8 @@ import {
   Announcement,
   SiteSettings,
   ZiniPayGatewayLog,
-  ServerHealthStatus
+  ServerHealthStatus,
+  SMMBlogPost
 } from '../../types';
 import { 
   updateOrderStatus, 
@@ -92,14 +95,17 @@ import {
   purgeAllDemoDataFromServer,
   fetchServerHealthStatus
 } from '../../services/db';
+import { testGeminiConnectionOnServer } from '../../services/blogSeoService';
 import {
   BRAND_LOGO_URL,
   DEFAULT_SITE_SETTINGS,
   BD_MAIN_SEO_KEYWORD,
   BD_SUB_SEO_KEYWORDS,
-  DEFAULT_BD_SEO_KEYWORDS_STRING
+  DEFAULT_BD_SEO_KEYWORDS_STRING,
+  INITIAL_SEO_BLOG_POSTS
 } from '../../data/seedServices';
 import { AdminFinanceView } from './AdminFinanceView';
+import { AdminBlogManager } from './AdminBlogManager';
 
 interface AdminViewProps {
   orders: SMMOrder[];
@@ -111,9 +117,11 @@ interface AdminViewProps {
   providers?: SMMProvider[];
   coupons?: SMMCoupon[];
   announcements?: Announcement[];
+  blogs?: SMMBlogPost[];
   siteSettings?: SiteSettings;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   onExitAdmin?: () => void;
+  onPreviewBlogSlug?: (slug: string) => void;
 }
 
 type AdminSection =
@@ -124,6 +132,7 @@ type AdminSection =
   | 'payments'
   | 'services'
   | 'providers'
+  | 'blogs'
   | 'hub'
   | 'users'
   | 'tickets'
@@ -151,9 +160,11 @@ export const AdminView: React.FC<AdminViewProps> = ({
   providers = [],
   coupons = [],
   announcements = [],
+  blogs = INITIAL_SEO_BLOG_POSTS,
   siteSettings = DEFAULT_SITE_SETTINGS,
   onShowToast,
-  onExitAdmin
+  onExitAdmin,
+  onPreviewBlogSlug
 }) => {
   const { formatPrice, profile, language, setLanguage } = useAuth();
   const [activeSection, setActiveSection] = useState<AdminSection>('overview');
@@ -352,6 +363,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [settingsForm, setSettingsForm] = useState<SiteSettings>(siteSettings);
   const [savingSettings, setSavingSettings] = useState(false);
   const [showZiniApiKey, setShowZiniApiKey] = useState(false);
+  const [showGeminiApiKey, setShowGeminiApiKey] = useState(false);
+  const [testingGemini, setTestingGemini] = useState(false);
+  const [geminiStatusMsg, setGeminiStatusMsg] = useState<string | null>(null);
   const [testingZiniPay, setTestingZiniPay] = useState(false);
   const [ziniPingResult, setZiniPingResult] = useState<{
     mode: 'sandbox' | 'live';
@@ -392,6 +406,30 @@ export const AdminView: React.FC<AdminViewProps> = ({
       onShowToast(err?.message || 'ZiniPay connection diagnostic failed', 'error');
     } finally {
       setTestingZiniPay(false);
+    }
+  };
+
+  const handleTestGeminiConnection = async () => {
+    setTestingGemini(true);
+    try {
+      const res = await testGeminiConnectionOnServer({
+        apiKey: settingsForm.geminiApiKey,
+        model: settingsForm.geminiModel || 'gemini-2.5-flash'
+      });
+      setGeminiStatusMsg(
+        res.message ||
+          (res.configured
+            ? `Google Gemini AI সচল আছে (${res.model})!`
+            : 'বিল্ট-ইন SEO ইঞ্জিন রেডি। কাস্টম API Key যুক্ত করে সেভ করুন।')
+      );
+      onShowToast(
+        res.message || `Google Gemini AI Verified (${res.model})`,
+        res.configured ? 'success' : 'info'
+      );
+    } catch (err: any) {
+      onShowToast(err?.message || 'Gemini API check failed', 'error');
+    } finally {
+      setTestingGemini(false);
     }
   };
 
@@ -977,16 +1015,17 @@ export const AdminView: React.FC<AdminViewProps> = ({
       case 'payments': return language === 'bn' ? 'পেমেন্ট ভেরিফিকেশন' : 'Deposit Requests';
       case 'services': return language === 'bn' ? 'সার্ভিস ক্যাটালগ' : 'Services Catalog';
       case 'providers': return language === 'bn' ? 'অ্যাডভান্সড API কন্ট্রোল স্টুডিও' : 'Advanced API Studio';
+      case 'blogs': return language === 'bn' ? '১০০% SEO ব্লগ ও Gemini AI রাইটার' : '100% SEO Blog & Gemini AI CMS';
       case 'hub': return language === 'bn' ? 'অ্যাডমিন কন্ট্রোল হাব' : 'Admin Control Hub';
       case 'users': return language === 'bn' ? 'ইউজার ম্যানেজমেন্ট' : 'Users Management';
       case 'tickets': return language === 'bn' ? 'সাপোর্ট টিকেট' : 'Support Tickets';
       case 'coupons': return language === 'bn' ? 'প্রোমো কোড' : 'Promo Codes';
       case 'announcements': return language === 'bn' ? 'নোটিশ বোর্ড' : 'Announcements';
-      case 'settings': return language === 'bn' ? 'সাইট ও পেমেন্ট সেটিংস' : 'Site Settings';
+      case 'settings': return language === 'bn' ? 'সাইট, Gemini AI ও পেমেন্ট সেটিংস' : 'Site, Gemini AI & SEO Settings';
     }
   };
 
-  const isSubHubScreen = ['finance', 'users', 'tickets', 'coupons', 'announcements', 'settings'].includes(activeSection);
+  const isSubHubScreen = ['finance', 'blogs', 'users', 'tickets', 'coupons', 'announcements', 'settings'].includes(activeSection);
 
   // Filtered Orders
   const filteredOrders = orders.filter(o => {
@@ -1050,12 +1089,13 @@ export const AdminView: React.FC<AdminViewProps> = ({
     { id: 'refills', label: language === 'bn' ? 'রিফিল কিউ' : 'Refill Queue', icon: RefreshCw, badge: pendingRefills.length || undefined },
     { id: 'payments', label: language === 'bn' ? 'ডিপোজিট ভেরিফিকেশন' : 'Deposit Verification', icon: Wallet, badge: pendingDeposits.length || undefined },
     { id: 'services', label: language === 'bn' ? 'সার্ভিস ক্যাটালগ' : 'Services Catalog', icon: Layers, badge: services.length || undefined },
+    { id: 'blogs', label: language === 'bn' ? 'SEO ব্লগ ও Gemini AI' : 'SEO Blog & Gemini AI', icon: BookOpen, badge: blogs.length || undefined },
     { id: 'providers', label: language === 'bn' ? 'API কন্ট্রোল স্টুডিও' : 'API Providers Studio', icon: Server, badge: providers.length || undefined },
     { id: 'users', label: language === 'bn' ? 'ইউজার ম্যানেজমেন্ট' : 'Users & Balances', icon: Users, badge: users.length || undefined },
     { id: 'tickets', label: language === 'bn' ? 'সাপোর্ট হেল্পডেস্ক' : 'Support Helpdesk', icon: MessageSquare, badge: openTickets.length || undefined },
     { id: 'coupons', label: language === 'bn' ? 'প্রোমো ভাউচার' : 'Promo Vouchers', icon: Gift },
     { id: 'announcements', label: language === 'bn' ? 'নোটিশ বোর্ড' : 'Announcements', icon: Megaphone },
-    { id: 'settings', label: language === 'bn' ? 'সাইট ও পেমেন্ট সেটিংস' : 'System Settings', icon: Settings }
+    { id: 'settings', label: language === 'bn' ? 'সাইট, Gemini ও SEO সেটিংস' : 'System & Gemini Settings', icon: Settings }
   ];
 
   return (
@@ -1366,8 +1406,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       { id: 'orders', label: language === 'bn' ? 'অর্ডারস' : 'Orders', icon: Package, color: 'text-sky-400 bg-sky-500/15 border-sky-500/30' },
                       { id: 'payments', label: language === 'bn' ? 'ডিপোজিট' : 'Deposits', icon: Wallet, color: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30' },
                       { id: 'services', label: language === 'bn' ? 'সার্ভিস' : 'Services', icon: Layers, color: 'text-amber-400 bg-amber-500/15 border-amber-500/30' },
+                      { id: 'blogs', label: language === 'bn' ? 'SEO ব্লগ' : 'SEO Blog', icon: BookOpen, color: 'text-fuchsia-400 bg-fuchsia-500/15 border-fuchsia-500/30' },
                       { id: 'users', label: language === 'bn' ? 'ইউজার' : 'Users', icon: Users, color: 'text-purple-400 bg-purple-500/15 border-purple-500/30' },
-                      { id: 'tickets', label: language === 'bn' ? 'টিকেট' : 'Tickets', icon: MessageSquare, color: 'text-rose-400 bg-rose-500/15 border-rose-500/30' },
                       { id: 'settings', label: language === 'bn' ? 'সেটিংস' : 'Settings', icon: Settings, color: 'text-teal-400 bg-teal-500/15 border-teal-500/30' },
                     ].map((item) => {
                       const Icon = item.icon;
@@ -1459,6 +1499,18 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 siteSettings={siteSettings}
                 onShowToast={onShowToast}
                 onNavigateSection={navigateSection}
+              />
+            )}
+
+            {/* =========================================================
+                SECTION 1.8: 100% ADVANCED SEO BLOG CMS & GOOGLE GEMINI AI WRITER
+               ========================================================= */}
+            {activeSection === 'blogs' && (
+              <AdminBlogManager
+                blogs={blogs}
+                siteSettings={settingsForm}
+                onOpenGeminiSettings={() => navigateSection('settings')}
+                onPreviewBlogSlug={onPreviewBlogSlug}
               />
             )}
 
@@ -3157,6 +3209,13 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       color: 'text-[#22C55E] bg-[#22C55E]/15'
                     },
                     {
+                      id: 'blogs',
+                      title: language === 'bn' ? '১০০% SEO ব্লগ ও Gemini AI রাইটার' : '100% SEO Blog & Gemini AI Writer',
+                      sub: `${blogs.length} published SEO articles · Auto Sitemap.xml & FAQ Schema`,
+                      icon: BookOpen,
+                      color: 'text-fuchsia-400 bg-fuchsia-500/15'
+                    },
+                    {
                       id: 'services',
                       title: language === 'bn' ? 'সার্ভিস ক্যাটালগ ম্যানেজার' : 'Local Services Catalog',
                       sub: `${services.length} active services in database`,
@@ -3924,6 +3983,159 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
                       />
                     </div>
+                  </div>
+                </div>
+
+                {/* =========================================================
+                    GOOGLE GEMINI AI API & AUTO SEO BLOG ENGINE CONFIGURATION
+                   ========================================================= */}
+                <div className="bg-gradient-to-b from-[#131129] to-[#080B14] border border-indigo-500/40 rounded-3xl p-4 sm:p-5 space-y-4 text-xs shadow-[0_16px_40px_rgba(0,0,0,0.6)]">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/[0.08]">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-indigo-400" />
+                        <h3 className="text-sm font-black text-white">
+                          Google Gemini AI API & 100% SEO Blog Writer Configuration
+                        </h3>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        এখানে আপনার Google Gemini API Key যোগ করুন। এই API দিয়ে অ্যাডমিন প্যানেলের ব্লগ সেকশনে ১-ক্লিকে ১০০% SEO অপ্টিমাইজড ব্লগ লেখা হবে।
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleTestGeminiConnection}
+                        disabled={testingGemini}
+                        className="px-3 py-2 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 text-indigo-300 font-bold text-[11px] flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${testingGemini ? 'animate-spin' : ''}`} />
+                        <span>{testingGemini ? 'যাচাই হচ্ছে...' : 'Gemini API টেস্ট করুন'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigateSection('blogs')}
+                        className="px-3 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-bold text-[11px] flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <BookOpen className="w-3.5 h-3.5" />
+                        <span>ব্লগ রাইটারে যান</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {geminiStatusMsg && (
+                    <div className="p-3 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 text-indigo-200 text-[11px] font-bold flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>{geminiStatusMsg}</span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="text-[10px] font-bold text-slate-300 uppercase block mb-1">
+                        Google Gemini API Key (AI Studio Key)
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showGeminiApiKey ? 'text' : 'password'}
+                          value={settingsForm.geminiApiKey || ''}
+                          onChange={(e) =>
+                            setSettingsForm({ ...settingsForm, geminiApiKey: e.target.value.trim() })
+                          }
+                          placeholder="AIzaSy... (আপনার Google Gemini API Key এখানে পেস্ট করুন)"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 pr-10 text-white font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowGeminiApiKey(!showGeminiApiKey)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                        >
+                          {showGeminiApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-300 uppercase block mb-1">
+                        Gemini AI Model
+                      </label>
+                      <select
+                        value={settingsForm.geminiModel || 'gemini-2.5-flash'}
+                        onChange={(e) =>
+                          setSettingsForm({ ...settingsForm, geminiModel: e.target.value })
+                        }
+                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-bold"
+                      >
+                        <option value="gemini-2.5-flash">gemini-2.5-flash (Fast & 100% SEO)</option>
+                        <option value="gemini-2.5-pro">gemini-2.5-pro (Deep Pillar Content)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-white/[0.07]">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-300 uppercase block mb-1">
+                        ডিফল্ট ব্লগ ভাষা (Default Blog Language)
+                      </label>
+                      <select
+                        value={settingsForm.geminiDefaultLanguage || 'bn'}
+                        onChange={(e) =>
+                          setSettingsForm({
+                            ...settingsForm,
+                            geminiDefaultLanguage: e.target.value as 'bn' | 'en' | 'mixed'
+                          })
+                        }
+                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-bold"
+                      >
+                        <option value="bn">বাংলা + SEO English Keywords</option>
+                        <option value="mixed">Bilingual (Bangla + English)</option>
+                        <option value="en">100% English SEO</option>
+                      </select>
+                    </div>
+
+                    <label className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-950 border border-slate-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settingsForm.geminiAutoInternalLinks !== false}
+                        onChange={(e) =>
+                          setSettingsForm({
+                            ...settingsForm,
+                            geminiAutoInternalLinks: e.target.checked
+                          })
+                        }
+                        className="w-4 h-4 accent-indigo-500 rounded"
+                      />
+                      <div>
+                        <span className="text-white font-bold block text-[11px]">
+                          Auto Internal Backlinks
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          ব্লগে সার্ভিস পেজের ইন্টারনাল লিংক যুক্ত করবে
+                        </span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-950 border border-slate-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settingsForm.geminiAutoFaqSchema !== false}
+                        onChange={(e) =>
+                          setSettingsForm({
+                            ...settingsForm,
+                            geminiAutoFaqSchema: e.target.checked
+                          })
+                        }
+                        className="w-4 h-4 accent-indigo-500 rounded"
+                      />
+                      <div>
+                        <span className="text-white font-bold block text-[11px]">
+                          Auto FAQPage Rich Schema
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          গুগল র‍্যাংকিংয়ের জন্য অটো FAQ স্কিমা তৈরি করবে
+                        </span>
+                      </div>
+                    </label>
                   </div>
                 </div>
 

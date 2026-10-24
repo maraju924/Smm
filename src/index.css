@@ -5,19 +5,19 @@
     --safe-bottom: env(safe-area-inset-bottom, 16px);
     --safe-top: env(safe-area-inset-top, 0px);
 
-    /* Hybrid Glass Premium Design Tokens */
-    --bg-deep: #080B14;
-    --bg-secondary: #0D1220;
-    --surface-elevated: #141B2B;
-    --surface-solid: #192337;
-    --accent-violet: #8B5CF6;
-    --accent-deep-violet: #6D28D9;
-    --accent-cyan: #22D3EE;
-    --text-primary: #F1F5F9;
+    /* Human-Crafted Native Mobile App Design Tokens */
+    --bg-deep: #090D16;
+    --bg-secondary: #111726;
+    --surface-elevated: #171F32;
+    --surface-solid: #1E2940;
+    --accent-violet: #6366F1;
+    --accent-deep-violet: #4F46E5;
+    --accent-cyan: #10B981;
+    --text-primary: #F8FAFC;
     --text-muted: #94A3B8;
-    --status-success: #22C55E;
+    --status-success: #10B981;
     --status-warning: #F59E0B;
-    --status-error: #F87171;
+    --status-error: #EF4444;
   }
 
   *, *::before, *::after {
@@ -30,17 +30,17 @@
     width: 100% !important;
     touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
-    background-color: #080B14;
+    background-color: #090D16;
     color-scheme: dark;
   }
 
   body {
-    font-family: 'Inter', 'Noto Sans Bengali', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Plus Jakarta Sans', 'Noto Sans Bengali', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     -webkit-tap-highlight-color: transparent;
     user-select: none;
     -webkit-user-select: none;
-    background-color: #080B14;
-    color: #F1F5F9;
+    background-color: #090D16;
+    color: #F8FAFC;
     overflow-x: hidden !important;
     max-width: 100vw !important;
     width: 100% !important;
@@ -69,55 +69,44 @@
   }
 }
 
-/* Hybrid Glassmorphism & Solid Operational Surfaces */
+/* Native Mobile App Surfaces */
 .glass-panel {
-  background: linear-gradient(145deg, rgba(20, 27, 43, 0.78) 0%, rgba(13, 18, 32, 0.86) 100%);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  box-shadow:
-    0 14px 36px -10px rgba(4, 6, 14, 0.75),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
+  background-color: #111726;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 28px -8px rgba(0, 0, 0, 0.55);
 }
 
 .glass-hero {
-  background:
-    radial-gradient(120% 110% at 95% 0%, rgba(139, 92, 246, 0.18) 0%, transparent 55%),
-    radial-gradient(90% 90% at 5% 100%, rgba(34, 211, 238, 0.12) 0%, transparent 55%),
-    linear-gradient(160deg, rgba(20, 27, 43, 0.9) 0%, rgba(13, 18, 32, 0.95) 100%);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(139, 92, 246, 0.24);
-  box-shadow:
-    0 20px 48px -12px rgba(5, 8, 18, 0.85),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+  background: linear-gradient(155deg, #161F35 0%, #111726 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 14px 34px -10px rgba(0, 0, 0, 0.65);
 }
 
 .solid-panel {
-  background-color: #0D1220;
-  border: 1px solid rgba(148, 163, 184, 0.11);
-  box-shadow: 0 8px 24px -8px rgba(3, 6, 14, 0.65);
+  background-color: #111726;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 6px 18px -6px rgba(0, 0, 0, 0.45);
 }
 
 .elevated-panel {
-  background-color: #141B2B;
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  background-color: #171F32;
+  border: 1px solid rgba(255, 255, 255, 0.09);
 }
 
 .input-surface {
-  background-color: #080B14;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  color: #F1F5F9;
+  background-color: #090D16;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #F8FAFC;
   transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
 }
 
 .input-surface:focus {
   outline: none;
-  border-color: #8B5CF6;
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.16);
+  border-color: #6366F1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
 }
 
-/* Hide scrollbar for horizontal pill bars */
+/* Hide scrollbar for horizontal scroll bars */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -133,14 +122,14 @@
     height: 6px;
   }
   ::-webkit-scrollbar-track {
-    background: #080B14;
+    background: #090D16;
   }
   ::-webkit-scrollbar-thumb {
-    background: #192337;
+    background: #1E2940;
     border-radius: 9999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #8B5CF6;
+    background: #6366F1;
   }
 }
 

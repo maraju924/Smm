@@ -14,7 +14,8 @@ import {
   UserProfile,
   SMMCoupon,
   SMMProvider,
-  SiteSettings
+  SiteSettings,
+  SMMBlogPost
 } from './types';
 import { 
   subscribeServices, 
@@ -33,7 +34,8 @@ import {
   subscribeSiteSettings,
   syncActiveOrdersWithProviders
 } from './services/db';
-import { DEFAULT_SITE_SETTINGS } from './data/seedServices';
+import { subscribeBlogs } from './services/blogSeoService';
+import { DEFAULT_SITE_SETTINGS, INITIAL_SEO_BLOG_POSTS } from './data/seedServices';
 
 // Code-split heavy workspace, admin, and modal views for 95+ Mobile Lighthouse Performance
 const Navbar = lazy(() => import('./components/layout/Navbar').then(m => ({ default: m.Navbar })));
@@ -53,6 +55,7 @@ const ApiDocsView = lazy(() => import('./components/views/ApiDocsView').then(m =
 const ProfileView = lazy(() => import('./components/views/ProfileView').then(m => ({ default: m.ProfileView })));
 const MenuView = lazy(() => import('./components/views/MenuView').then(m => ({ default: m.MenuView })));
 const AdminView = lazy(() => import('./components/views/AdminView').then(m => ({ default: m.AdminView })));
+const BlogView = lazy(() => import('./components/views/BlogView').then(m => ({ default: m.BlogView })));
 const ProductionPagesView = lazy(() => import('./components/views/ProductionPagesView').then(m => ({ default: m.ProductionPagesView })));
 const AuthModal = lazy(() => import('./components/modals/AuthModal').then(m => ({ default: m.AuthModal })));
 const CommandPaletteModal = lazy(() => import('./components/modals/CommandPaletteModal').then(m => ({ default: m.CommandPaletteModal })));
@@ -75,6 +78,7 @@ const VALID_APP_TABS = new Set([
   'profile',
   'menu',
   'admin',
+  'blog',
   'about',
   'contact',
   'terms',
@@ -97,6 +101,8 @@ const PRODUCTION_PAGE_TABS = new Set<string>([
 function normalizeTabId(raw: string): string {
   const clean = raw.trim().toLowerCase().replace(/^\/+|\/+$/g, '');
   if (!clean) return 'landing';
+  if (clean === 'blogs') return 'blog';
+  if (clean === 'new_order') return 'new-order';
   if (clean === 'api') return 'api-docs';
   if (clean === 'track') return 'track-order';
   if (clean === 'about-us') return 'about';
@@ -104,6 +110,7 @@ function normalizeTabId(raw: string): string {
   if (clean === 'terms-of-service' || clean === 'tos') return 'terms';
   if (clean === 'privacy-policy') return 'privacy';
   if (clean === 'refund-policy' || clean === 'cancellation-policy') return 'refund';
+  if (clean === 'login' || clean === 'signin' || clean === 'register' || clean === 'signup') return 'landing';
   if (clean === 'not-found') return '404';
   return VALID_APP_TABS.has(clean) ? clean : '404';
 }
@@ -125,16 +132,30 @@ function resolveInitialRoute(): { tab: string; isWorkspace: boolean; params: any
   const searchParams = new URLSearchParams(window.location.search);
   const tabParam = searchParams.get('tab');
   const catParam = searchParams.get('category');
+  const slugParam = searchParams.get('slug');
+  const refParam = searchParams.get('ref') || searchParams.get('referral');
+  if (refParam && refParam.trim()) {
+    try {
+      sessionStorage.setItem('boostlagbe_ref_code', refParam.trim().toUpperCase());
+    } catch {
+      // Ignore storage restriction
+    }
+  }
   const pathname = window.location.pathname.replace(/^\/+|\/+$/g, '');
   const sessionActive = hasStoredAuthSession();
+  const routeParams: Record<string, string> = {};
+  if (catParam) routeParams.category = catParam;
+  if (slugParam) routeParams.slug = slugParam;
 
   if (tabParam) {
     const resolved = normalizeTabId(tabParam);
     const effective = sessionActive && resolved === 'landing' ? 'home' : resolved;
     return {
       tab: effective,
-      isWorkspace: sessionActive || (!PRODUCTION_PAGE_TABS.has(effective) && effective !== 'landing'),
-      params: catParam ? { category: catParam } : {}
+      isWorkspace:
+        sessionActive ||
+        (!PRODUCTION_PAGE_TABS.has(effective) && effective !== 'landing' && effective !== 'blog'),
+      params: routeParams
     };
   }
 
@@ -143,8 +164,10 @@ function resolveInitialRoute(): { tab: string; isWorkspace: boolean; params: any
     const effective = sessionActive && resolved === 'landing' ? 'home' : resolved;
     return {
       tab: effective,
-      isWorkspace: sessionActive || (!PRODUCTION_PAGE_TABS.has(effective) && effective !== 'landing'),
-      params: catParam ? { category: catParam } : {}
+      isWorkspace:
+        sessionActive ||
+        (!PRODUCTION_PAGE_TABS.has(effective) && effective !== 'landing' && effective !== 'blog'),
+      params: routeParams
     };
   }
 
@@ -183,7 +206,20 @@ const MainAppContent: React.FC = () => {
   }, [isLoggedIn, loading, currentTab, guestWorkspaceMode]);
 
   // Modals & Layout State
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState<boolean>(() => {
+    const p = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase();
+    const t = new URLSearchParams(window.location.search).get('tab')?.toLowerCase();
+    return !hasStoredAuthSession() && (p === 'login' || p === 'signin' || p === 'register' || p === 'signup' || t === 'login' || t === 'register');
+  });
+  const [authInitialMode, setAuthInitialMode] = useState<'login' | 'register'>(() => {
+    const p = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase();
+    const t = new URLSearchParams(window.location.search).get('tab')?.toLowerCase();
+    return p === 'register' || p === 'signup' || t === 'register' ? 'register' : 'login';
+  });
+  const openAuthModal = (mode: 'login' | 'register' = 'login') => {
+    setAuthInitialMode(mode);
+    setIsAuthOpen(true);
+  };
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -212,6 +248,7 @@ const MainAppContent: React.FC = () => {
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [coupons, setCoupons] = useState<SMMCoupon[]>([]);
   const [providers, setProviders] = useState<SMMProvider[]>([]);
+  const [blogs, setBlogs] = useState<SMMBlogPost[]>(INITIAL_SEO_BLOG_POSTS);
   const [siteSettings, setSiteSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS);
 
   const providersRef = useRef<SMMProvider[]>([]);
@@ -290,9 +327,11 @@ const MainAppContent: React.FC = () => {
     let unsubAnnouncements: (() => void) | null = null;
     let unsubCoupons: (() => void) | null = null;
     let unsubSettings: (() => void) | null = null;
+    let unsubBlogs: (() => void) | null = null;
 
-    // Subscribe to Global Site Settings immediately (0ms delay) so Google Search Console verification tag is injected right away
+    // Subscribe to Global Site Settings & Blogs immediately so SEO meta tags & Sitemap are hydrated
     unsubSettings = subscribeSiteSettings(setSiteSettings);
+    unsubBlogs = subscribeBlogs(setBlogs);
 
     const attachPublicListeners = () => {
       unsubServices = subscribeServices((loadedServices) => {
@@ -311,6 +350,7 @@ const MainAppContent: React.FC = () => {
       if (unsubAnnouncements) unsubAnnouncements();
       if (unsubCoupons) unsubCoupons();
       if (unsubSettings) unsubSettings();
+      if (unsubBlogs) unsubBlogs();
     };
   }, []);
 
@@ -376,6 +416,11 @@ const MainAppContent: React.FC = () => {
         } else {
           url.searchParams.delete('category');
         }
+        if (params?.slug) {
+          url.searchParams.set('slug', String(params.slug));
+        } else {
+          url.searchParams.delete('slug');
+        }
       }
       window.history.pushState({ tab: normalized, params: params || {} }, '', url.toString());
     } catch {
@@ -413,9 +458,11 @@ const MainAppContent: React.FC = () => {
             providers={providers}
             coupons={coupons}
             announcements={announcements}
+            blogs={blogs}
             siteSettings={siteSettings}
             onShowToast={addToast}
             onExitAdmin={() => handleNavigate('home')}
+            onPreviewBlogSlug={(slug) => handleNavigate('blog', { slug })}
           />
         </Suspense>
       </>
@@ -437,6 +484,7 @@ const MainAppContent: React.FC = () => {
           <Suspense fallback={null}>
             <AuthModal
               isOpen={isAuthOpen}
+              initialMode={authInitialMode}
               onClose={() => setIsAuthOpen(false)}
               onSuccessToast={(msg) => {
                 addToast(msg, 'success');
@@ -451,9 +499,54 @@ const MainAppContent: React.FC = () => {
             siteSettings={siteSettings}
             services={services}
             onNavigateTab={handleNavigate}
-            onOpenAuth={() => setIsAuthOpen(true)}
+            onOpenAuth={() => openAuthModal('login')}
             onShowToast={addToast}
             standalone={true}
+          />
+        </Suspense>
+      </>
+    );
+  }
+
+  // STANDALONE PUBLIC SEO BLOG HUB & ARTICLE READER (For Googlebot & Unauthenticated Guests)
+  if (!isLoggedIn && !guestWorkspaceMode && currentTab === 'blog') {
+    return (
+      <>
+        <SeoHeadManager
+          currentTab="blog"
+          navParams={navParams}
+          siteSettings={siteSettings}
+          services={services}
+          blogs={blogs}
+        />
+        <Toast toasts={toasts} onDismiss={removeToast} />
+        {isAuthOpen && (
+          <Suspense fallback={null}>
+            <AuthModal
+              isOpen={isAuthOpen}
+              initialMode={authInitialMode}
+              onClose={() => setIsAuthOpen(false)}
+              onSuccessToast={(msg) => {
+                addToast(msg, 'success');
+                setCurrentTab('home');
+              }}
+            />
+          </Suspense>
+        )}
+        <Suspense fallback={<ViewLoadingFallback />}>
+          <BlogView
+            blogs={blogs}
+            services={services}
+            siteSettings={siteSettings}
+            selectedSlug={navParams?.slug || null}
+            onSelectSlug={(slug) => handleNavigate('blog', slug ? { slug } : {})}
+            onNavigate={(tabId) => handleNavigate(tabId)}
+            onSelectService={(srv) => {
+              setGuestWorkspaceMode(true);
+              handleNavigate('new-order', { serviceId: srv.id, category: srv.category });
+            }}
+            isPublicStandalone={true}
+            onOpenAuth={() => openAuthModal('login')}
           />
         </Suspense>
       </>
@@ -469,12 +562,14 @@ const MainAppContent: React.FC = () => {
           navParams={navParams}
           siteSettings={siteSettings}
           services={services}
+          blogs={blogs}
         />
         <Toast toasts={toasts} onDismiss={removeToast} />
         {isAuthOpen && (
           <Suspense fallback={null}>
             <AuthModal
               isOpen={isAuthOpen}
+              initialMode={authInitialMode}
               onClose={() => setIsAuthOpen(false)}
               onSuccessToast={(msg) => {
                 addToast(msg, 'success');
@@ -494,7 +589,7 @@ const MainAppContent: React.FC = () => {
               }
               handleNavigate(tabId, params);
             }}
-            onOpenAuth={() => setIsAuthOpen(true)}
+            onOpenAuth={() => openAuthModal('login')}
             onShowToast={addToast}
             standalone={true}
           />
@@ -512,12 +607,14 @@ const MainAppContent: React.FC = () => {
           navParams={navParams}
           siteSettings={siteSettings}
           services={services}
+          blogs={blogs}
         />
         <Toast toasts={toasts} onDismiss={removeToast} />
         {isAuthOpen && (
           <Suspense fallback={null}>
             <AuthModal
               isOpen={isAuthOpen}
+              initialMode={authInitialMode}
               onClose={() => setIsAuthOpen(false)}
               onSuccessToast={(msg) => {
                 addToast(msg, 'success');
@@ -532,14 +629,14 @@ const MainAppContent: React.FC = () => {
           siteSettings={siteSettings}
           onNavigateTab={(tabId, params) => {
             const norm = normalizeTabId(tabId);
-            if (!PRODUCTION_PAGE_TABS.has(norm) && norm !== 'landing') {
+            if (!PRODUCTION_PAGE_TABS.has(norm) && norm !== 'landing' && norm !== 'blog') {
               setGuestWorkspaceMode(true);
             } else {
               setGuestWorkspaceMode(false);
             }
             handleNavigate(norm, params);
           }}
-          onOpenAuth={() => setIsAuthOpen(true)}
+          onOpenAuth={(mode) => openAuthModal(mode || 'login')}
           onEnterWorkspace={() => {
             setGuestWorkspaceMode(true);
             handleNavigate('home');
@@ -558,6 +655,7 @@ const MainAppContent: React.FC = () => {
         navParams={navParams}
         siteSettings={siteSettings}
         services={services}
+        blogs={blogs}
       />
       {/* Toast notifications */}
       <Toast toasts={toasts} onDismiss={removeToast} />
@@ -567,6 +665,7 @@ const MainAppContent: React.FC = () => {
         <Suspense fallback={null}>
           <AuthModal 
             isOpen={isAuthOpen} 
+            initialMode={authInitialMode}
             onClose={() => setIsAuthOpen(false)}
             onSuccessToast={(msg) => addToast(msg, 'success')}
           />
@@ -755,6 +854,22 @@ const MainAppContent: React.FC = () => {
                   onNavigateTab={handleNavigate}
                   onOpenAuth={() => setIsAuthOpen(true)}
                   siteSettings={siteSettings}
+                />
+              )}
+
+              {currentTab === 'blog' && (
+                <BlogView
+                  blogs={blogs}
+                  services={services}
+                  siteSettings={siteSettings}
+                  selectedSlug={navParams?.slug || null}
+                  onSelectSlug={(slug) => handleNavigate('blog', slug ? { slug } : {})}
+                  onNavigate={(tabId) => handleNavigate(tabId)}
+                  onSelectService={(srv) =>
+                    handleNavigate('new-order', { serviceId: srv.id, category: srv.category })
+                  }
+                  isPublicStandalone={false}
+                  onOpenAuth={() => setIsAuthOpen(true)}
                 />
               )}
 

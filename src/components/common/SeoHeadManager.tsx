@@ -1,9 +1,10 @@
 import React, { useEffect } from 'react';
-import { SiteSettings, SMMService } from '../../types';
+import { SiteSettings, SMMService, SMMBlogPost } from '../../types';
 import {
   BRAND_LOGO_URL,
   BD_MAIN_SEO_KEYWORD,
-  DEFAULT_BD_SEO_KEYWORDS_STRING
+  DEFAULT_BD_SEO_KEYWORDS_STRING,
+  INITIAL_SEO_BLOG_POSTS
 } from '../../data/seedServices';
 
 interface SeoHeadManagerProps {
@@ -11,6 +12,7 @@ interface SeoHeadManagerProps {
   navParams?: any;
   siteSettings: SiteSettings;
   services: SMMService[];
+  blogs?: SMMBlogPost[];
 }
 
 function upsertMetaTag(attrName: 'name' | 'property', attrValue: string, content: string) {
@@ -45,7 +47,8 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
   currentTab,
   navParams,
   siteSettings,
-  services
+  services,
+  blogs = INITIAL_SEO_BLOG_POSTS
 }) => {
   useEffect(() => {
     const brandName = siteSettings.siteName?.trim() || 'Boostlagbe.com';
@@ -69,7 +72,7 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
       siteSettings.seoDescription?.trim() ||
       'Boostlagbe.com (বুস্ট লাগবে / বুস্টলাগবে ডট কম) — বাংলাদেশের ১ নম্বর ও সবচেয়ে কম দামে অটোমেটিক SMM Panel। বিকাশ ও নগদে তাৎক্ষণিক ডিপোজিট করে Facebook Page Monetization, 60k Watchtime, Non-Drop Followers, YouTube 4000h Watchtime ও TikTok Views নিন। Boost Lagbe BD।';
 
-    const keywords = siteSettings.seoKeywords?.trim() || DEFAULT_BD_SEO_KEYWORDS_STRING;
+    let keywords = siteSettings.seoKeywords?.trim() || DEFAULT_BD_SEO_KEYWORDS_STRING;
 
     // Route-aware title, description, breadcrumb name, robots policy, and canonical URL
     let pageTitle = baseTitle;
@@ -78,10 +81,53 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
     let breadcrumbLabel = 'Home';
     let robotsDirective = 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
     let pageSchemaType = 'WebPage';
+    let ogType = 'website';
+    let ogImg = siteSettings.seoOgImage?.trim() || BRAND_LOGO_URL;
 
     const activeCategory = navParams?.category ? String(navParams.category).trim() : '';
+    const activeSlug = navParams?.slug ? String(navParams.slug).trim().toLowerCase() : '';
+    const activeBlogPost =
+      currentTab === 'blog' && activeSlug
+        ? blogs.find((b) => b.slug.toLowerCase() === activeSlug || b.id.toLowerCase() === activeSlug)
+        : null;
 
-    if (currentTab === 'services') {
+    if (currentTab === 'blog') {
+      if (activeBlogPost) {
+        pageTitle = activeBlogPost.seoTitle?.trim() || `${activeBlogPost.title} | ${brandName}`;
+        pageDescription = activeBlogPost.seoDescription?.trim() || activeBlogPost.excerpt;
+        canonicalUrl =
+          activeBlogPost.canonicalUrl?.trim() ||
+          `${baseOrigin}/?tab=blog&slug=${encodeURIComponent(activeBlogPost.slug)}`;
+        breadcrumbLabel = activeBlogPost.title;
+        robotsDirective =
+          activeBlogPost.metaRobots === 'noindex, follow'
+            ? 'noindex, follow'
+            : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
+        pageSchemaType = activeBlogPost.schemaType || 'BlogPosting';
+        ogType = 'article';
+        if (activeBlogPost.coverImage) {
+          ogImg = activeBlogPost.coverImage.startsWith('http')
+            ? activeBlogPost.coverImage
+            : `${baseOrigin}${activeBlogPost.coverImage}`;
+        }
+        const postKws = [
+          activeBlogPost.focusKeyword,
+          ...(activeBlogPost.secondaryKeywords || []),
+          ...(activeBlogPost.tags || [])
+        ]
+          .filter(Boolean)
+          .join(', ');
+        if (postKws) {
+          keywords = `${postKws}, ${keywords}`;
+        }
+      } else {
+        pageTitle = `SMM Marketing & Growth Blog Bangladesh (বুস্ট লাগবে গাইড) | ${brandName}`;
+        pageDescription = `ফেসবুক পেজ মনিটাইজেশন, টিকটক ভাইরাল ট্রিকস, ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম এবং এসএমএম রিসেলার মার্কেটিং নিয়ে সম্পূর্ণ বাংলা গাইড পড়ুন ${brandName}-এ।`;
+        canonicalUrl = `${baseOrigin}/?tab=blog`;
+        breadcrumbLabel = 'SMM Blog & Guides';
+        pageSchemaType = 'Blog';
+      }
+    } else if (currentTab === 'services') {
       if (activeCategory && activeCategory !== 'All') {
         pageTitle = `Buy ${activeCategory} Boost Services BD (বুস্ট লাগবে) | ${brandName}`;
         pageDescription = `Boostlagbe.com (বুস্ট লাগবে)-এ সবচেয়ে কম দামে ${activeCategory} Followers, Views, Watchtime ও Monetization সার্ভিস নিন। বিকাশ ও নগদে অটোমেটিক পেমেন্ট ও ইনস্ট্যান্ট ডেলিভারি।`;
@@ -104,8 +150,8 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
       canonicalUrl = `${baseOrigin}/?tab=track`;
       breadcrumbLabel = 'Live Order Tracker';
     } else if (currentTab === 'add-funds') {
-      pageTitle = `Instant bKash & Nagad Auto Deposit Wallet (ZiniPay) | ${brandName}`;
-      pageDescription = `ZiniPay অটোমেটিক পেমেন্ট গেটওয়ের মাধ্যমে বিকাশ, নগদ, রকেট ও উপায়ে ১ ক্লিকে তাৎক্ষণিক ওয়ালেট ডিপোজিট করুন।`;
+      pageTitle = `Instant bKash & Nagad Auto Deposit Wallet | ${brandName}`;
+      pageDescription = `বিকাশ, নগদ, রকেট ও উপায়ে ১ ক্লিকে তাৎক্ষণিক ওয়ালেট ডিপোজিট করুন।`;
       canonicalUrl = `${baseOrigin}/?tab=add-funds`;
       breadcrumbLabel = 'bKash & Nagad Auto Deposit';
     } else if (currentTab === 'new-order') {
@@ -120,24 +166,24 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
       breadcrumbLabel = 'Affiliates & Vouchers';
     } else if (currentTab === 'about') {
       pageTitle = `About ${brandName} (বুস্ট লাগবে) – #1 Automated bKash Nagad SMM Panel Bangladesh`;
-      pageDescription = `${brandName} (বুস্ট লাগবে ডট কম) সম্পর্কে জানুন — বাংলাদেশের ১ নম্বর অটোমেটিক SMM ও মনিটাইজেশন ইনফ্রাস্ট্রাকচার। ZiniPay ইনস্ট্যান্ট পেমেন্ট ও ক্লাউড API v2।`;
+      pageDescription = `${brandName} (বুস্ট লাগবে ডট কম) সম্পর্কে জানুন — বাংলাদেশের ১ নম্বর অটোমেটিক SMM ও মনিটাইজেশন ইনফ্রাস্ট্রাকচার।`;
       canonicalUrl = `${baseOrigin}/?tab=about`;
       breadcrumbLabel = 'About Us';
       pageSchemaType = 'AboutPage';
     } else if (currentTab === 'contact') {
       pageTitle = `Contact Us & 24/7 Bangladesh Help Center | ${brandName}`;
-      pageDescription = `অর্ডার রিফিল, ZiniPay বিকাশ/নগদ পেমেন্ট অথবা রিসেলার API v2 সাপোর্টের জন্য আমাদের ২৪/৭ বাংলাদেশ কাস্টমার হেল্প সেন্টারে যোগাযোগ করুন।`;
+      pageDescription = `অর্ডার রিফিল, বিকাশ/নগদ পেমেন্ট অথবা রিসেলার API v2 সাপোর্টের জন্য আমাদের ২৪/৭ বাংলাদেশ কাস্টমার হেল্প সেন্টারে যোগাযোগ করুন।`;
       canonicalUrl = `${baseOrigin}/?tab=contact`;
       breadcrumbLabel = 'Contact & Help Center';
       pageSchemaType = 'ContactPage';
     } else if (currentTab === 'terms') {
       pageTitle = `Terms of Service & Usage Rules | ${brandName} Bangladesh`;
-      pageDescription = `${brandName}-এ অর্ডার প্লেসমেন্ট, পাবলিক লিংক নিয়মাবলী, ZiniPay ওয়ালেট ডিপোজিট এবং REST API v2 ব্যবহারের অফিশিয়াল শর্তাবলী।`;
+      pageDescription = `${brandName}-এ অর্ডার প্লেসমেন্ট, পাবলিক লিংক নিয়মাবলী, ওয়ালেট ডিপোজিট এবং REST API v2 ব্যবহারের অফিশিয়াল শর্তাবলী।`;
       canonicalUrl = `${baseOrigin}/?tab=terms`;
       breadcrumbLabel = 'Terms of Service';
     } else if (currentTab === 'privacy') {
       pageTitle = `Privacy Policy & Zero-Password Security | ${brandName} Bangladesh`;
-      pageDescription = `আমাদের জিরো-পাসওয়ার্ড সিকিউরিটি পলিসি, ZiniPay এনক্রিপ্টেড বিকাশ/নগদ ট্রানজেকশন এবং ক্লায়েন্ট ডাটা গোপনীয়তা নীতিমালা।`;
+      pageDescription = `আমাদের জিরো-পাসওয়ার্ড সিকিউরিটি পলিসি, এনক্রিপ্টেড বিকাশ/নগদ ট্রানজেকশন এবং ক্লায়েন্ট ডাটা গোপনীয়তা নীতিমালা।`;
       canonicalUrl = `${baseOrigin}/?tab=privacy`;
       breadcrumbLabel = 'Privacy Policy';
     } else if (currentTab === 'refund') {
@@ -153,7 +199,7 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
       robotsDirective = 'noindex, follow';
     } else if (currentTab === 'maintenance') {
       pageTitle = `Scheduled System Maintenance | ${brandName} Bangladesh`;
-      pageDescription = `আমাদের ক্লাউড API v2 এবং ZiniPay পেমেন্ট গেটওয়ে আপগ্রেডের কাজ চলছে। খুব শীঘ্রই সকল সার্ভিস পুনরায় সচল হবে।`;
+      pageDescription = `আমাদের ক্লাউড API v2 এবং পেমেন্ট গেটওয়ে আপগ্রেডের কাজ চলছে। খুব শীঘ্রই সকল সার্ভিস পুনরায় সচল হবে।`;
       canonicalUrl = `${baseOrigin}/`;
       breadcrumbLabel = 'System Maintenance';
       robotsDirective = 'noindex, follow';
@@ -166,17 +212,30 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
     upsertMetaTag('name', 'keywords', keywords);
     upsertMetaTag('name', 'robots', robotsDirective);
     upsertMetaTag('name', 'googlebot', robotsDirective);
+    upsertMetaTag('property', 'og:type', ogType);
     upsertMetaTag('property', 'og:title', pageTitle);
     upsertMetaTag('property', 'og:description', pageDescription);
     upsertMetaTag('property', 'og:url', canonicalUrl);
     upsertMetaTag('property', 'og:site_name', `${brandName} – বুস্ট লাগবে`);
     upsertMetaTag('name', 'twitter:title', pageTitle);
     upsertMetaTag('name', 'twitter:description', pageDescription);
-
-    const ogImg = siteSettings.seoOgImage?.trim() || BRAND_LOGO_URL;
     upsertMetaTag('property', 'og:image', ogImg);
     upsertMetaTag('name', 'twitter:image', ogImg);
     upsertLinkTag('icon', BRAND_LOGO_URL);
+
+    if (activeBlogPost) {
+      upsertMetaTag(
+        'property',
+        'article:published_time',
+        new Date(activeBlogPost.publishedAt || activeBlogPost.createdAt).toISOString()
+      );
+      upsertMetaTag(
+        'property',
+        'article:modified_time',
+        new Date(activeBlogPost.updatedAt || activeBlogPost.publishedAt).toISOString()
+      );
+      upsertMetaTag('property', 'article:section', activeBlogPost.category);
+    }
 
     // Google Search Console verification tag (prepended to top of <head> & supports raw token, <meta> tag, or google*.html)
     if (siteSettings.googleSiteVerification?.trim()) {
@@ -261,7 +320,20 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
       }
     ];
 
-    if (currentTab !== 'landing' && currentTab !== 'home') {
+    if (currentTab === 'blog' && activeBlogPost) {
+      breadcrumbItems.push({
+        '@type': 'ListItem',
+        position: 2,
+        name: 'SMM Blog & Guides',
+        item: `${baseOrigin}/?tab=blog`
+      });
+      breadcrumbItems.push({
+        '@type': 'ListItem',
+        position: 3,
+        name: activeBlogPost.title,
+        item: canonicalUrl
+      });
+    } else if (currentTab !== 'landing' && currentTab !== 'home') {
       breadcrumbItems.push({
         '@type': 'ListItem',
         position: 2,
@@ -270,11 +342,57 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
       });
     }
 
+    const blogPostingSchema = activeBlogPost
+      ? [
+          {
+            '@type': activeBlogPost.schemaType || 'BlogPosting',
+            '@id': `${canonicalUrl}#article`,
+            mainEntityOfPage: {
+              '@type': 'WebPage',
+              '@id': canonicalUrl
+            },
+            headline: activeBlogPost.title,
+            description: activeBlogPost.seoDescription || activeBlogPost.excerpt,
+            image: [ogImg],
+            datePublished: new Date(
+              activeBlogPost.publishedAt || activeBlogPost.createdAt
+            ).toISOString(),
+            dateModified: new Date(
+              activeBlogPost.updatedAt || activeBlogPost.publishedAt
+            ).toISOString(),
+            author: {
+              '@type': 'Organization',
+              name: activeBlogPost.authorName || `${brandName} Editorial Team`,
+              url: `${baseOrigin}/`
+            },
+            publisher: {
+              '@type': 'Organization',
+              name: brandName,
+              logo: {
+                '@type': 'ImageObject',
+                url: `${baseOrigin}${BRAND_LOGO_URL}`
+              }
+            },
+            keywords: [
+              activeBlogPost.focusKeyword,
+              ...(activeBlogPost.secondaryKeywords || []),
+              ...(activeBlogPost.tags || [])
+            ]
+              .filter(Boolean)
+              .join(', '),
+            wordCount: activeBlogPost.wordCount || 650,
+            articleSection: activeBlogPost.category,
+            inLanguage: 'bn-BD'
+          }
+        ]
+      : [];
+
     const jsonLdGraph: Record<string, any> = {
       '@context': 'https://schema.org',
       '@graph': [
+        ...blogPostingSchema,
         {
-          '@type': pageSchemaType,
+          '@type': activeBlogPost ? 'WebPage' : pageSchemaType,
           '@id': `${canonicalUrl}#webpage`,
           url: canonicalUrl,
           name: pageTitle,
@@ -371,41 +489,51 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
           : []),
         {
           '@type': 'FAQPage',
-          '@id': `${baseOrigin}/#faq`,
-          mainEntity: [
-            {
-              '@type': 'Question',
-              name: 'বাংলাদেশে সবচেয়ে কম দামে বিকাশ ও নগদে অটোমেটিক SMM Panel কোনটি?',
-              acceptedAnswer: {
-                '@type': 'Answer',
-                text: `${brandName} হলো বাংলাদেশের সেরা ও সবচেয়ে কম দামের অটোমেটিক SMM Panel, যেখানে ZiniPay গেটওয়ের মাধ্যমে বিকাশ (bKash), নগদ (Nagad), রকেট (Rocket) এবং উপায় (Upay) দিয়ে তাৎক্ষণিক অটো ডিপোজিট করে ফেসবুক, ইউটিউব, টিকটক ও ইনস্টাগ্রাম সার্ভিস নেওয়া যায়।`
-              }
-            },
-            {
-              '@type': 'Question',
-              name: 'ফেসবুক পেজ মনিটাইজেশন (60k Watchtime ও Non-Drop Followers) করতে কত সময় লাগে?',
-              acceptedAnswer: {
-                '@type': 'Answer',
-                text: 'আমাদের Facebook Page Monetization Package, 60,000 Minutes Watchtime এবং Non-Drop Profile/Page Followers সার্ভিস অর্ডার করার কয়েক মিনিটের মধ্যেই অটোমেটিক শুরু হয় এবং ২৪–৭২ ঘণ্টার মধ্যে সম্পন্ন হয়।'
-              }
-            },
-            {
-              '@type': 'Question',
-              name: 'ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম ও ১০০০ সাবস্ক্রাইবার এবং টিকটক ভিউ কি নিরাপদ?',
-              acceptedAnswer: {
-                '@type': 'Answer',
-                text: 'হ্যাঁ, আমাদের সকল YouTube 4000 Hours Watchtime, Monetization Subscribers এবং TikTok Viral Views সার্ভিস ১০০% অর্গানিক-প্যাটার্ন ও নন-ড্রপ রিফিল গ্যারান্টিযুক্ত।'
-              }
-            },
-            {
-              '@type': 'Question',
-              name: 'অর্ডার ক্যানসেল বা পার্শিয়াল (Partial) হলে কি ওয়ালেটে টাকা রিফান্ড পাওয়া যায়?',
-              acceptedAnswer: {
-                '@type': 'Answer',
-                text: 'হ্যাঁ, ১০০% অটোমেটিক। কোনো অর্ডার ক্যানসেল হলে সম্পূর্ণ টাকা এবং পার্শিয়াল হলে বাকি থাকা ইউনিটের টাকা স্বয়ংক্রিয়ভাবে আপনার ওয়ালেট ব্যালেন্সে রিফান্ড হয়ে যায়।'
-              }
-            }
-          ]
+          '@id': `${canonicalUrl}#faq`,
+          mainEntity:
+            activeBlogPost && activeBlogPost.faqItems && activeBlogPost.faqItems.length > 0
+              ? activeBlogPost.faqItems.map((f) => ({
+                  '@type': 'Question',
+                  name: f.question,
+                  acceptedAnswer: {
+                    '@type': 'Answer',
+                    text: f.answer
+                  }
+                }))
+              : [
+                  {
+                    '@type': 'Question',
+                    name: 'বাংলাদেশে সবচেয়ে কম দামে বিকাশ ও নগদে অটোমেটিক SMM Panel কোনটি?',
+                    acceptedAnswer: {
+                      '@type': 'Answer',
+                      text: `${brandName} হলো বাংলাদেশের সেরা ও সবচেয়ে কম দামের অটোমেটিক SMM Panel, যেখানে বিকাশ (bKash), নগদ (Nagad), রকেট (Rocket) এবং উপায় (Upay) দিয়ে তাৎক্ষণিক অটো ডিপোজিট করে ফেসবুক, ইউটিউব, টিকটক ও ইনস্টাগ্রাম সার্ভিস নেওয়া যায়।`
+                    }
+                  },
+                  {
+                    '@type': 'Question',
+                    name: 'ফেসবুক পেজ মনিটাইজেশন (60k Watchtime ও Non-Drop Followers) করতে কত সময় লাগে?',
+                    acceptedAnswer: {
+                      '@type': 'Answer',
+                      text: 'আমাদের Facebook Page Monetization Package, 60,000 Minutes Watchtime এবং Non-Drop Profile/Page Followers সার্ভিস অর্ডার করার কয়েক মিনিটের মধ্যেই অটোমেটিক শুরু হয় এবং ২৪–৭২ ঘণ্টার মধ্যে সম্পন্ন হয়।'
+                    }
+                  },
+                  {
+                    '@type': 'Question',
+                    name: 'ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম ও ১০০০ সাবস্ক্রাইবার এবং টিকটক ভিউ কি নিরাপদ?',
+                    acceptedAnswer: {
+                      '@type': 'Answer',
+                      text: 'হ্যাঁ, আমাদের সকল YouTube 4000 Hours Watchtime, Monetization Subscribers এবং TikTok Viral Views সার্ভিস ১০০% অর্গানিক-প্যাটার্ন ও নন-ড্রপ রিফিল গ্যারান্টিযুক্ত।'
+                    }
+                  },
+                  {
+                    '@type': 'Question',
+                    name: 'অর্ডার ক্যানসেল বা পার্শিয়াল (Partial) হলে কি ওয়ালেটে টাকা রিফান্ড পাওয়া যায়?',
+                    acceptedAnswer: {
+                      '@type': 'Answer',
+                      text: 'হ্যাঁ, ১০০% অটোমেটিক। কোনো অর্ডার ক্যানসেল হলে সম্পূর্ণ টাকা এবং পার্শিয়াল হলে বাকি থাকা ইউনিটের টাকা স্বয়ংক্রিয়ভাবে আপনার ওয়ালেট ব্যালেন্সে রিফান্ড হয়ে যায়।'
+                    }
+                  }
+                ]
         }
       ]
     };
@@ -418,7 +546,7 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
       document.head.appendChild(scriptEl);
     }
     scriptEl.textContent = JSON.stringify(jsonLdGraph);
-  }, [currentTab, navParams, siteSettings, services]);
+  }, [currentTab, navParams, siteSettings, services, blogs]);
 
   // Optional Google Analytics 4 (gtag.js) injection
   useEffect(() => {
