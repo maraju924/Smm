@@ -27,7 +27,8 @@ import {
   createOrder,
   requestRefill,
   updateOrderStatus,
-  fetchServerHealthStatus
+  fetchServerHealthStatus,
+  safeParseJsonResponse
 } from '../../services/db';
 
 interface ApiDocsViewProps {
@@ -274,7 +275,7 @@ export const ApiDocsView: React.FC<ApiDocsViewProps> = ({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        const data = await res.json();
+        const data = await safeParseJsonResponse(res, 'API v2 add order request failed');
         const elapsed = Date.now() - startTime;
         setTestHttpCode(res.status);
         setTestLatencyMs(elapsed);
@@ -322,7 +323,7 @@ export const ApiDocsView: React.FC<ApiDocsViewProps> = ({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        const data = await res.json();
+        const data = await safeParseJsonResponse(res, 'API v2 refill request failed');
         setTestHttpCode(res.status);
         setTestLatencyMs(Date.now() - startTime);
 
@@ -345,7 +346,7 @@ export const ApiDocsView: React.FC<ApiDocsViewProps> = ({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        const data = await res.json();
+        const data = await safeParseJsonResponse(res, 'API v2 cancel request failed');
         setTestHttpCode(res.status);
         setTestLatencyMs(Date.now() - startTime);
 
@@ -372,7 +373,7 @@ export const ApiDocsView: React.FC<ApiDocsViewProps> = ({
         body: JSON.stringify(payload)
       });
 
-      const data = await res.json();
+      const data = await safeParseJsonResponse(res, 'API v2 request failed');
       setTestHttpCode(res.status);
       setTestLatencyMs(Date.now() - startTime);
       setTestResponse(JSON.stringify(data, null, 2));

@@ -108,14 +108,100 @@ export async function purgeAllDemoDataFromServer(): Promise<number> {
   return deletedCount;
 }
 
+export async function safeParseJsonResponse(resp: Response, fallbackErrorMsg: string): Promise<any> {
+  const rawText = await resp.text();
+  if (!rawText || !rawText.trim()) {
+    throw new Error(fallbackErrorMsg);
+  }
+  const trimmed = rawText.trim();
+  if (
+    trimmed.startsWith('<!DOCTYPE') ||
+    trimmed.startsWith('<html') ||
+    trimmed.startsWith('A server error') ||
+    trimmed.startsWith('FUNCTION_INVOCATION_FAILED')
+  ) {
+    throw new Error(fallbackErrorMsg);
+  }
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    throw new Error(fallbackErrorMsg);
+  }
+}
+
 export async function fetchServerHealthStatus(): Promise<ServerHealthStatus | null> {
   try {
     const res = await fetch('/api/server-status');
     if (!res.ok) return null;
-    return await res.json();
+    return await safeParseJsonResponse(res, 'Server health check unavailable');
   } catch {
     return null;
   }
+}
+
+/**
+ * Instant deterministic client-side social link normalizer & platform detector.
+ * Guarantees 0ms validation and acts as automatic fallback if the serverless endpoint is cold or unreachable.
+ */
+export function analyzeSocialLinkLocally(link: string): {
+  valid: boolean;
+  normalizedUrl?: string;
+  hostname?: string;
+  detectedPlatform?: string;
+  error?: string;
+} {
+  if (!link || typeof link !== 'string' || !link.trim()) {
+    return { valid: false, error: 'টার্গেট সোশ্যাল মিডিয়া লিংক প্রদান করুন (URL link is required)' };
+  }
+
+  let candidate = link.trim();
+  if (candidate.includes(' ')) {
+    return { valid: false, error: 'লিংকের ভেতরে স্পেস রাখা যাবে না (Spaces are not allowed in URL)' };
+  }
+
+  if (!/^https?:\/\//i.test(candidate)) {
+    candidate = `https://${candidate}`;
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(candidate);
+  } catch {
+    return {
+      valid: false,
+      error: 'সঠিক সোশ্যাল মিডিয়া লিংক প্রদান করুন (যেমন: https://www.facebook.com/...)'
+    };
+  }
+
+  if (!['http:', 'https:'].includes(parsedUrl.protocol) || !parsedUrl.hostname.includes('.')) {
+    return {
+      valid: false,
+      error: 'সঠিক ওয়েবসাইট বা সোশ্যাল মিডিয়া লিংক দিন (Valid HTTP/HTTPS link required)'
+    };
+  }
+
+  const host = parsedUrl.hostname.toLowerCase();
+  let detectedPlatform = 'Other';
+  if (host.includes('facebook.com') || host.includes('fb.watch') || host.includes('fb.com')) {
+    detectedPlatform = 'Facebook';
+  } else if (host.includes('instagram.com') || host.includes('instagr.am') || host.includes('threads.net')) {
+    detectedPlatform = 'Instagram';
+  } else if (host.includes('youtube.com') || host.includes('youtu.be')) {
+    detectedPlatform = 'YouTube';
+  } else if (host.includes('tiktok.com')) {
+    detectedPlatform = 'TikTok';
+  } else if (host.includes('t.me') || host.includes('telegram.me') || host.includes('telegram.org')) {
+    detectedPlatform = 'Telegram';
+  } else if (host.includes('twitter.com') || host.includes('x.com')) {
+    detectedPlatform = 'Twitter';
+  }
+
+  return {
+    valid: true,
+    normalizedUrl: parsedUrl.toString(),
+    hostname: host,
+    detectedPlatform
+  };
 }
 
 export async function analyzeSocialLinkOnServer(link: string): Promise<{
@@ -125,15 +211,30 @@ export async function analyzeSocialLinkOnServer(link: string): Promise<{
   detectedPlatform?: string;
   error?: string;
 }> {
+  const localResult = analyzeSocialLinkLocally(link);
+  if (!localResult.valid) {
+    return localResult;
+  }
+
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3500);
     const res = await fetch('/api/analyze-link', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ link })
+      body: JSON.stringify({ link: localResult.normalizedUrl || link.trim() }),
+      signal: controller.signal
     });
-    return await res.json();
-  } catch (err: any) {
-    return { valid: false, error: err?.message || 'Server link check failed' };
+    clearTimeout(timer);
+
+    const data = await safeParseJsonResponse(res, 'Fallback to client validator');
+    if (res.ok && data && typeof data.valid === 'boolean') {
+      return data;
+    }
+    return localResult;
+  } catch {
+    // Seamless instant fallback to client-side validation when serverless endpoint is cold or unreachable
+    return localResult;
   }
 }
 
@@ -276,10 +377,16 @@ export async function createOrder(
 
   // If service is linked to an upstream API provider, try dispatching via Express backend server
   if (serviceObj?.providerId && serviceObj?.providerServiceId) {
+    let provApiUrl = '';
+    let provApiKey = '';
+    let provName = 'Provider';
+    let shouldDispatch = true;
+
     try {
       const provSnap = await getDoc(doc(db, 'providers', serviceObj.providerId));
       if (provSnap.exists()) {
         const prov = provSnap.data() as SMMProvider;
+        provName = prov.name || 'Provider';
         const exchangeMult = prov.currency?.toUpperCase() === 'USD' || !prov.currency
           ? (prov.customExchangeRate && prov.customExchangeRate > 0 ? prov.customExchangeRate : 122)
           : 1;
@@ -290,30 +397,43 @@ export async function createOrder(
         }
 
         if (prov.status === 'active' && prov.apiUrl && prov.apiKey) {
-          const resp = await fetch('/api/provider/order', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              apiUrl: prov.apiUrl,
-              apiKey: prov.apiKey,
-              providerServiceId: serviceObj.providerServiceId,
-              link: order.link,
-              quantity: order.quantity,
-              runs: order.runs,
-              interval: order.interval,
-              customComments: order.customComments
-            })
-          });
-          if (resp.ok) {
-            const pData = await resp.json();
-            if (pData.providerOrderId) {
-              upstreamOrderId = String(pData.providerOrderId);
-            }
-          }
+          provApiUrl = prov.apiUrl;
+          provApiKey = prov.apiKey;
+        } else if (prov.status === 'inactive') {
+          shouldDispatch = false;
         }
       }
-    } catch (e) {
-      console.warn('Upstream API order dispatch notice (order saved in queue):', e);
+    } catch {
+      // Non-admin customers cannot read providers/{id} directly from browser; server will resolve providerId
+    }
+
+    if (shouldDispatch) {
+      try {
+        const resp = await fetch('/api/provider/order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            providerId: serviceObj.providerId,
+            providerName: provName,
+            ...(provApiUrl ? { apiUrl: provApiUrl } : {}),
+            ...(provApiKey ? { apiKey: provApiKey } : {}),
+            providerServiceId: serviceObj.providerServiceId,
+            link: order.link,
+            quantity: order.quantity,
+            runs: order.runs,
+            interval: order.interval,
+            customComments: order.customComments
+          })
+        });
+        if (resp.ok) {
+          const pData = await safeParseJsonResponse(resp, 'Order queued locally');
+          if (pData && pData.providerOrderId) {
+            upstreamOrderId = String(pData.providerOrderId);
+          }
+        }
+      } catch (e) {
+        console.warn('Upstream API order dispatch notice (order saved in queue):', e);
+      }
     }
   } else if (serviceObj?.originalRate && serviceObj.originalRate > 0) {
     computedProviderCostBdt = Number(((serviceObj.originalRate * order.quantity) / 1000).toFixed(2));
@@ -640,22 +760,6 @@ export async function rejectPaymentDeposit(paymentId: string): Promise<void> {
 // ==========================================
 // 5B. ZINIPAY AUTOMATED PAYMENT GATEWAY CLIENT ENGINE
 // ==========================================
-
-async function safeParseJsonResponse(resp: Response, fallbackErrorMsg: string): Promise<any> {
-  const rawText = await resp.text();
-  if (!rawText || !rawText.trim()) {
-    throw new Error(fallbackErrorMsg);
-  }
-  const trimmed = rawText.trim();
-  if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html')) {
-    throw new Error(fallbackErrorMsg);
-  }
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    throw new Error(fallbackErrorMsg);
-  }
-}
 
 export async function createZiniPayCheckoutInvoice(params: {
   userId: string;
@@ -1601,6 +1705,7 @@ export async function pingProviderOnServer(provider: SMMProvider): Promise<{
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      providerId: provider.id,
       providerName: provider.name,
       apiUrl: provider.apiUrl,
       apiKey: provider.apiKey,
@@ -1650,6 +1755,7 @@ export async function checkProviderBalanceOnServer(provider: SMMProvider): Promi
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      providerId: provider.id,
       providerName: provider.name,
       apiUrl: provider.apiUrl,
       apiKey: provider.apiKey
@@ -2142,6 +2248,7 @@ export async function syncActiveOrdersWithProviders(
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            providerId: prov.id,
             providerName: prov.name,
             apiUrl: prov.apiUrl,
             apiKey: prov.apiKey,
@@ -2149,7 +2256,7 @@ export async function syncActiveOrdersWithProviders(
           })
         });
         if (resp.ok) {
-          const multiData = await resp.json();
+          const multiData = await safeParseJsonResponse(resp, 'Batch status check failed');
           const results = multiData.results || {};
           if (Object.keys(results).length > 0) {
             batchHandled = true;
@@ -2180,6 +2287,7 @@ export async function syncActiveOrdersWithProviders(
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+              providerId: prov.id,
               providerName: prov.name,
               apiUrl: prov.apiUrl,
               apiKey: prov.apiKey,
@@ -2188,7 +2296,7 @@ export async function syncActiveOrdersWithProviders(
           });
 
           if (!resp.ok) continue;
-          const statusData = await resp.json();
+          const statusData = await safeParseJsonResponse(resp, 'Status check failed');
           if (statusData.mappedStatus) {
             await updateOrderStatus(
               ord.id,
@@ -2220,7 +2328,7 @@ export async function fetchServerApiTrafficLogs(): Promise<{
     if (!resp.ok) {
       return { totalCalls: 0, successRate: 100, avgLatencyMs: 0, logs: [] };
     }
-    const data = await resp.json();
+    const data = await safeParseJsonResponse(resp, 'Empty traffic logs');
     return {
       totalCalls: data.totalCalls || 0,
       successRate: data.successRate ?? 100,
