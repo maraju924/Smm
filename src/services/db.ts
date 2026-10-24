@@ -442,6 +442,7 @@ export async function createOrder(
   const newOrder: SMMOrder = {
     ...order,
     id: orderId,
+    status: upstreamOrderId ? 'in_progress' : order.status,
     startCount: order.startCount ?? 0,
     remains: order.quantity,
     ...(serviceObj?.providerId ? { providerId: serviceObj.providerId } : {}),
@@ -505,6 +506,18 @@ export async function updateOrderStatus(
       (orderData.remains ?? 0) === remains
     ) {
       return;
+    }
+
+    // If cancelling an order that was already dispatched to an upstream provider, notify upstream cancel endpoint automatically
+    if (status === 'canceled' && orderData?.providerId && orderData?.providerOrderId) {
+      fetch('/api/provider/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          providerId: orderData.providerId,
+          providerOrderId: orderData.providerOrderId
+        })
+      }).catch(() => {});
     }
 
     // Calculate refund if Canceled or Partial (and wasn't already refunded)
@@ -596,7 +609,8 @@ export async function requestRefill(
   orderId: string,
   userId: string,
   userEmail: string,
-  serviceName: string
+  serviceName: string,
+  order?: SMMOrder
 ): Promise<string> {
   const refillId = 'REF-' + Math.floor(10000 + Math.random() * 90000);
   const newRefill: SMMRefill = {
@@ -612,6 +626,31 @@ export async function requestRefill(
   const path = `refills/${refillId}`;
   try {
     await setDoc(doc(db, 'refills', refillId), sanitizeForFirestore(newRefill));
+
+    // Automatically forward refill to upstream provider if order has providerId and providerOrderId
+    if (order?.providerId && order?.providerOrderId) {
+      try {
+        const resp = await fetch('/api/provider/refill', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            providerId: order.providerId,
+            providerOrderId: order.providerOrderId
+          })
+        });
+        if (resp.ok) {
+          const data = await safeParseJsonResponse(resp, 'Refill queued');
+          if (!data.error) {
+            await updateDoc(doc(db, 'refills', refillId), sanitizeForFirestore({
+              status: 'completed'
+            }));
+          }
+        }
+      } catch {
+        // Stays pending in Firestore queue if upstream provider refill endpoint is temporarily unreachable
+      }
+    }
+
     return refillId;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
@@ -2215,18 +2254,76 @@ export async function forwardRefillToProvider(
 
 /**
  * Queries real upstream SMM providers via our Express Server (/api/provider/multi-status & /api/provider/status)
- * for all active orders that have a `providerOrderId` and `providerId`.
+ * for all active orders, and automatically retries dispatching any undispatched pending API orders.
+ * Works 100% automatically for both regular customers and admins (server resolves providerId credentials).
  */
 export async function syncActiveOrdersWithProviders(
   orders: SMMOrder[],
-  providers: SMMProvider[] = []
+  providers: SMMProvider[] = [],
+  services: SMMService[] = []
 ): Promise<number> {
+  if (isFirestoreQuotaExhausted()) return 0;
+
+  let updatedCount = 0;
+
+  // 1. Auto-dispatch any pending orders that haven't received a providerOrderId yet
+  const undispatchedOrders = orders.filter(
+    o => o.status === 'pending' && !o.providerOrderId
+  );
+
+  for (const ord of undispatchedOrders) {
+    const srv = services.find(s => s.id === ord.serviceId);
+    const targetProviderId = ord.providerId || srv?.providerId;
+    const targetProviderServiceId = srv?.providerServiceId;
+    if (!targetProviderId || !targetProviderServiceId) continue;
+
+    const prov = providers.find(p => p.id === targetProviderId);
+    if (prov && (prov.status === 'inactive' || prov.autoForwardOrders === false)) continue;
+
+    try {
+      const resp = await fetch('/api/provider/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          providerId: targetProviderId,
+          providerName: prov?.name || 'Provider',
+          ...(prov?.apiUrl ? { apiUrl: prov.apiUrl } : {}),
+          ...(prov?.apiKey ? { apiKey: prov.apiKey } : {}),
+          providerServiceId: targetProviderServiceId,
+          link: ord.link,
+          quantity: ord.quantity,
+          runs: ord.runs,
+          interval: ord.interval,
+          customComments: ord.customComments
+        })
+      });
+
+      if (resp.ok) {
+        const data = await safeParseJsonResponse(resp, 'Auto-dispatch queued');
+        if (data && data.providerOrderId) {
+          const providerOrderId = String(data.providerOrderId);
+          await updateDoc(doc(db, 'orders', ord.id), sanitizeForFirestore({
+            providerId: targetProviderId,
+            providerOrderId,
+            status: 'in_progress',
+            updatedAt: Date.now()
+          }));
+          ord.providerId = targetProviderId;
+          ord.providerOrderId = providerOrderId;
+          ord.status = 'in_progress';
+          updatedCount++;
+        }
+      }
+    } catch {
+      // Will retry on next auto-sync cycle
+    }
+  }
+
+  // 2. Sync live status, startCount, remains & trigger automatic Partial/Canceled refunds
   const activeOrders = orders.filter(
     o => ['pending', 'processing', 'in_progress'].includes(o.status) && o.providerId && o.providerOrderId
   );
-  if (activeOrders.length === 0) return 0;
-
-  let updatedCount = 0;
+  if (activeOrders.length === 0) return updatedCount;
 
   // Group active orders by providerId for high-speed batch multi-status sync
   const byProvider = new Map<string, SMMOrder[]>();
@@ -2238,7 +2335,6 @@ export async function syncActiveOrdersWithProviders(
 
   for (const [pid, provOrders] of byProvider.entries()) {
     const prov = providers.find(p => p.id === pid);
-    if (!prov || !prov.apiUrl || !prov.apiKey) continue;
 
     // Try batch multi-status endpoint first if > 1 order
     let batchHandled = false;
@@ -2248,10 +2344,10 @@ export async function syncActiveOrdersWithProviders(
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            providerId: prov.id,
-            providerName: prov.name,
-            apiUrl: prov.apiUrl,
-            apiKey: prov.apiKey,
+            providerId: pid,
+            providerName: prov?.name || 'Provider',
+            ...(prov?.apiUrl ? { apiUrl: prov.apiUrl } : {}),
+            ...(prov?.apiKey ? { apiKey: prov.apiKey } : {}),
             providerOrderIds: provOrders.map(o => o.providerOrderId)
           })
         });
@@ -2287,10 +2383,10 @@ export async function syncActiveOrdersWithProviders(
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              providerId: prov.id,
-              providerName: prov.name,
-              apiUrl: prov.apiUrl,
-              apiKey: prov.apiKey,
+              providerId: pid,
+              providerName: prov?.name || 'Provider',
+              ...(prov?.apiUrl ? { apiUrl: prov.apiUrl } : {}),
+              ...(prov?.apiKey ? { apiKey: prov.apiKey } : {}),
               providerOrderId: ord.providerOrderId
             })
           });

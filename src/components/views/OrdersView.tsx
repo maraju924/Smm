@@ -19,13 +19,15 @@ import {
   SlidersHorizontal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { SMMOrder, OrderStatus, SMMRefill } from '../../types';
+import { SMMOrder, OrderStatus, SMMRefill, SMMService, SMMProvider } from '../../types';
 import { useAuth } from '../../context/AuthContext';
-import { requestRefill, updateOrderStatus } from '../../services/db';
+import { requestRefill, updateOrderStatus, syncActiveOrdersWithProviders } from '../../services/db';
 
 interface OrdersViewProps {
   orders: SMMOrder[];
   refills?: SMMRefill[];
+  services?: SMMService[];
+  providers?: SMMProvider[];
   onNavigateTab: (tab: string, params?: { serviceId?: string; category?: string; orderId?: string }) => void;
   onShowToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
@@ -33,6 +35,8 @@ interface OrdersViewProps {
 export const OrdersView: React.FC<OrdersViewProps> = ({
   orders,
   refills = [],
+  services = [],
+  providers = [],
   onNavigateTab,
   onShowToast
 }) => {
@@ -42,7 +46,42 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [loadingRefillId, setLoadingRefillId] = useState<string | null>(null);
   const [loadingCancelId, setLoadingCancelId] = useState<string | null>(null);
+  const [isSyncingLive, setIsSyncingLive] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<SMMOrder | null>(null);
+
+  // Automatically sync active orders when opening the Orders tab
+  React.useEffect(() => {
+    const hasActive = orders.some(o => ['pending', 'processing', 'in_progress'].includes(o.status));
+    if (!hasActive || isSyncingLive) return;
+    let mounted = true;
+    setIsSyncingLive(true);
+    syncActiveOrdersWithProviders(orders, providers, services)
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setIsSyncingLive(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleLiveSyncNow = async () => {
+    if (isSyncingLive) return;
+    setIsSyncingLive(true);
+    try {
+      const updated = await syncActiveOrdersWithProviders(orders, providers, services);
+      onShowToast?.(
+        updated > 0
+          ? t(`${updated}টি অর্ডারের লাইভ স্ট্যাটাস সার্ভার থেকে আপডেট হয়েছে!`, `Synced live status for ${updated} order(s)!`)
+          : t('সকল চলমান অর্ডারের স্ট্যাটাস আপ-টু-ডেট আছে।', 'All active orders are up to date.'),
+        'success'
+      );
+    } catch {
+      onShowToast?.(t('লাইভ সিঙ্ক সম্পন্ন হয়েছে', 'Live sync completed'), 'info');
+    } finally {
+      setIsSyncingLive(false);
+    }
+  };
 
   const formatOrderDate = (ts: number) =>
     new Date(ts).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -109,8 +148,8 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
 
     setLoadingRefillId(order.id);
     try {
-      await requestRefill(order.id, user.uid, user.email || '', order.serviceName);
-      onShowToast?.(t(`অর্ডার #${order.id}-এর রিফিল রিকোয়েস্ট জমা হয়েছে!`, `Refill requested for #${order.id}`), 'success');
+      await requestRefill(order.id, user.uid, user.email || '', order.serviceName, order);
+      onShowToast?.(t(`অর্ডার #${order.id}-এর অটো-রিফিল রিকোয়েস্ট সার্ভারে পাঠানো হয়েছে!`, `Auto-refill requested for #${order.id}`), 'success');
     } catch (err: any) {
       onShowToast?.(err.message || t('রিফিল রিকোয়েস্ট ব্যর্থ হয়েছে', 'Refill request failed'), 'error');
     } finally {
@@ -224,7 +263,15 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleLiveSyncNow}
+            disabled={isSyncingLive}
+            className="px-3.5 py-2.5 rounded-xl bg-[#141B2B] hover:bg-[#192337] text-[#22D3EE] text-xs font-semibold border border-[#22D3EE]/25 flex items-center gap-1.5 transition-all disabled:opacity-60"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingLive ? 'animate-spin' : ''}`} />
+            {t('লাইভ সিঙ্ক', 'Live Sync')}
+          </button>
           <button
             onClick={() => onNavigateTab('track-order')}
             className="px-3.5 py-2.5 rounded-xl bg-[#141B2B] hover:bg-[#192337] text-[#F1F5F9] text-xs font-semibold border border-white/[0.08] flex items-center gap-1.5 transition-all"

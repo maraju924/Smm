@@ -155,11 +155,15 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
           label: language === 'bn' ? 'রিফান্ড ও লিগ্যাল পলিসি' : 'Refund & Legal Policies',
           icon: Sparkles
         },
-        {
-          id: 'landing',
-          label: language === 'bn' ? 'পাবলিক ল্যান্ডিং পেজ' : 'Public Landing Page',
-          icon: Sparkles
-        }
+        ...(!profile
+          ? [
+              {
+                id: 'landing',
+                label: language === 'bn' ? 'পাবলিক ল্যান্ডিং পেজ' : 'Public Landing Page',
+                icon: Sparkles
+              }
+            ]
+          : [])
       ]
     }
   ];

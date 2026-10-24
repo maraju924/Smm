@@ -177,12 +177,41 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
       upsertMetaTag('name', 'twitter:image', siteSettings.seoOgImage.trim());
     }
 
-    // Google Search Console verification tag
+    // Google Search Console verification tag (prepended to top of <head> & supports raw token, <meta> tag, or google*.html)
     if (siteSettings.googleSiteVerification?.trim()) {
-      const cleanToken = siteSettings.googleSiteVerification
-        .trim()
-        .replace(/^.*content=["']([^"']+)["'].*$/i, '$1');
-      upsertMetaTag('name', 'google-site-verification', cleanToken);
+      const rawVerif = siteSettings.googleSiteVerification.trim();
+      const metaMatch = rawVerif.match(/content=["']([^"']+)["']/i);
+      const prefixMatch = rawVerif.match(/^google-site-verification[=:\s]+([^\s"'>]+)/i);
+      const cleanToken = metaMatch?.[1]
+        ? metaMatch[1].trim()
+        : prefixMatch?.[1]
+        ? prefixMatch[1].trim()
+        : rawVerif.replace(/^<meta[^>]*>|<\/meta>$/gi, '').replace(/\.html$/i, '').trim();
+
+      let gscMeta = document.head.querySelector('meta[name="google-site-verification"]') as HTMLMetaElement | null;
+      if (!gscMeta) {
+        gscMeta = document.createElement('meta');
+        gscMeta.setAttribute('name', 'google-site-verification');
+        document.head.prepend(gscMeta);
+      }
+      gscMeta.setAttribute('content', cleanToken);
+    }
+
+    // Google Analytics 4 (gtag.js) injection (Also enables Google Search Console verification via GA4)
+    if (siteSettings.googleAnalyticsId?.trim()) {
+      const gaId = siteSettings.googleAnalyticsId.trim();
+      if (/^G-[A-Z0-9]+$/i.test(gaId) && !document.getElementById('ga4-gtag-script')) {
+        const scriptAsync = document.createElement('script');
+        scriptAsync.id = 'ga4-gtag-script';
+        scriptAsync.async = true;
+        scriptAsync.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(gaId)}`;
+        document.head.prepend(scriptAsync);
+
+        const scriptInit = document.createElement('script');
+        scriptInit.id = 'ga4-gtag-init';
+        scriptInit.text = `window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', '${gaId}');`;
+        document.head.prepend(scriptInit);
+      }
     }
 
     // Canonical & Hreflang links for Google Bangladesh

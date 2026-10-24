@@ -121,7 +121,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   const currentMeta = getTabTitle(currentTab);
 
   const mobileSecondaryTabs = [
-    { id: 'landing', label: language === 'bn' ? 'ল্যান্ডিং পেজ' : 'Landing', icon: LayoutGrid },
+    ...(!profile
+      ? [{ id: 'landing', label: language === 'bn' ? 'ল্যান্ডিং পেজ' : 'Landing', icon: LayoutGrid }]
+      : []),
     { id: 'services', label: language === 'bn' ? 'সার্ভিস লিস্ট' : 'Services', icon: Layers },
     { id: 'analytics', label: language === 'bn' ? 'অ্যানালিটিক্স' : 'Analytics', icon: BarChart3 },
     { id: 'track-order', label: language === 'bn' ? 'লাইভ ট্র্যাক' : 'Track', icon: Clock },

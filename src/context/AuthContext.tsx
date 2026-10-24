@@ -143,12 +143,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
+        try {
+          localStorage.setItem('amartrend_auth_active', '1');
+        } catch {
+          // Ignore if storage is restricted
+        }
+
+        const isEmailAdmin = isSuperAdminEmail(currentUser.email);
+        // Set immediate optimistic profile so logged-in users go straight to Dashboard with zero delay
+        setProfile((prev) => prev || {
+          uid: currentUser.uid,
+          email: currentUser.email || '',
+          displayName: currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : 'User'),
+          photoURL: currentUser.photoURL || '',
+          balance: 0,
+          totalSpent: 0,
+          role: isEmailAdmin ? 'admin' : 'user',
+          currency: 'BDT',
+          language: 'bn',
+          darkMode: true,
+          apiKey: '',
+          referralCode: `AMT-${currentUser.uid.substring(0, 6).toUpperCase()}`,
+          referralCount: 0,
+          referralEarnings: 0,
+          unpaidReferralEarnings: 0,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        });
+
         const userRef = doc(db, 'users', currentUser.uid);
         
         const unSubDoc = onSnapshot(userRef, async (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data() as UserProfile;
-            const isEmailAdmin = isSuperAdminEmail(currentUser.email);
 
             if (isEmailAdmin && data.role !== 'admin' && !isFirestoreQuotaExhausted()) {
               try {
@@ -173,7 +200,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
           } else {
             // Create clean production user document on server (0 starter balance, no fake funds)
-            const isEmailAdmin = isSuperAdminEmail(currentUser.email);
             const newProfile: UserProfile = {
               uid: currentUser.uid,
               email: currentUser.email || '',
@@ -220,6 +246,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         return () => unSubDoc();
       } else {
+        try {
+          localStorage.removeItem('amartrend_auth_active');
+        } catch {
+          // Ignore if storage is restricted
+        }
         setProfile(null);
         setLoading(false);
       }

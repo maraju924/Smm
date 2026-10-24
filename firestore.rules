@@ -65,7 +65,10 @@ service cloud.firestore {
       allow update: if isAdmin() || (
         isSignedIn() &&
         resource.data.userId == request.auth.uid &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt'])
+        incoming().userId == existing().userId &&
+        incoming().charge == existing().charge &&
+        incoming().quantity == existing().quantity &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'startCount', 'remains', 'providerId', 'providerOrderId', 'updatedAt'])
       );
       allow delete: if isAdmin();
     }
@@ -75,7 +78,12 @@ service cloud.firestore {
       allow get: if true;
       allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && incoming().userId == request.auth.uid;
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        isSignedIn() &&
+        resource.data.userId == request.auth.uid &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'providerRefillId'])
+      );
+      allow delete: if isAdmin();
     }
 
     // API Keys Index for /api/v2 Server Authentication
@@ -119,9 +127,10 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Upstream API Providers (Admin Only)
+    // Upstream API Providers (Server Get by ID + Admin Full Control)
     match /providers/{providerId} {
-      allow read, write: if isAdmin();
+      allow get: if true;
+      allow list, write: if isAdmin();
     }
 
     // Promo Codes / Coupons

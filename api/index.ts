@@ -2503,6 +2503,71 @@ Sitemap: ${baseOrigin}/sitemap.xml
   res.status(200).send(robotsContent);
 };
 
+export function extractCleanGscToken(rawInput?: string): string {
+  if (!rawInput) return '';
+  const trimmed = String(rawInput).trim();
+  if (!trimmed) return '';
+  const metaMatch = trimmed.match(/content=["']([^"']+)["']/i);
+  if (metaMatch && metaMatch[1]) {
+    return metaMatch[1].trim();
+  }
+  const prefixMatch = trimmed.match(/^google-site-verification[=:\s]+([^\s"'>]+)/i);
+  if (prefixMatch && prefixMatch[1]) {
+    return prefixMatch[1].trim();
+  }
+  return trimmed.replace(/^<meta[^>]*>|<\/meta>$/gi, '').trim();
+}
+
+export async function getServerGoogleVerificationToken(): Promise<string> {
+  if (serverSettingsCache?.googleSiteVerification) {
+    return extractCleanGscToken(serverSettingsCache.googleSiteVerification);
+  }
+  try {
+    const snap = await getDoc(doc(serverDb, 'settings', 'global'));
+    if (snap.exists()) {
+      const data = snap.data() || {};
+      serverSettingsCache = { ...data, ...serverSettingsCache };
+      return extractCleanGscToken(data.googleSiteVerification);
+    }
+  } catch {
+    // ignore
+  }
+  return '';
+}
+
+// Automatic Google Search Console HTML File Verification (Works for ANY googleXXXXXXXX.html file)
+const handleGoogleVerificationFile = (req: Request, res: Response) => {
+  const match = req.path.match(/(google[a-zA-Z0-9_-]+\.html)$/i);
+  const fileName = match ? match[1] : String(req.query.file || 'google.html');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  res.status(200).send(`google-site-verification: ${fileName}`);
+};
+
+app.get(/^\/(api\/)?google[a-zA-Z0-9_-]+\.html$/i, handleGoogleVerificationFile);
+
+app.get('/api/seo/verify-status', async (_req: Request, res: Response) => {
+  const token = await getServerGoogleVerificationToken();
+  const htmlFileName = token
+    ? token.endsWith('.html')
+      ? token.startsWith('google')
+        ? token
+        : `google${token}`
+      : token.startsWith('google')
+      ? `${token}.html`
+      : `google${token}.html`
+    : 'google1234567890abcdef.html';
+
+  res.json({
+    status: 'ready',
+    token,
+    metaTag: token ? `<meta name="google-site-verification" content="${token}" />` : '',
+    htmlFileSupported: true,
+    sampleHtmlFileUrl: `/${htmlFileName}`,
+    expectedFileResponse: `google-site-verification: ${htmlFileName}`
+  });
+});
+
 app.get('/sitemap.xml', handleSitemapXml);
 app.get('/api/sitemap.xml', handleSitemapXml);
 app.get('/robots.txt', handleRobotsTxt);

@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { SMMOrder } from '../../types';
-import { fetchOrderByIdFromServer } from '../../services/db';
+import { fetchOrderByIdFromServer, syncActiveOrdersWithProviders } from '../../services/db';
 
 interface TrackOrderViewProps {
   orders: SMMOrder[];
@@ -43,7 +43,13 @@ export const TrackOrderView: React.FC<TrackOrderViewProps> = ({
 
     try {
       // First check live server directly for authoritative state
-      const serverOrd = await fetchOrderByIdFromServer(cleaned);
+      let serverOrd = await fetchOrderByIdFromServer(cleaned);
+      if (serverOrd && ['pending', 'processing', 'in_progress'].includes(serverOrd.status) && serverOrd.providerId && serverOrd.providerOrderId) {
+        await syncActiveOrdersWithProviders([serverOrd]);
+        const refreshedOrd = await fetchOrderByIdFromServer(cleaned);
+        if (refreshedOrd) serverOrd = refreshedOrd;
+      }
+
       if (serverOrd) {
         setSearchedOrder(serverOrd);
       } else {

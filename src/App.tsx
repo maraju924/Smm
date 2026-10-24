@@ -108,28 +108,48 @@ function normalizeTabId(raw: string): string {
   return VALID_APP_TABS.has(clean) ? clean : '404';
 }
 
+function hasStoredAuthSession(): boolean {
+  try {
+    if (localStorage.getItem('amartrend_auth_active') === '1') return true;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('firebase:authUser:')) return true;
+    }
+  } catch {
+    // Ignore storage access errors
+  }
+  return false;
+}
+
 function resolveInitialRoute(): { tab: string; isWorkspace: boolean; params: any } {
   const searchParams = new URLSearchParams(window.location.search);
   const tabParam = searchParams.get('tab');
   const catParam = searchParams.get('category');
   const pathname = window.location.pathname.replace(/^\/+|\/+$/g, '');
+  const sessionActive = hasStoredAuthSession();
 
   if (tabParam) {
     const resolved = normalizeTabId(tabParam);
+    const effective = sessionActive && resolved === 'landing' ? 'home' : resolved;
     return {
-      tab: resolved,
-      isWorkspace: !PRODUCTION_PAGE_TABS.has(resolved) && resolved !== 'landing',
+      tab: effective,
+      isWorkspace: sessionActive || (!PRODUCTION_PAGE_TABS.has(effective) && effective !== 'landing'),
       params: catParam ? { category: catParam } : {}
     };
   }
 
   if (pathname && pathname !== 'index.html') {
     const resolved = normalizeTabId(pathname);
+    const effective = sessionActive && resolved === 'landing' ? 'home' : resolved;
     return {
-      tab: resolved,
-      isWorkspace: !PRODUCTION_PAGE_TABS.has(resolved) && resolved !== 'landing',
+      tab: effective,
+      isWorkspace: sessionActive || (!PRODUCTION_PAGE_TABS.has(effective) && effective !== 'landing'),
       params: catParam ? { category: catParam } : {}
     };
+  }
+
+  if (sessionActive) {
+    return { tab: 'home', isWorkspace: true, params: {} };
   }
 
   return { tab: 'landing', isWorkspace: false, params: {} };
@@ -145,12 +165,22 @@ const ViewLoadingFallback: React.FC = () => (
 );
 
 const MainAppContent: React.FC = () => {
-  const { profile, isAdmin } = useAuth();
+  const { user, profile, loading, isAdmin } = useAuth();
+  const isLoggedIn = Boolean(user || profile || (loading && hasStoredAuthSession()));
   
   // Navigation tab (supports deep-linked SEO URLs like /?tab=about, /about, /?tab=services&category=Facebook)
   const [currentTab, setCurrentTab] = useState<string>(() => resolveInitialRoute().tab);
   const [guestWorkspaceMode, setGuestWorkspaceMode] = useState<boolean>(() => resolveInitialRoute().isWorkspace);
   const [navParams, setNavParams] = useState<any>(() => resolveInitialRoute().params);
+
+  // Immediately route logged-in users away from 'landing' to 'home' (Dashboard)
+  useEffect(() => {
+    if (isLoggedIn && currentTab === 'landing') {
+      setCurrentTab('home');
+    } else if (!isLoggedIn && !loading && currentTab === 'home' && !guestWorkspaceMode) {
+      setCurrentTab('landing');
+    }
+  }, [isLoggedIn, loading, currentTab, guestWorkspaceMode]);
 
   // Modals & Layout State
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -218,12 +248,12 @@ const MainAppContent: React.FC = () => {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
-  // Lightweight 5-Minute Background Sync ONLY for Active Orders (Zero redundant catalog writes)
+  // Automatic 60-Second Background Sync for Active Orders (Works for ALL logged-in customers & Admin 24/7)
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!profile) return;
 
     const runAutoSync = async () => {
-      if (isAutoSyncingRef.current || providersRef.current.length === 0) return;
+      if (isAutoSyncingRef.current) return;
       const hasActiveOrders = ordersRef.current.some(o =>
         ['pending', 'processing', 'in_progress'].includes(o.status)
       );
@@ -232,18 +262,26 @@ const MainAppContent: React.FC = () => {
       isAutoSyncingRef.current = true;
       setIsSyncingCatalog(true);
       try {
-        await syncActiveOrdersWithProviders(ordersRef.current, providersRef.current);
+        await syncActiveOrdersWithProviders(
+          ordersRef.current,
+          providersRef.current,
+          servicesRef.current
+        );
       } catch (e) {
-        console.warn('Automatic 5m order status sync warning:', e);
+        console.warn('Automatic order status sync warning:', e);
       } finally {
         isAutoSyncingRef.current = false;
         setIsSyncingCatalog(false);
       }
     };
 
-    const intervalId = setInterval(runAutoSync, FIVE_MINUTES_MS);
-    return () => clearInterval(intervalId);
-  }, [isAdmin]);
+    const initialTimer = setTimeout(runAutoSync, 3500);
+    const intervalId = setInterval(runAutoSync, 60 * 1000);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(intervalId);
+    };
+  }, [profile]);
 
   // Subscribe Services, Announcements, Coupons & Site Settings (Public)
   // Deferred slightly on initial paint so Mobile FCP/LCP & Total Blocking Time achieve 95-100 on PageSpeed Insights
@@ -253,6 +291,9 @@ const MainAppContent: React.FC = () => {
     let unsubCoupons: (() => void) | null = null;
     let unsubSettings: (() => void) | null = null;
 
+    // Subscribe to Global Site Settings immediately (0ms delay) so Google Search Console verification tag is injected right away
+    unsubSettings = subscribeSiteSettings(setSiteSettings);
+
     const attachPublicListeners = () => {
       unsubServices = subscribeServices((loadedServices) => {
         setServices(loadedServices);
@@ -260,10 +301,9 @@ const MainAppContent: React.FC = () => {
       });
       unsubAnnouncements = subscribeAnnouncements(setAnnouncements);
       unsubCoupons = subscribeCoupons(setCoupons);
-      unsubSettings = subscribeSiteSettings(setSiteSettings);
     };
 
-    const timerId = window.setTimeout(attachPublicListeners, 900);
+    const timerId = window.setTimeout(attachPublicListeners, 600);
 
     return () => {
       window.clearTimeout(timerId);
@@ -317,7 +357,9 @@ const MainAppContent: React.FC = () => {
   }, [profile?.uid, isAdmin]);
 
   const handleNavigate = (tabId: string, params?: any) => {
-    const normalized = normalizeTabId(tabId);
+    const rawNormalized = normalizeTabId(tabId);
+    // Logged-in users can NEVER navigate to the public landing page; always route to Dashboard ('home')
+    const normalized = isLoggedIn && rawNormalized === 'landing' ? 'home' : rawNormalized;
     setCurrentTab(normalized);
     setNavParams(params || {});
 
@@ -325,7 +367,7 @@ const MainAppContent: React.FC = () => {
     try {
       const url = new URL(window.location.href);
       url.pathname = '/';
-      if (normalized === 'landing') {
+      if (normalized === 'landing' || (isLoggedIn && normalized === 'home')) {
         url.search = '';
       } else {
         url.searchParams.set('tab', normalized === 'api-docs' ? 'api' : normalized === 'track-order' ? 'track' : normalized);
@@ -346,12 +388,12 @@ const MainAppContent: React.FC = () => {
   useEffect(() => {
     const onPopState = () => {
       const route = resolveInitialRoute();
-      setCurrentTab(route.tab);
+      setCurrentTab(isLoggedIn && route.tab === 'landing' ? 'home' : route.tab);
       setNavParams(route.params);
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, []);
+  }, [isLoggedIn]);
 
   const inProgressOrderCount = orders.filter(o => ['in_progress', 'processing'].includes(o.status)).length;
 
@@ -418,8 +460,8 @@ const MainAppContent: React.FC = () => {
     );
   }
 
-  // STANDALONE PUBLIC SEO PRODUCTION PAGES (When visited by guests outside workspace)
-  if (!profile && !guestWorkspaceMode && PRODUCTION_PAGE_TABS.has(currentTab)) {
+  // STANDALONE PUBLIC SEO PRODUCTION PAGES (ONLY when visited by unauthenticated guests outside workspace)
+  if (!isLoggedIn && !guestWorkspaceMode && PRODUCTION_PAGE_TABS.has(currentTab)) {
     return (
       <>
         <SeoHeadManager
@@ -461,8 +503,8 @@ const MainAppContent: React.FC = () => {
     );
   }
 
-  // STANDALONE PUBLIC LANDING PAGE (Default for guests or when 'landing' tab is selected)
-  if (currentTab === 'landing' || (!profile && currentTab === 'home' && !guestWorkspaceMode)) {
+  // STANDALONE PUBLIC LANDING PAGE (STRICTLY ONLY for unauthenticated guests — logged-in users NEVER see this)
+  if (!isLoggedIn && (currentTab === 'landing' || (currentTab === 'home' && !guestWorkspaceMode))) {
     return (
       <>
         <SeoHeadManager
@@ -507,10 +549,12 @@ const MainAppContent: React.FC = () => {
     );
   }
 
+  const activeDashboardTab = isLoggedIn && currentTab === 'landing' ? 'home' : currentTab;
+
   return (
     <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#080B14] text-[#F1F5F9] flex font-sans selection:bg-[#8B5CF6] selection:text-white">
       <SeoHeadManager
-        currentTab={currentTab}
+        currentTab={activeDashboardTab}
         navParams={navParams}
         siteSettings={siteSettings}
         services={services}
@@ -545,7 +589,7 @@ const MainAppContent: React.FC = () => {
       {/* Desktop Operational Sidebar (lg+) */}
       <Suspense fallback={null}>
         <DesktopSidebar
-          currentTab={currentTab}
+          currentTab={activeDashboardTab}
           onSelectTab={handleNavigate}
           onOpenAuth={() => setIsAuthOpen(true)}
           onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
@@ -569,7 +613,7 @@ const MainAppContent: React.FC = () => {
             onOpenAuth={() => setIsAuthOpen(true)}
             onNavigateTab={handleNavigate}
             onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
-            currentTab={currentTab}
+            currentTab={activeDashboardTab}
             announcements={announcements}
           />
         </Suspense>
@@ -577,8 +621,8 @@ const MainAppContent: React.FC = () => {
         {/* Main Content Area */}
         <main id="main-content" className="flex-1 w-full max-w-[1440px] mx-auto px-3.5 sm:px-6 lg:px-8 pt-4 pb-32 lg:pb-12 overflow-x-hidden">
           <Suspense fallback={<ViewLoadingFallback />}>
-            <div key={currentTab} className="w-full max-w-full overflow-x-hidden">
-              {currentTab === 'home' && (
+            <div key={activeDashboardTab} className="w-full max-w-full overflow-x-hidden">
+              {activeDashboardTab === 'home' && (
                 <HomeView
                   onNavigateTab={handleNavigate}
                   onOpenAuth={() => setIsAuthOpen(true)}
@@ -619,6 +663,8 @@ const MainAppContent: React.FC = () => {
                 <OrdersView
                   orders={orders}
                   refills={refills}
+                  services={services}
+                  providers={providers}
                   onNavigateTab={handleNavigate}
                   onShowToast={addToast}
                 />
