@@ -2975,6 +2975,66 @@ const CURATED_BD_SMM_KEYWORD_BANK: {
     keywordDifficulty: 13,
     rankingOpportunityScore: 95,
     whyItRanks: 'নতুন ইউটিউবারদের অর্গানিক ভিউ ও হাই-রিটেনশন ওয়াচটাইম পাওয়ার মূল চাবিকাঠি।'
+  },
+  {
+    keyword: 'ফেসবুক ইন-স্ট্রিম অ্যাডস মনিটাইজেশন ২০২৬',
+    topicTitle: 'ফেসবুক ইন-স্ট্রিম অ্যাডস (In-Stream Ads) ও ৬০ হাজার মিনিট ওয়াচটাইম দ্রুত পূরণ করার কৌশল',
+    category: 'Facebook',
+    searchIntent: 'Guide',
+    monthlySearchVolumeBd: '15,800+ / mo',
+    keywordDifficulty: 10,
+    rankingOpportunityScore: 98,
+    whyItRanks: 'লং ভিডিও ক্রিয়েটরদের প্রধান আয়ের উৎস হওয়ায় এই কীওয়ার্ডের চাহিদা সারাবছর তুঙ্গে থাকে।'
+  },
+  {
+    keyword: 'টিকটক লাইভ ও গিফট মনিটাইজেশন বাংলাদেশ',
+    topicTitle: 'টিকটক ১০০০ ফলোয়ার পূরণ করে TikTok LIVE ও ভিডিও গিফট থেকে ডলারে আয়ের সম্পূর্ণ নিয়ম',
+    category: 'TikTok',
+    searchIntent: 'Guide',
+    monthlySearchVolumeBd: '12,600+ / mo',
+    keywordDifficulty: 9,
+    rankingOpportunityScore: 97,
+    whyItRanks: 'নতুন টিকটকাররা লাইভ অপশন আনলক করার জন্য প্রতিদিন এই কীওয়ার্ড লিখে সার্চ করেন।'
+  },
+  {
+    keyword: 'বিকাশ ও নগদে ফেসবুক পোস্ট বুস্ট করার নিয়ম',
+    topicTitle: 'ডলার কার্ড ছাড়াই বিকাশ ও নগদে ফেসবুক পেজ এবং ই-কমার্স পোস্ট প্রমোট করার নিরাপদ গাইড',
+    category: 'Facebook',
+    searchIntent: 'Transactional',
+    monthlySearchVolumeBd: '19,400+ / mo',
+    keywordDifficulty: 11,
+    rankingOpportunityScore: 99,
+    whyItRanks: 'ডলার কার্ড না থাকা বাংলাদেশি ক্ষুদ্র উদ্যোক্তাদের সরাসরি সার্ভিস অর্ডার করার কীওয়ার্ড।'
+  },
+  {
+    keyword: 'ইউটিউব ১০০০ সাবস্ক্রাইবার দ্রুত পূরণ করার উপায়',
+    topicTitle: 'নতুন ইউটিউব চ্যানেলে প্রথম ১০০০ নন-ড্রপ সাবস্ক্রাইবার ও ইউটিউব পার্টনার প্রোগ্রাম পাওয়ার কৌশল',
+    category: 'YouTube',
+    searchIntent: 'Commercial',
+    monthlySearchVolumeBd: '14,900+ / mo',
+    keywordDifficulty: 12,
+    rankingOpportunityScore: 97,
+    whyItRanks: 'প্রতিটি নতুন ইউটিউব চ্যানেলের প্রথম মাইলফলক হওয়ায় এর ট্রাফিক ও কনভার্সন রেট সর্বোচ্চ।'
+  },
+  {
+    keyword: 'ফেসবুক পারফরম্যান্স বোনাস প্রোগ্রাম বাংলাদেশ',
+    topicTitle: 'ফেসবুক Performance Bonus ইনভাইটেশন পাওয়ার গোপন শর্ত ও পেজ এনগেজমেন্ট বাড়ানোর নিয়ম',
+    category: 'Facebook',
+    searchIntent: 'Informational',
+    monthlySearchVolumeBd: '11,200+ / mo',
+    keywordDifficulty: 8,
+    rankingOpportunityScore: 98,
+    whyItRanks: 'শুধুমাত্র ছবি ও টেক্সট পোস্ট করেই হাজার ডলার আয়ের সুযোগ থাকায় এটি এখন ভাইরাল টপিক।'
+  },
+  {
+    keyword: 'ই-কমার্স পেজে কাস্টমার রিভিউ ও ট্রাস্ট বাড়ানোর কৌশল',
+    topicTitle: 'অনলাইন শপ ও ফেসবুক বিজনেস পেজে সোশ্যাল প্রুফ, রিঅ্যাকশন এবং কাস্টমার ট্রাস্ট তৈরির গাইড',
+    category: 'SMM Guide',
+    searchIntent: 'Commercial',
+    monthlySearchVolumeBd: '8,300+ / mo',
+    keywordDifficulty: 7,
+    rankingOpportunityScore: 96,
+    whyItRanks: 'ক্যাশ অন ডেলিভারি (COD) অর্ডার কনভার্সন বাড়াতে প্রতিটি অনলাইন সেলার এই কৌশল খোঁজেন।'
   }
 ];
 
@@ -3026,12 +3086,13 @@ function computeServer3GramShingles(text: string): {
   shingles: Set<string>;
   fingerprint: string;
 } {
+  // Include \p{M} so Bengali vowel signs (া, ি, ী, ু, ে, ো, ং, ্) are preserved inside words
   const words = String(text || '')
     .toLowerCase()
     .replace(/<[^>]+>/g, ' ')
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/[^\p{L}\p{M}\p{N}\s]/gu, ' ')
     .split(/\s+/)
-    .filter((w) => w.length > 2);
+    .filter((w) => w.length > 1);
 
   const shingles = new Set<string>();
   for (let i = 0; i < words.length - 2; i++) {
@@ -3066,7 +3127,7 @@ function selectContextualOnlineImagesForTopic(params: {
     for (const kw of item.keywords) {
       if (combined.includes(kw.toLowerCase())) score += 4;
     }
-    if (!used.has(item.url)) score += 2;
+    if (!used.has(item.url)) score += 3;
     if (score > bestScore) {
       bestScore = score;
       bestMatch = item;
@@ -3091,14 +3152,44 @@ function selectContextualOnlineImagesForTopic(params: {
 }
 
 function tokenizeForSimilarity(text: string): Set<string> {
+  // Include \p{M} so Bengali combining marks / matras are never stripped out
   return new Set(
     String(text || '')
       .toLowerCase()
-      .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+      .replace(/[^\p{L}\p{M}\p{N}\s-]/gu, ' ')
       .split(/\s+/)
       .map((w) => w.trim())
-      .filter((w) => w.length > 2 && !['and', 'the', 'for', 'with', 'কীভাবে', 'করার', 'উপায়', 'নিয়ম', 'গাইড', 'সেরা'].includes(w))
+      .filter(
+        (w) =>
+          w.length > 1 &&
+          ![
+            'and',
+            'the',
+            'for',
+            'with',
+            'কীভাবে',
+            'কিভাবে',
+            'করার',
+            'উপায়',
+            'নিয়ম',
+            'গাইড',
+            'সেরা',
+            'সম্পূর্ণ',
+            'কৌশল',
+            '২০২৬',
+            '2026'
+          ].includes(w)
+      )
   );
+}
+
+function normalizeTextForComparison(text: string): string {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[^\p{L}\p{M}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 async function gatherAllExistingBlogsOnServer(extraBlogs?: any[]): Promise<
@@ -3191,7 +3282,8 @@ function checkCandidateUniquenessAgainstExisting(
   candidate: { title: string; slug?: string; focusKeyword: string },
   existingBlogs: { title: string; slug: string; focusKeyword: string }[]
 ): { isUnique: boolean; uniquenessScore: number; maxOverlapSlug?: string } {
-  const candKw = String(candidate.focusKeyword || '').trim().toLowerCase();
+  const candKw = normalizeTextForComparison(candidate.focusKeyword);
+  const candTitle = normalizeTextForComparison(candidate.title);
   const candSlug = String(candidate.slug || '')
     .trim()
     .toLowerCase();
@@ -3201,14 +3293,23 @@ function checkCandidateUniquenessAgainstExisting(
   let maxOverlapSlug: string | undefined;
 
   for (const ex of existingBlogs) {
-    const exKw = String(ex.focusKeyword || '').trim().toLowerCase();
+    const exKw = normalizeTextForComparison(ex.focusKeyword);
+    const exTitle = normalizeTextForComparison(ex.title);
     const exSlug = String(ex.slug || '').trim().toLowerCase();
 
     if (candSlug && exSlug && candSlug === exSlug) {
       return { isUnique: false, uniquenessScore: 10, maxOverlapSlug: ex.slug };
     }
-    if (candKw && exKw && candKw === exKw) {
-      return { isUnique: false, uniquenessScore: 25, maxOverlapSlug: ex.slug };
+    if (candTitle && exTitle && (candTitle === exTitle || candTitle.includes(exTitle) || exTitle.includes(candTitle))) {
+      return { isUnique: false, uniquenessScore: 15, maxOverlapSlug: ex.slug };
+    }
+    if (
+      candKw &&
+      exKw &&
+      (candKw === exKw ||
+        (candKw.length >= 10 && exKw.length >= 10 && (candKw.includes(exKw) || exKw.includes(candKw))))
+    ) {
+      return { isUnique: false, uniquenessScore: 20, maxOverlapSlug: ex.slug };
     }
 
     const exTokens = tokenizeForSimilarity(`${ex.title} ${ex.focusKeyword}`);
@@ -3219,8 +3320,10 @@ function checkCandidateUniquenessAgainstExisting(
       });
       const union = candTokens.size + exTokens.size - intersection;
       const jaccard = union > 0 ? intersection / union : 0;
-      if (jaccard > maxSimilarity) {
-        maxSimilarity = jaccard;
+      const overlapMin = intersection / Math.min(candTokens.size, exTokens.size);
+      const combinedSim = Math.max(jaccard, overlapMin * 0.8);
+      if (combinedSim > maxSimilarity) {
+        maxSimilarity = combinedSim;
         maxOverlapSlug = ex.slug;
       }
     }
@@ -3228,7 +3331,7 @@ function checkCandidateUniquenessAgainstExisting(
 
   const uniquenessScore = Math.max(0, Math.min(100, Math.round((1 - maxSimilarity * 0.85) * 100)));
   return {
-    isUnique: maxSimilarity < 0.55,
+    isUnique: maxSimilarity < 0.45,
     uniquenessScore,
     maxOverlapSlug
   };
@@ -3269,9 +3372,9 @@ function buildHumanEditorialSeoBlog(params: {
     usedCoverUrls: params.usedCoverUrls
   });
 
-  const author = EDITORIAL_AUTHORS[Math.floor(Math.random() * EDITORIAL_AUTHORS.length)];
+  const author = EDITORIAL_AUTHORS[existing.length % EDITORIAL_AUTHORS.length];
 
-  // Pick up to 2 related existing blog posts for contextual internal linking mesh
+  // Pick up to 3 related existing blog posts for contextual internal linking mesh
   const relatedOldPosts = existing.slice(0, 3);
   const internalBlogLinksHtml =
     relatedOldPosts.length > 0
@@ -3288,9 +3391,20 @@ function buildHumanEditorialSeoBlog(params: {
 </div>`
       : '';
 
-  const title = params.topic.includes(kw)
-    ? params.topic
-    : `${kw}: বাস্তব অভিজ্ঞতা ও ১০০% কার্যকরী গাইড (২০২৬ আপডেট)`;
+  const titleAngles = [
+    `${kw}: বাস্তব অভিজ্ঞতা ও ১০০% কার্যকরী গাইড (২০২৬ আপডেট)`,
+    `${kw} — নতুন ক্রিয়েটর ও উদ্যোক্তাদের জন্য স্টেপ-বাই-স্টেপ ব্লুপ্রিন্ট`,
+    `বাংলাদেশে ${kw} সফল করার ৭টি প্রমাণিত কৌশল ও প্রো টিপস`,
+    `${kw}: অর্গানিক রিচ ও দ্রুত মনিটাইজেশন পাওয়ার সম্পূর্ণ রোডম্যাপ`
+  ];
+  let title = params.topic.trim() || titleAngles[existing.length % titleAngles.length];
+  if (!title.toLowerCase().includes(kw.toLowerCase())) {
+    title = `${kw} — ${title}`;
+  }
+  const existingTitlesNorm = new Set(existing.map((b) => normalizeTextForComparison(b.title)));
+  if (existingTitlesNorm.has(normalizeTextForComparison(title))) {
+    title = titleAngles[(existing.length + 1) % titleAngles.length];
+  }
   const seoTitle = `${kw} — সম্পূর্ণ গাইড ও প্রো টিপস | Boostlagbe.com`.slice(0, 68);
   const seoDescription = `${kw} নিয়ে আমাদের প্র্যাকটিক্যাল গাইড। জানুন কীভাবে অর্গানিক কৌশল এবং Boostlagbe.com-এ বিকাশ ও নগদে সবচেয়ে কম দামে নিরাপদ গ্রোথ পাবেন।`.slice(
     0,
@@ -4331,12 +4445,31 @@ async function executeFullAutopilotBlogCycle(options: {
   let chosenKeyword = String(options.preferredKeyword || '').trim();
   let chosenCategory = String(options.preferredCategory || '').trim() || 'Facebook';
 
-  // Step 1: Check priority Topic Queue or run AI Keyword Research against anti-cannibalization registry
+  // Step 1: Check priority Topic Queue against anti-cannibalization registry (skip any queued topic already covered)
   if (!chosenTopic && queue.length > 0) {
-    const popped = String(queue.shift() || '').trim();
-    if (popped) {
-      chosenTopic = popped;
-      chosenKeyword = popped.split(/[—:(-]/)[0].trim().slice(0, 45) || popped;
+    while (queue.length > 0) {
+      const popped = String(queue.shift() || '').trim();
+      if (!popped) continue;
+      const cleanedForKw = popped
+        .replace(/\([^)]*\)/g, ' ')
+        .replace(/\s+/g, ' ')
+        .split(/[—:|]/)[0]
+        .trim();
+      const candidateKw = cleanedForKw.slice(0, 52) || popped.slice(0, 52);
+      const check = checkCandidateUniquenessAgainstExisting(
+        { title: popped, focusKeyword: candidateKw },
+        allExisting
+      );
+      if (check.isUnique) {
+        chosenTopic = popped;
+        chosenKeyword = candidateKw;
+        if (/ইউটিউব|youtube/i.test(popped)) chosenCategory = 'YouTube';
+        else if (/টিকটক|tiktok/i.test(popped)) chosenCategory = 'TikTok';
+        else if (/ইনস্টাগ্রাম|instagram/i.test(popped)) chosenCategory = 'Instagram';
+        else if (/টেলিগ্রাম|telegram/i.test(popped)) chosenCategory = 'Telegram';
+        else if (/রিসেলার|reseller|api/i.test(popped)) chosenCategory = 'SMM Guide';
+        break;
+      }
     }
   }
 
@@ -4358,10 +4491,12 @@ async function executeFullAutopilotBlogCycle(options: {
 
   if (!chosenTopic) {
     const year = new Date().getFullYear();
-    const suffix = Math.floor(100 + Math.random() * 899);
-    chosenKeyword = `সোশ্যাল মিডিয়া মার্কেটিং ও মনিটাইজেশন ট্রিকস ${year}`;
-    chosenTopic = `${chosenKeyword} — বাংলাদেশি ক্রিয়েটরদের জন্য অ্যাডভান্সড গাইড (#${suffix})`;
-    chosenCategory = 'SMM Guide';
+    const rotIndex = allExisting.length;
+    const baseCandidate = CURATED_BD_SMM_KEYWORD_BANK[rotIndex % CURATED_BD_SMM_KEYWORD_BANK.length];
+    const angle = SEARCH_INTENT_ANGLES[rotIndex % SEARCH_INTENT_ANGLES.length];
+    chosenKeyword = `${baseCandidate.keyword} (${year} সংস্করণ #${rotIndex + 1})`;
+    chosenTopic = `${baseCandidate.topicTitle} — ${angle}`;
+    chosenCategory = baseCandidate.category;
   }
 
   // Step 2: Generate Human-Editorial Blog Post via Gemini AI (or Human Editorial Engine fallback)

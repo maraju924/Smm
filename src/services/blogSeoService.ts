@@ -21,7 +21,7 @@ import {
   SMMService
 } from '../types';
 import { INITIAL_SEO_BLOG_POSTS } from '../data/seedServices';
-import { sanitizeForFirestore, safeParseJsonResponse } from './db';
+import { sanitizeForFirestore, safeParseJsonResponse, diversifyDuplicateBlogsList } from './db';
 
 let cachedBlogsList: SMMBlogPost[] = [...INITIAL_SEO_BLOG_POSTS];
 const blogSubscribers = new Set<(blogs: SMMBlogPost[]) => void>();
@@ -94,7 +94,7 @@ export function compute3GramShingleSet(rawText: string): Set<string> {
   const plain = (rawText || '')
     .replace(/<[^>]+>/g, ' ')
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/[^\p{L}\p{M}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   const words = plain.split(' ').filter((w) => w.length > 1);
@@ -415,14 +415,14 @@ export function subscribeBlogs(callback: (blogs: SMMBlogPost[]) => void): () => 
         }
       }
 
-      merged.sort(
-        (a, b) => (b.publishedAt || b.createdAt || 0) - (a.publishedAt || a.createdAt || 0)
-      );
-      cachedBlogsList = merged;
-      syncBlogsToServerSitemap(merged);
-      callback(merged);
+      const { diversified } = diversifyDuplicateBlogsList(merged);
+      cachedBlogsList = diversified;
+      syncBlogsToServerSitemap(diversified);
+      callback(diversified);
     },
     () => {
+      const { diversified } = diversifyDuplicateBlogsList(cachedBlogsList);
+      cachedBlogsList = diversified;
       syncBlogsToServerSitemap(cachedBlogsList);
       callback(cachedBlogsList);
     }
@@ -937,8 +937,12 @@ export async function healAllBlogsSeoAndImages(
   const fallbackCover =
     'https://images.pexels.com/photos/267350/pexels-photo-267350.jpeg?auto=compress&cs=tinysrgb&w=1200';
 
-  for (const post of blogs) {
+  const { diversified, modifiedPosts } = diversifyDuplicateBlogsList(blogs);
+  const modifiedIds = new Set(modifiedPosts.map((p) => p.id));
+
+  for (const post of diversified) {
     const needsHeal =
+      modifiedIds.has(post.id) ||
       !post.coverImage ||
       !post.coverImageAlt ||
       !post.sgeDirectAnswer ||
@@ -957,7 +961,7 @@ export async function healAllBlogsSeoAndImages(
           coverImage: post.coverImage || fallbackCover,
           coverImageAlt: post.coverImageAlt || `${post.focusKeyword} - ${post.title} | Boostlagbe.com`
         },
-        blogs
+        diversified
       );
       healedCount++;
     }

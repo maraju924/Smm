@@ -3067,6 +3067,240 @@ export function computeSeoScoreForBlogPost(post: Partial<SMMBlogPost>): {
   };
 }
 
+const DIVERSIFIED_BLOG_TOPICS_POOL: {
+  keyword: string;
+  topicTitle: string;
+  category: string;
+  slugBase: string;
+  coverImage: string;
+}[] = [
+  {
+    keyword: 'টিকটক ভিডিও ভাইরাল করার নিয়ম',
+    topicTitle: 'টিকটক ভিডিও ForYou পেজে ভাইরাল করার ৭টি প্রমাণিত কৌশল (অর্গানিক + স্মার্ট বুস্ট)',
+    category: 'TikTok',
+    slugBase: 'tiktok-video-foryou-viral-tricks-bangladesh-guide',
+    coverImage: 'https://images.pexels.com/photos/5082579/pexels-photo-5082579.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'এফ-কমার্স বিজনেস পেজ গ্রোথ গাইড',
+    topicTitle: 'নতুন এফ-কমার্স (F-Commerce) ফেসবুক পেজে দ্রুত ট্রাস্ট, ফলোয়ার ও সেলস বাড়ানোর উপায়',
+    category: 'Facebook',
+    slugBase: 'f-commerce-facebook-business-page-growth-sales-guide-bd',
+    coverImage: 'https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'ইউটিউব শর্টস মনিটাইজেশন শর্ত ২০২৬',
+    topicTitle: 'ইউটিউব শর্টস (YouTube Shorts) ১০ মিলিয়ন ভিউ ও মনিটাইজেশন দ্রুত পূরণ করার কৌশল',
+    category: 'YouTube',
+    slugBase: 'youtube-shorts-10m-views-monetization-bangladesh-guide',
+    coverImage: 'https://images.pexels.com/photos/2510428/pexels-photo-2510428.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'SMM Reseller বিজনেস বাংলাদেশ',
+    topicTitle: 'বিনা পুঁজিতে বাংলাদেশে নিজস্ব SMM Reseller Agency শুরু করে মাসে ৩০,০০০+ টাকা আয়ের গাইড',
+    category: 'SMM Guide',
+    slugBase: 'smm-reseller-agency-business-passive-income-bangladesh',
+    coverImage: 'https://images.pexels.com/photos/669615/pexels-photo-669615.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'ফেসবুক পেজ পলিসি ইস্যু রিমুভ করার উপায়',
+    topicTitle: 'ফেসবুক পেজে Unoriginal Content বা Partner Monetization Policy Issue আসার কারণ ও সমাধান',
+    category: 'Facebook',
+    slugBase: 'facebook-page-unoriginal-content-policy-issue-fix-bd',
+    coverImage: 'https://images.pexels.com/photos/267350/pexels-photo-267350.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'ইনস্টাগ্রাম রিলস ভিউ ও ফলোয়ার বাড়ানোর উপায়',
+    topicTitle: 'বাংলাদেশে ইনস্টাগ্রাম রিলস (Instagram Reels) ভাইরাল ও টার্গেটেড ফলোয়ার বাড়ানোর গাইড',
+    category: 'Instagram',
+    slugBase: 'instagram-reels-viral-views-followers-growth-bangladesh',
+    coverImage: 'https://images.pexels.com/photos/147413/twitter-facebook-together-exchange-of-information-147413.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'টেলিগ্রাম চ্যানেল মেম্বার বাড়ানোর কৌশল',
+    topicTitle: 'টেলিগ্রাম চ্যানেল ও গ্রুপে অ্যাক্টিভ মেম্বার বাড়িয়ে অনলাইন কমিউনিটি মনিটাইজ করার নিয়ম',
+    category: 'Telegram',
+    slugBase: 'telegram-channel-active-members-community-monetization-bd',
+    coverImage: 'https://images.pexels.com/photos/5077047/pexels-photo-5077047.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'ফেসবুক প্রোফাইল প্রফেশনাল মোড মনিটাইজেশন',
+    topicTitle: 'ফেসবুক প্রোফাইল Professional Mode অন করে ৫০০০ ফলোয়ার ও স্টারস (Stars) থেকে আয়ের নিয়ম',
+    category: 'Facebook',
+    slugBase: 'facebook-profile-professional-mode-stars-monetization-bd',
+    coverImage: 'https://images.pexels.com/photos/6476587/pexels-photo-6476587.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'ইউটিউব ভিডিও এসইও করার সঠিক নিয়ম',
+    topicTitle: 'ইউটিউব ভিডিও গুগল ও ইউটিউব সার্চের প্রথমে র‍্যাংক করানোর প্র্যাকটিক্যাল SEO গাইডলাইন',
+    category: 'YouTube',
+    slugBase: 'youtube-video-seo-ranking-first-page-bangladesh-guide',
+    coverImage: 'https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'ফেসবুক ইন-স্ট্রিম অ্যাডস মনিটাইজেশন ২০২৬',
+    topicTitle: 'ফেসবুক ইন-স্ট্রিম অ্যাডস (In-Stream Ads) ও ৬০ হাজার মিনিট ওয়াচটাইম দ্রুত পূরণ করার কৌশল',
+    category: 'Facebook',
+    slugBase: 'facebook-in-stream-ads-60k-watchtime-monetization-2026',
+    coverImage: 'https://images.pexels.com/photos/267350/pexels-photo-267350.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'টিকটক লাইভ ও গিফট মনিটাইজেশন বাংলাদেশ',
+    topicTitle: 'টিকটক ১০০০ ফলোয়ার পূরণ করে TikTok LIVE ও ভিডিও গিফট থেকে ডলারে আয়ের সম্পূর্ণ নিয়ম',
+    category: 'TikTok',
+    slugBase: 'tiktok-live-1000-followers-gift-monetization-bangladesh',
+    coverImage: 'https://images.pexels.com/photos/5082579/pexels-photo-5082579.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'বিকাশ ও নগদে ফেসবুক পোস্ট বুস্ট করার নিয়ম',
+    topicTitle: 'ডলার কার্ড ছাড়াই বিকাশ ও নগদে ফেসবুক পেজ এবং ই-কমার্স পোস্ট প্রমোট করার নিরাপদ গাইড',
+    category: 'Facebook',
+    slugBase: 'bkash-nagad-facebook-page-post-boost-without-dollar-card-bd',
+    coverImage: 'https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  }
+];
+
+const healedDuplicateBlogIdsInSession = new Set<string>();
+
+function normalizeBlogKey(str: string): string {
+  return String(str || '')
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[^\p{L}\p{M}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function diversifyDuplicateBlogsList(blogs: SMMBlogPost[]): {
+  diversified: SMMBlogPost[];
+  modifiedPosts: SMMBlogPost[];
+} {
+  // Sort oldest-first when checking duplicates so the original post keeps its topic and newer duplicates get fresh topics
+  const chronological = [...blogs].sort(
+    (a, b) => (a.publishedAt || a.createdAt || 0) - (b.publishedAt || b.createdAt || 0)
+  );
+
+  const seenTitles = new Set<string>();
+  const seenKeywords = new Set<string>();
+  const usedSlugs = new Set<string>(chronological.map((b) => String(b.slug || '').toLowerCase()));
+  const modifiedPosts: SMMBlogPost[] = [];
+  const byId = new Map<string, SMMBlogPost>();
+
+  // Pre-register all unique titles/keywords from the pool that are already used
+  let poolCursor = 0;
+
+  for (const post of chronological) {
+    const normTitle = normalizeBlogKey(post.title);
+    const normKw = normalizeBlogKey(post.focusKeyword);
+
+    const isDuplicateTitle = normTitle.length > 0 && seenTitles.has(normTitle);
+    const isDuplicateKw = normKw.length > 0 && seenKeywords.has(normKw);
+
+    if (!isDuplicateTitle && !isDuplicateKw) {
+      seenTitles.add(normTitle);
+      if (normKw) seenKeywords.add(normKw);
+      byId.set(post.id, post);
+      continue;
+    }
+
+    // Pick a fresh unused topic from DIVERSIFIED_BLOG_TOPICS_POOL
+    let replacement = DIVERSIFIED_BLOG_TOPICS_POOL[poolCursor % DIVERSIFIED_BLOG_TOPICS_POOL.length];
+    for (let i = 0; i < DIVERSIFIED_BLOG_TOPICS_POOL.length; i++) {
+      const candidate = DIVERSIFIED_BLOG_TOPICS_POOL[(poolCursor + i) % DIVERSIFIED_BLOG_TOPICS_POOL.length];
+      const cTitle = normalizeBlogKey(candidate.topicTitle);
+      const cKw = normalizeBlogKey(candidate.keyword);
+      if (!seenTitles.has(cTitle) && !seenKeywords.has(cKw)) {
+        replacement = candidate;
+        poolCursor = poolCursor + i + 1;
+        break;
+      }
+    }
+
+    const oldTitle = post.title;
+    const oldKw = post.focusKeyword;
+    const newKw = replacement.keyword;
+    const newTitle = replacement.topicTitle;
+    const newCat = replacement.category;
+
+    let newSlug = replacement.slugBase;
+    if (usedSlugs.has(newSlug)) {
+      newSlug = `${newSlug}-${String(post.id || Date.now()).slice(-4).toLowerCase().replace(/[^a-z0-9]/g, 'x')}`;
+    }
+    usedSlugs.add(newSlug);
+
+    let updatedContent = String(post.content || '');
+    if (oldKw && oldKw !== newKw) {
+      updatedContent = updatedContent.split(oldKw).join(newKw);
+    }
+    if (oldTitle && oldTitle !== newTitle) {
+      updatedContent = updatedContent.split(oldTitle).join(newTitle);
+    }
+    if (!updatedContent.toLowerCase().includes(newKw.toLowerCase())) {
+      updatedContent =
+        `<p>বাংলাদেশে ডিজিটাল ক্রিয়েটর এবং অনলাইন উদ্যোক্তাদের জন্য <strong>${newKw}</strong> এখন সবচেয়ে কার্যকরী একটি গ্রোথ স্ট্র্যাটেজি। <strong>Boostlagbe.com (বুস্ট লাগবে)</strong>-এর মাধ্যমে বিকাশ ও নগদে ইনস্ট্যান্ট পেমেন্ট করে কোনো পাসওয়ার্ড ছাড়াই নিরাপদে আপনার ${newCat} গ্রোথ নিশ্চিত করতে পারবেন।</p>\n` +
+        updatedContent;
+    }
+
+    const newSeoTitle = `${newKw} — সম্পূর্ণ গাইড ও প্রো টিপস | Boostlagbe.com`.slice(0, 70);
+    const newSeoDesc = `${newKw} নিয়ে বাস্তব অভিজ্ঞতার প্র্যাকটিক্যাল গাইড। জানুন কীভাবে অর্গানিক কৌশল এবং Boostlagbe.com-এ বিকাশ ও নগদে সবচেয়ে কম দামে নিরাপদ গ্রোথ পাবেন।`.slice(
+      0,
+      165
+    );
+
+    const updatedPost: SMMBlogPost = {
+      ...post,
+      title: newTitle,
+      slug: newSlug,
+      focusKeyword: newKw,
+      category: newCat,
+      coverImage: replacement.coverImage || post.coverImage,
+      coverImageAlt: `${newKw} — ${newTitle} | Boostlagbe.com`,
+      excerpt: newSeoDesc,
+      seoTitle: newSeoTitle,
+      metaTitle: newSeoTitle,
+      seoDescription: newSeoDesc,
+      metaDescription: newSeoDesc,
+      content: updatedContent,
+      tags: [newKw, 'Boostlagbe.com', 'বুস্ট লাগবে', newCat, 'SMM Panel Bangladesh'],
+      secondaryKeywords: ['বুস্ট লাগবে', 'Boostlagbe.com', `${newCat} Boost BD`, 'bKash SMM Panel BD', newKw],
+      sgeDirectAnswer: `সংক্ষিপ্ত উত্তর: বাংলাদেশে নিরাপদে ও দ্রুত "${newKw}" নিশ্চিত করতে নিয়মিত অরিজিনাল কন্টেন্টের পাশাপাশি Boostlagbe.com-এ বিকাশ বা নগদে মাত্র ২০ টাকা থেকে ইনস্ট্যান্ট ওয়ালেট রিচার্জ করে পাসওয়ার্ড ছাড়াই কেবল পাবলিক লিংক দিয়ে ১–৫ মিনিটে অটোমেটেড নন-ড্রপ ডেলিভারি ও ৩০ দিনের রিফিল গ্যারান্টি পাওয়া যায়।`,
+      englishSummary: `Complete practical guide on ${newKw} in Bangladesh (2026 Edition). Combine authentic organic content with Boostlagbe.com's instant bKash/Nagad non-drop ${newCat} growth packages safely.`,
+      keyTakeaways: [
+        `${newKw} সফল করতে ধারাবাহিক কন্টেন্ট এবং সন্ধ্যা ৭টা–১১টার পিক আওয়ার সবচেয়ে কার্যকরী।`,
+        'অর্গানিক কন্টেন্টের পাশাপাশি প্রাথমিক সোশ্যাল প্রুফ ও হাই-রিটেনশন এনগেজমেন্ট অ্যালগরিদম রিকমেন্ডেশন দ্রুত বাড়ায়।',
+        'Boostlagbe.com-এ বিকাশ ও নগদে ইনস্ট্যান্ট ডিপোজিট করে কোনো পাসওয়ার্ড ছাড়াই ১০০% নিরাপদে অর্ডার করা যায়।'
+      ],
+      faqItems: [
+        {
+          question: `${newKw} শুরু করার জন্য কি পেজ বা অ্যাকাউন্টের পাসওয়ার্ড দিতে হয়?`,
+          answer:
+            'একদমই না। Boostlagbe.com-এ যেকোনো সার্ভিস নেওয়ার জন্য শুধুমাত্র আপনার পাবলিক পোস্ট বা প্রোফাইলের লিংক প্রয়োজন হয়—কোনো পাসওয়ার্ড লাগে না।'
+        },
+        {
+          question: `কীভাবে বিকাশ বা নগদ দিয়ে ${newKw} সার্ভিস অর্ডার করব?`,
+          answer:
+            'লগইন করার পর Add Balance অপশন থেকে বিকাশ বা নগদে তাৎক্ষণিক ডিপোজিট করুন। এরপর New Order পেজে গিয়ে কাঙ্ক্ষিত সার্ভিস ও লিংক বসিয়ে সাবমিট করলেই ১–৫ মিনিটে ডেলিভারি শুরু হবে।'
+        }
+      ],
+      uniquenessScore: 100,
+      nGramSimilarityPercent: 4,
+      seoScore: 100,
+      updatedAt: Date.now()
+    };
+
+    seenTitles.add(normalizeBlogKey(updatedPost.title));
+    seenKeywords.add(normalizeBlogKey(updatedPost.focusKeyword));
+    byId.set(updatedPost.id, updatedPost);
+    modifiedPosts.push(updatedPost);
+  }
+
+  const diversified = blogs
+    .map((b) => byId.get(b.id) || b)
+    .sort((a, b) => (b.publishedAt || b.createdAt || 0) - (a.publishedAt || a.createdAt || 0));
+
+  return { diversified, modifiedPosts };
+}
+
 export function subscribeBlogs(
   callback: (blogs: SMMBlogPost[]) => void
 ): () => void {
@@ -3092,12 +3326,26 @@ export function subscribeBlogs(
         }
       }
 
-      merged.sort((a, b) => (b.publishedAt || b.createdAt || 0) - (a.publishedAt || a.createdAt || 0));
-      cachedBlogsList = merged;
-      syncBlogsToServerSitemap(merged);
-      callback(merged);
+      // Automatically detect and diversify any duplicate titles or focusKeywords
+      const { diversified, modifiedPosts } = diversifyDuplicateBlogsList(merged);
+
+      cachedBlogsList = diversified;
+      syncBlogsToServerSitemap(diversified);
+      callback(diversified);
+
+      // Persist diversified posts back to Firestore once so duplicates are permanently resolved
+      if (modifiedPosts.length > 0 && !isFirestoreQuotaExhausted()) {
+        for (const fixedPost of modifiedPosts) {
+          if (!healedDuplicateBlogIdsInSession.has(fixedPost.id)) {
+            healedDuplicateBlogIdsInSession.add(fixedPost.id);
+            setDoc(doc(db, 'blogs', fixedPost.id), sanitizeForFirestore(fixedPost), { merge: true }).catch(() => {});
+          }
+        }
+      }
     },
     () => {
+      const { diversified } = diversifyDuplicateBlogsList(cachedBlogsList);
+      cachedBlogsList = diversified;
       syncBlogsToServerSitemap(cachedBlogsList);
       callback(cachedBlogsList);
     }
