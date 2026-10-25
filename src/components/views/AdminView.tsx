@@ -1509,6 +1509,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <AdminBlogManager
                 blogs={blogs}
                 siteSettings={settingsForm}
+                onUpdateSiteSettings={(updated) => setSettingsForm(updated)}
                 onOpenGeminiSettings={() => navigateSection('settings')}
                 onPreviewBlogSlug={onPreviewBlogSlug}
               />

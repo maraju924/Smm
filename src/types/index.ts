@@ -254,15 +254,69 @@ export interface SiteSettings {
   geminiEnabled?: boolean;
   geminiApiKey?: string;
   geminiModel?: string;
-  geminiDefaultLanguage?: 'bn' | 'bn_en' | 'en';
+  geminiDefaultLanguage?: 'bn' | 'bn_en' | 'en' | 'mixed';
   geminiAutoInternalLinks?: boolean;
   geminiAutoFaqSchema?: boolean;
+  // 10-18h Automated SEO Blog Autopilot Configuration
+  blogAutopilotEnabled?: boolean;
+  blogAutopilotMinHours?: number;
+  blogAutopilotMaxHours?: number;
+  blogAutopilotMinSeoScore?: number;
+  blogAutopilotCategories?: string[];
+  blogAutopilotLastRunAt?: number;
+  blogAutopilotNextRunAt?: number;
+  blogAutopilotTotalPublished?: number;
+  blogAutopilotTopicQueue?: string[];
+  blogAutopilotLogs?: SMMBlogAutopilotLog[];
   updatedAt: number;
 }
 
 export interface SMMBlogFaqItem {
   question: string;
   answer: string;
+}
+
+export interface SMMBlogKeywordCandidate {
+  keyword: string;
+  topicTitle: string;
+  suggestedTitle?: string;
+  category: string;
+  searchIntent: 'Informational' | 'Commercial' | 'Transactional' | 'Guide';
+  intent?: string;
+  monthlySearchVolumeBd: string;
+  monthlyVolume?: string;
+  keywordDifficulty: number;
+  difficulty?: string | number;
+  rankingOpportunityScore: number;
+  whyItRanks: string;
+  rationale?: string;
+  secondaryKeywords?: string[];
+  suggestedCoverImage: string;
+  suggestedCoverAlt: string;
+  isUnique?: boolean;
+}
+
+export interface SMMBlogAutopilotLog {
+  id: string;
+  timestamp: number;
+  triggerType: 'auto_schedule' | 'manual_admin';
+  researchedKeyword: string;
+  keyword?: string;
+  blogTitle: string;
+  title?: string;
+  blogSlug: string;
+  slug?: string;
+  category: string;
+  seoScore: number;
+  uniquenessScore: number;
+  internalLinksInjected: number;
+  internalLinksCount?: number;
+  coverImage: string;
+  status: 'published' | 'refined_and_published' | 'skipped_duplicate' | 'error';
+  sitemapSynced: boolean;
+  nextScheduledAt?: number;
+  summary: string;
+  note?: string;
 }
 
 export interface SMMBlogPost {
@@ -277,20 +331,33 @@ export interface SMMBlogPost {
   tags: string[];
   focusKeyword: string;
   secondaryKeywords: string[];
-  metaTitle: string;
-  metaDescription: string;
+  metaTitle?: string;
+  metaDescription?: string;
+  seoTitle?: string;
+  seoDescription?: string;
   canonicalUrl?: string;
+  ogType?: string;
+  schemaType?: 'BlogPosting' | 'NewsArticle' | 'TechArticle';
+  metaRobots?: 'index, follow' | 'noindex, follow';
   faqItems: SMMBlogFaqItem[];
+  keyTakeaways?: string[];
   authorName: string;
   authorRole?: string;
+  authorBio?: string;
+  reviewedBy?: string;
   readingTimeMinutes: number;
   wordCount?: number;
   seoScore: number; // 0 - 100
+  uniquenessScore?: number; // 0 - 100
+  internalLinksCount?: number;
+  searchIntent?: string;
+  keywordDifficulty?: number;
   status: 'published' | 'draft';
   featured?: boolean;
   views: number;
   relatedCategory?: string;
   aiGenerated?: boolean;
+  autopilotGenerated?: boolean;
   publishedAt: number;
   createdAt: number;
   updatedAt: number;

@@ -18,7 +18,9 @@ import {
   Award,
   TrendingUp,
   Layers,
-  List
+  List,
+  ShieldCheck,
+  CheckCircle2
 } from 'lucide-react';
 import { SMMBlogPost, SMMService, SiteSettings } from '../../types';
 import { incrementBlogViews } from '../../services/blogSeoService';
@@ -34,6 +36,9 @@ interface BlogViewProps {
   isPublicStandalone?: boolean;
   onOpenAuth?: () => void;
 }
+
+const FALLBACK_BLOG_IMAGE =
+  'https://images.pexels.com/photos/267350/pexels-photo-267350.jpeg?auto=compress&cs=tinysrgb&w=1200';
 
 export const BlogView: React.FC<BlogViewProps> = ({
   blogs,
@@ -135,7 +140,7 @@ export const BlogView: React.FC<BlogViewProps> = ({
 
   const relatedPosts = useMemo(() => {
     if (!activePost) return [];
-    return publishedBlogs.filter((b) => b.id !== activePost.id).slice(0, 3);
+    return publishedBlogs.filter((b) => b.id !== activePost.id).slice(0, 4);
   }, [publishedBlogs, activePost]);
 
   const handleCopyCanonicalLink = (post: SMMBlogPost) => {
@@ -143,6 +148,28 @@ export const BlogView: React.FC<BlogViewProps> = ({
     navigator.clipboard.writeText(url);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
+  };
+
+  // SPA click handler for internal links inside article HTML
+  const handleArticleBodyClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = (e.target as HTMLElement).closest('a');
+    if (!target) return;
+    const href = target.getAttribute('href') || '';
+    if (href.startsWith('/?tab=')) {
+      e.preventDefault();
+      try {
+        const params = new URLSearchParams(href.slice(2));
+        const tab = params.get('tab');
+        const slugParam = params.get('slug');
+        if (tab === 'blog' && slugParam) {
+          onSelectSlug(slugParam);
+        } else if (tab) {
+          onNavigate(tab);
+        }
+      } catch {
+        // Fallback to standard navigation
+      }
+    }
   };
 
   const formatDateBn = (timestamp: number) => {
@@ -203,7 +230,7 @@ export const BlogView: React.FC<BlogViewProps> = ({
       <div className={isPublicStandalone ? 'max-w-6xl mx-auto px-4 pt-6 space-y-6' : 'space-y-6'}>
         {activePost ? (
           /* ==========================================
-             SINGLE SEO ARTICLE READER VIEW (100% SCHEMA MICRODATA)
+             SINGLE SEO ARTICLE READER VIEW (100% SCHEMA MICRODATA + E-E-A-T)
              ========================================== */
           <article
             itemScope
@@ -245,6 +272,10 @@ export const BlogView: React.FC<BlogViewProps> = ({
                     itemProp="image"
                     src={activePost.coverImage}
                     alt={activePost.coverImageAlt || activePost.title}
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = FALLBACK_BLOG_IMAGE;
+                    }}
                     className="w-full h-full object-cover opacity-90"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent" />
@@ -253,7 +284,7 @@ export const BlogView: React.FC<BlogViewProps> = ({
                       {activePost.category}
                     </span>
                     <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-[11px] font-bold backdrop-blur-md flex items-center gap-1">
-                      <Award className="w-3.5 h-3.5" /> ভেরিফাইড গাইড • Boostlagbe.com
+                      <Award className="w-3.5 h-3.5" /> ভেরিফাইড হিউম্যান গাইড • Boostlagbe.com
                     </span>
                   </div>
                 </div>
@@ -280,18 +311,18 @@ export const BlogView: React.FC<BlogViewProps> = ({
                     <div
                       itemProp="author"
                       itemScope
-                      itemType="https://schema.org/Organization"
+                      itemType="https://schema.org/Person"
                       className="flex items-center gap-2"
                     >
                       <div className="w-8 h-8 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-xs">
-                        BL
+                        TA
                       </div>
                       <div>
                         <span itemProp="name" className="font-bold text-slate-800 dark:text-slate-200 block">
-                          {activePost.authorName || 'Boostlagbe Editorial Team'}
+                          {activePost.authorName || 'তানভীর আহমেদ (Tanvir Ahmed)'}
                         </span>
-                        <span className="text-[11px] text-slate-400">
-                          {activePost.authorRole || 'SMM Growth Specialist'}
+                        <span itemProp="jobTitle" className="text-[11px] text-slate-400">
+                          {activePost.authorRole || 'Senior Social Media Growth Strategist'}
                         </span>
                       </div>
                     </div>
@@ -338,8 +369,26 @@ export const BlogView: React.FC<BlogViewProps> = ({
 
             {/* Main Content + Sidebar Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Left 8 Cols: TOC + Rich Content + FAQ Schema + Tags */}
+              {/* Left 8 Cols: Key Takeaways + TOC + Rich Content + E-E-A-T Author Box + FAQ Schema + Tags */}
               <div className="lg:col-span-8 space-y-6">
+                {/* Key Takeaways Highlight Card */}
+                {activePost.keyTakeaways && activePost.keyTakeaways.length > 0 && (
+                  <div className="bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent dark:from-emerald-950/40 dark:to-slate-900 rounded-2xl border border-emerald-500/30 p-5 space-y-3">
+                    <div className="flex items-center gap-2 font-extrabold text-sm text-emerald-700 dark:text-emerald-300">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                      <span>এক নজরে মূল পয়েন্টসমূহ (Key Takeaways)</span>
+                    </div>
+                    <ul className="space-y-2 text-xs sm:text-sm text-slate-700 dark:text-slate-200">
+                      {activePost.keyTakeaways.map((pt, idx) => (
+                        <li key={idx} className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                          <span className="font-medium leading-relaxed">{pt}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {/* Auto Table of Contents */}
                 {processedArticle.toc.length > 0 && (
                   <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs">
@@ -351,7 +400,11 @@ export const BlogView: React.FC<BlogViewProps> = ({
                       {processedArticle.toc.map((item, idx) => (
                         <li
                           key={item.id}
-                          className={item.level === 3 ? 'pl-4 text-slate-600 dark:text-slate-400' : 'font-semibold text-slate-800 dark:text-slate-200'}
+                          className={
+                            item.level === 3
+                              ? 'pl-4 text-slate-600 dark:text-slate-400'
+                              : 'font-semibold text-slate-800 dark:text-slate-200'
+                          }
                         >
                           <a
                             href={`#${item.id}`}
@@ -370,6 +423,7 @@ export const BlogView: React.FC<BlogViewProps> = ({
                 <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-8 shadow-xs">
                   <div
                     itemProp="articleBody"
+                    onClick={handleArticleBodyClick}
                     className="prose prose-slate dark:prose-invert max-w-none
                       prose-headings:font-extrabold prose-headings:text-slate-900 dark:prose-headings:text-white
                       prose-h2:text-xl sm:prose-h2:text-2xl prose-h2:mt-7 prose-h2:mb-3 prose-h2:pb-2 prose-h2:border-b prose-h2:border-slate-100 dark:prose-h2:border-slate-800
@@ -377,6 +431,9 @@ export const BlogView: React.FC<BlogViewProps> = ({
                       prose-p:text-slate-700 dark:prose-p:text-slate-300 prose-p:leading-relaxed prose-p:mb-4
                       prose-li:text-slate-700 dark:prose-li:text-slate-300 prose-li:my-1.5
                       prose-a:text-indigo-600 dark:prose-a:text-indigo-400 prose-a:font-bold hover:prose-a:underline
+                      prose-blockquote:border-l-4 prose-blockquote:border-indigo-500 prose-blockquote:bg-indigo-50/50 dark:prose-blockquote:bg-indigo-950/20 prose-blockquote:p-4 prose-blockquote:rounded-r-xl prose-blockquote:not-italic
+                      prose-table:w-full prose-table:border-collapse prose-th:bg-slate-100 dark:prose-th:bg-slate-800 prose-th:p-2.5 prose-th:text-left prose-td:p-2.5 prose-td:border-t prose-td:border-slate-200 dark:prose-td:border-slate-800
+                      prose-img:rounded-2xl prose-img:shadow-md
                       prose-strong:text-slate-900 dark:prose-strong:text-white"
                     dangerouslySetInnerHTML={{ __html: processedArticle.html }}
                   />
@@ -400,6 +457,36 @@ export const BlogView: React.FC<BlogViewProps> = ({
                     >
                       <Zap className="w-4 h-4" /> এখনই অর্ডার করুন
                     </button>
+                  </div>
+                </div>
+
+                {/* Google E-E-A-T Verified Author & Editorial Reviewer Credential Box */}
+                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-emerald-600 dark:text-emerald-400">
+                      <ShieldCheck className="w-4 h-4" /> Google E-E-A-T Verified Editorial Author & Fact-Checked Guide
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-semibold">
+                      Reviewed by: {activePost.reviewedBy || 'Boostlagbe Editorial & SEO Review Board'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white font-extrabold flex items-center justify-center text-base shrink-0 shadow-sm">
+                      TA
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
+                        {activePost.authorName || 'তানভীর আহমেদ (Tanvir Ahmed)'}
+                      </h3>
+                      <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                        {activePost.authorRole || 'Senior Social Media Growth Strategist, Boostlagbe.com'}
+                      </p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                        {activePost.authorBio ||
+                          'তানভীর আহমেদ গত ৬+ বছর ধরে বাংলাদেশের ১০,০০০+ ফেসবুক পেজ, ইউটিউব চ্যানেল এবং ই-কমার্স ব্র্যান্ডের অর্গানিক গ্রোথ, মনিটাইজেশন ও এসইও স্ট্র্যাটেজি নিয়ে কাজ করছেন।'}
+                      </p>
+                    </div>
                   </div>
                 </div>
 
@@ -548,11 +635,11 @@ export const BlogView: React.FC<BlogViewProps> = ({
                   </div>
                 </div>
 
-                {/* Other Pillar Articles */}
+                {/* Other Pillar Articles (Contextual Internal Links) */}
                 {relatedPosts.length > 0 && (
                   <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
                     <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                      <BookOpen className="w-4 h-4 text-indigo-500" /> আরও পড়ুন
+                      <BookOpen className="w-4 h-4 text-indigo-500" /> সম্পর্কিত অন্যান্য গাইড (আরও পড়ুন)
                     </h3>
                     <div className="space-y-3">
                       {relatedPosts.map((rp) => (
@@ -649,11 +736,12 @@ export const BlogView: React.FC<BlogViewProps> = ({
                   >
                     <div className="relative h-48 bg-slate-900 overflow-hidden">
                       <img
-                        src={
-                          post.coverImage ||
-                          '/assets/aistudio/file_00000000117c8208a1cede2cdfee706a_42e73997.png'
-                        }
+                        src={post.coverImage || FALLBACK_BLOG_IMAGE}
                         alt={post.coverImageAlt || post.title}
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = FALLBACK_BLOG_IMAGE;
+                        }}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />

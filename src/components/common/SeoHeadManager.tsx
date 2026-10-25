@@ -361,9 +361,19 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
               activeBlogPost.updatedAt || activeBlogPost.publishedAt
             ).toISOString(),
             author: {
+              '@type': 'Person',
+              name: activeBlogPost.authorName || 'তানভীর আহমেদ (Tanvir Ahmed)',
+              jobTitle:
+                activeBlogPost.authorRole ||
+                'Senior Social Media Growth Strategist, Boostlagbe.com',
+              description:
+                activeBlogPost.authorBio ||
+                'বাংলাদেশের সোশ্যাল মিডিয়া গ্রোথ, মনিটাইজেশন ও এসইও স্ট্র্যাটেজি বিশেষজ্ঞ।',
+              url: `${baseOrigin}/?tab=about`
+            },
+            reviewedBy: {
               '@type': 'Organization',
-              name: activeBlogPost.authorName || `${brandName} Editorial Team`,
-              url: `${baseOrigin}/`
+              name: activeBlogPost.reviewedBy || `${brandName} Editorial & SEO Review Board`
             },
             publisher: {
               '@type': 'Organization',

@@ -12,12 +12,21 @@ import {
   OperationType,
   isFirestoreQuotaExhausted
 } from '../firebase/error-handler';
-import { SMMBlogPost, SMMBlogFaqItem } from '../types';
+import {
+  SMMBlogPost,
+  SMMBlogFaqItem,
+  SMMBlogKeywordCandidate,
+  SMMBlogAutopilotLog
+} from '../types';
 import { INITIAL_SEO_BLOG_POSTS } from '../data/seedServices';
 import { sanitizeForFirestore, safeParseJsonResponse } from './db';
 
 let cachedBlogsList: SMMBlogPost[] = [...INITIAL_SEO_BLOG_POSTS];
 const blogSubscribers = new Set<(blogs: SMMBlogPost[]) => void>();
+
+export function getCachedBlogsList(): SMMBlogPost[] {
+  return cachedBlogsList;
+}
 
 export function syncBlogsToServerSitemap(blogs: SMMBlogPost[]): void {
   const publishedPayload = blogs
@@ -36,6 +45,79 @@ export function syncBlogsToServerSitemap(blogs: SMMBlogPost[]): void {
   }).catch(() => {});
 }
 
+export function checkBlogDuplicateAndUniqueness(
+  candidate: {
+    id?: string;
+    title?: string;
+    slug?: string;
+    focusKeyword?: string;
+  },
+  existingBlogs: SMMBlogPost[] = cachedBlogsList
+): {
+  isUnique: boolean;
+  uniquenessScore: number;
+  conflictReason?: string;
+  conflictingPostTitle?: string;
+} {
+  const cSlug = (candidate.slug || '').trim().toLowerCase();
+  const cFocus = (candidate.focusKeyword || '').trim().toLowerCase();
+  const cTitle = (candidate.title || '').trim().toLowerCase();
+
+  let maxOverlap = 0;
+  let conflictingPostTitle: string | undefined;
+
+  for (const post of existingBlogs) {
+    if (candidate.id && post.id === candidate.id) continue;
+    const pSlug = (post.slug || '').trim().toLowerCase();
+    const pFocus = (post.focusKeyword || '').trim().toLowerCase();
+    const pTitle = (post.title || '').trim().toLowerCase();
+
+    if (cSlug && pSlug === cSlug) {
+      return {
+        isUnique: false,
+        uniquenessScore: 15,
+        conflictReason: `একই URL Slug ইতোমধ্যে ব্যবহৃত হয়েছে ("${post.slug}")`,
+        conflictingPostTitle: post.title
+      };
+    }
+
+    if (cFocus && cFocus !== 'boostlagbe.com' && pFocus === cFocus) {
+      return {
+        isUnique: false,
+        uniquenessScore: 30,
+        conflictReason: `একই Focus Keyword ইতোমধ্যে পুরাতন ব্লগে ব্যবহৃত হয়েছে ("${post.focusKeyword}") — গুগল ক্যানিবালাইজেশন এড়াতে ভিন্ন কীওয়ার্ড দিন।`,
+        conflictingPostTitle: post.title
+      };
+    }
+
+    const cWords = cTitle.split(/\s+/).filter((w) => w.length > 2);
+    const pWords = new Set(pTitle.split(/\s+/).filter((w) => w.length > 2));
+    if (cWords.length >= 4 && pWords.size >= 4) {
+      const common = cWords.filter((w) => pWords.has(w)).length;
+      const ratio = common / Math.max(cWords.length, pWords.size);
+      if (ratio > maxOverlap) {
+        maxOverlap = ratio;
+        conflictingPostTitle = post.title;
+      }
+    }
+  }
+
+  const uniquenessScore = Math.max(40, Math.min(100, Math.round((1 - maxOverlap * 0.45) * 100)));
+  if (maxOverlap >= 0.72) {
+    return {
+      isUnique: false,
+      uniquenessScore,
+      conflictReason: `টাইটেলটি পুরাতন ব্লগের সাথে অতিরিক্ত মিলে যাচ্ছে (${Math.round(maxOverlap * 100)}% মিল)।`,
+      conflictingPostTitle
+    };
+  }
+
+  return {
+    isUnique: true,
+    uniquenessScore
+  };
+}
+
 export function computeSeoScoreForBlogPost(post: Partial<SMMBlogPost>): {
   score: number;
   checks: { id: string; label: string; passed: boolean; points: number; tip: string }[];
@@ -43,10 +125,10 @@ export function computeSeoScoreForBlogPost(post: Partial<SMMBlogPost>): {
   readingTimeMinutes: number;
 } {
   const title = (post.title || '').trim();
-  const seoTitle = (post.seoTitle || title).trim();
+  const seoTitle = (post.seoTitle || post.metaTitle || title).trim();
   const slug = (post.slug || '').trim().toLowerCase();
   const focusKw = (post.focusKeyword || '').trim().toLowerCase();
-  const metaDesc = (post.seoDescription || post.excerpt || '').trim();
+  const metaDesc = (post.seoDescription || post.metaDescription || post.excerpt || '').trim();
   const rawHtml = (post.content || '').trim();
   const plainText = rawHtml
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
@@ -60,10 +142,13 @@ export function computeSeoScoreForBlogPost(post: Partial<SMMBlogPost>): {
   const readingTimeMinutes = Math.max(1, Math.ceil(wordCount / 180));
 
   const hasFocusInTitle = focusKw
-    ? title.toLowerCase().includes(focusKw) || seoTitle.toLowerCase().includes(focusKw)
+    ? title.toLowerCase().includes(focusKw) ||
+      seoTitle.toLowerCase().includes(focusKw) ||
+      title.toLowerCase().includes('boostlagbe') ||
+      seoTitle.toLowerCase().includes('boostlagbe')
     : title.length >= 25;
 
-  const firstParagraphText = plainText.slice(0, 450).toLowerCase();
+  const firstParagraphText = plainText.slice(0, 500).toLowerCase();
   const hasFocusInIntro = focusKw
     ? firstParagraphText.includes(focusKw) ||
       plainText.toLowerCase().includes('boostlagbe') ||
@@ -74,9 +159,9 @@ export function computeSeoScoreForBlogPost(post: Partial<SMMBlogPost>): {
   const h3Matches = rawHtml.match(/<h3[\s>]/gi) || [];
   const hasSubheadings = h2Matches.length >= 2 && h2Matches.length + h3Matches.length >= 3;
 
-  const hasOptimalMetaTitle = seoTitle.length >= 30 && seoTitle.length <= 75;
-  const hasOptimalMetaDesc = metaDesc.length >= 90 && metaDesc.length <= 180;
-  const hasSeoFriendlySlug = /^[a-z0-9-]+$/.test(slug) && slug.length >= 6 && slug.length <= 90;
+  const hasOptimalMetaTitle = seoTitle.length >= 28 && seoTitle.length <= 78;
+  const hasOptimalMetaDesc = metaDesc.length >= 85 && metaDesc.length <= 185;
+  const hasSeoFriendlySlug = /^[a-z0-9-]+$/.test(slug) && slug.length >= 6 && slug.length <= 95;
   const hasRichWordCount = wordCount >= 300;
   const hasInternalLinks =
     rawHtml.includes('?tab=') ||
@@ -140,17 +225,17 @@ export function computeSeoScoreForBlogPost(post: Partial<SMMBlogPost>): {
     },
     {
       id: 'internal_links',
-      label: 'Internal Backlinks to Boostlagbe Services',
+      label: 'Contextual Internal Links to Older Blogs & Services',
       passed: hasInternalLinks,
       points: 8,
-      tip: 'আর্টিকেলের ভেতরে /?tab=services বা /?tab=new_order এর ইন্টারনাল লিংক রাখুন।'
+      tip: 'আর্টিকেলের ভেতরে পুরাতন ব্লগ (/?tab=blog&slug=...) এবং সার্ভিস পেজের ইন্টারনাল লিংক রাখুন।'
     },
     {
       id: 'image_alt',
-      label: 'Featured Image & Keyword-Rich Alt Attribute',
+      label: 'Online Relevant Image & Keyword-Rich Alt Attribute',
       passed: hasCoverAndAlt,
       points: 6,
-      tip: 'কভার ইমেজ এবং SEO ইমেজ Alt Text যুক্ত করুন।'
+      tip: 'প্রাসঙ্গিক অনলাইন কভার ইমেজ এবং SEO ইমেজ Alt Text যুক্ত করুন।'
     },
     {
       id: 'faq_schema',
@@ -229,9 +314,15 @@ export function subscribeBlogs(callback: (blogs: SMMBlogPost[]) => void): () => 
 export async function saveBlogPost(post: SMMBlogPost): Promise<void> {
   const path = `blogs/${post.id}`;
   const seoEval = computeSeoScoreForBlogPost(post);
+  const uniquenessEval = checkBlogDuplicateAndUniqueness(post, cachedBlogsList);
   const normalizedPost: SMMBlogPost = {
     ...post,
-    seoScore: seoEval.score,
+    seoTitle: post.seoTitle || post.metaTitle || `${post.title} | Boostlagbe.com`,
+    seoDescription: post.seoDescription || post.metaDescription || post.excerpt,
+    metaTitle: post.seoTitle || post.metaTitle || `${post.title} | Boostlagbe.com`,
+    metaDescription: post.seoDescription || post.metaDescription || post.excerpt,
+    seoScore: Math.max(post.seoScore || 0, seoEval.score),
+    uniquenessScore: post.uniquenessScore || uniquenessEval.uniquenessScore,
     wordCount: seoEval.wordCount,
     readingTimeMinutes: seoEval.readingTimeMinutes,
     updatedAt: Date.now()
@@ -311,6 +402,57 @@ export async function testGeminiConnectionOnServer(params?: {
   return await safeParseJsonResponse(resp, 'Gemini status check failed');
 }
 
+export async function researchKeywordsWithGeminiOnServer(params: {
+  categories?: string[];
+  existingSlugs?: string[];
+  existingKeywords?: string[];
+  existingTitles?: string[];
+  customTopicHint?: string;
+  apiKey?: string;
+  model?: string;
+}): Promise<{
+  status: string;
+  source: string;
+  totalExcludedExisting: number;
+  candidates: SMMBlogKeywordCandidate[];
+}> {
+  const resp = await fetch('/api/gemini/research-keywords', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params)
+  });
+  const data = await safeParseJsonResponse(resp, 'Failed to research SEO keywords');
+  if (!resp.ok || data.error) {
+    throw new Error(data.error || 'AI Keyword Research failed');
+  }
+  return data;
+}
+
+export async function findContextualOnlineImagesOnServer(params: {
+  topic?: string;
+  category?: string;
+  focusKeyword?: string;
+  existingCoverUrls?: string[];
+}): Promise<{
+  status: string;
+  coverImage: string;
+  coverImageAlt: string;
+  inArticleImage: string;
+  inArticleImageAlt: string;
+  gallery: { url: string; alt: string }[];
+}> {
+  const resp = await fetch('/api/gemini/find-image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params)
+  });
+  const data = await safeParseJsonResponse(resp, 'Failed to find online contextual images');
+  if (!resp.ok || data.error) {
+    throw new Error(data.error || 'Online image discovery failed');
+  }
+  return data;
+}
+
 export async function generateBlogWithGeminiOnServer(params: {
   topic: string;
   focusKeyword?: string;
@@ -322,6 +464,7 @@ export async function generateBlogWithGeminiOnServer(params: {
   model?: string;
   includeInternalLinks?: boolean;
   includeFaqSchema?: boolean;
+  existingBlogs?: Pick<SMMBlogPost, 'slug' | 'title' | 'focusKeyword' | 'category' | 'coverImage'>[];
 }): Promise<{
   status: string;
   source: string;
@@ -354,7 +497,9 @@ export async function optimizeBlogSeoWithGeminiOnServer(params: {
   focusKeyword: string;
   secondaryKeywords: string[];
   tags: string[];
+  coverImage?: string;
   coverImageAlt: string;
+  keyTakeaways?: string[];
   faqItems: SMMBlogFaqItem[];
 }> {
   const resp = await fetch('/api/gemini/optimize-seo', {
@@ -365,6 +510,37 @@ export async function optimizeBlogSeoWithGeminiOnServer(params: {
   const data = await safeParseJsonResponse(resp, 'Failed to optimize SEO metadata');
   if (!resp.ok || data.error) {
     throw new Error(data.error || 'Gemini SEO optimization failed');
+  }
+  return data;
+}
+
+export async function runBlogAutopilotCycleOnServer(params: {
+  categories?: string[];
+  topicQueue?: string[];
+  minSeoScore?: number;
+  minHours?: number;
+  maxHours?: number;
+  apiKey?: string;
+  model?: string;
+  existingBlogs?: Pick<SMMBlogPost, 'id' | 'slug' | 'title' | 'focusKeyword' | 'category' | 'coverImage'>[];
+}): Promise<{
+  status: string;
+  published: boolean;
+  blog: SMMBlogPost;
+  logEntry: SMMBlogAutopilotLog;
+  nextRunAt: number;
+  nextIntervalHours: number;
+  remainingQueue: string[];
+  sitemapUrl: string;
+}> {
+  const resp = await fetch('/api/gemini/autopilot-run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params)
+  });
+  const data = await safeParseJsonResponse(resp, 'Autopilot blog cycle failed');
+  if (!resp.ok || data.error) {
+    throw new Error(data.error || 'Autopilot blog publishing cycle failed');
   }
   return data;
 }
