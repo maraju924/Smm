@@ -166,10 +166,72 @@ export const INITIAL_SEO_BLOG_POSTS: SMMBlogPost[] = [
     seoDescription:
       'Boostlagbe.com (বুস্ট লাগবে ডট কম) কেন বাংলাদেশের ১ নম্বর অটোমেটিক SMM Panel? বিকাশ ও নগদে ইনস্ট্যান্ট ডিপোজিট করে Facebook 60k Watchtime ও YouTube 4000h নিন।',
     canonicalUrl: 'https://boostlagbe.com/?tab=blog&slug=boostlagbe-best-automatic-smm-panel-bangladesh',
+    englishSummary:
+      'Boostlagbe.com (বুস্ট লাগবে) is Bangladesh’s #1 Automated SMM Panel offering instant bKash, Nagad, Rocket, and Upay wallet deposits. Creators, F-Commerce brands, and agencies can order non-drop Facebook 60k Watchtime, 5,000 Followers, YouTube 4,000 Hours Watchtime, and TikTok Viral Views with 1–5 minute cloud API v2 delivery and a 100% automated refund guarantee.',
     keyTakeaways: [
       'বিকাশ, নগদ, রকেট ও উপায়ে ১-ক্লিকে ইনস্ট্যান্ট অটোমেটিক ওয়ালেট ডিপোজিট।',
       'অর্ডার দেওয়ার ১–৫ মিনিটের মধ্যে API v2 সার্ভার থেকে অটোমেটিক ডেলিভারি শুরু।',
       'ফেসবুক 60k Watchtime, ইউটিউব 4000h এবং টিকটক ভাইরাল ভিউতে ৩০ দিনের রিফিল গ্যারান্টি।'
+    ],
+    howToSteps: [
+      {
+        stepNumber: 1,
+        title: 'ফ্রি অ্যাকাউন্ট তৈরি ও বিকাশ/নগদে ওয়ালেট ডিপোজিট',
+        description: 'মাত্র ৩০ সেকেন্ডে ইমেইল দিয়ে লগইন করুন এবং Add Funds পেজ থেকে বিকাশ বা নগদে সর্বনিম্ন ২০ টাকা থেকে ইনস্ট্যান্ট ব্যালেন্স যোগ করুন।',
+        tip: 'প্রথমবার ১০০ টাকা+ ডিপোজিট করলে রেফারেল ও প্রোমো বোনাস সুবিধা পাবেন।'
+      },
+      {
+        stepNumber: 2,
+        title: 'কাঙ্ক্ষিত প্ল্যাটফর্ম ও সার্ভিস প্যাকেজ নির্বাচন',
+        description: 'New Order অথবা Services পেজ থেকে Facebook, YouTube, TikTok বা Instagram ক্যাটাগরি সিলেক্ট করে আপনার বাজেট অনুযায়ী সেরা সার্ভিস বেছে নিন।',
+        tip: 'সার্ভিস সিলেক্ট করার সময় ৩০ দিনের Refill Guarantee যুক্ত সার্ভিস প্রাধান্য দিন।'
+      },
+      {
+        stepNumber: 3,
+        title: 'পাবলিক লিংক ও পরিমাণ দিয়ে ১-ক্লিকে অর্ডার সাবমিট',
+        description: 'আপনার পেজ বা ভিডিওর পাবলিক লিংক এবং পরিমাণ (Quantity) বসিয়ে সাবমিট করলেই ১–৫ মিনিটের মধ্যে স্বয়ংক্রিয়ভাবে ডেলিভারি শুরু হয়ে যাবে।',
+        tip: 'Live Order Tracker থেকে প্রতি মুহূর্তে স্টার্ট কাউন্ট ও ডেলিভারি প্রগ্রেস ট্র্যাক করতে পারবেন।'
+      }
+    ],
+    caseStudy: {
+      clientName: 'রাফি ইসলাম — ঢাকা এফ-কমার্স ও ডিজিটাল এজেন্সি',
+      niche: 'Facebook F-Commerce & SMM Reselling',
+      beforeMetric: 'নতুন পেজে মাত্র ৩২০ ফলোয়ার ও দিনে ১–২টি অর্ডার',
+      afterMetric: '১৫ দিনে ১২,৫০০+ অ্যাক্টিভ ফলোয়ার ও মাসে ৳২৮,০০০+ রিসেলিং প্রফিট',
+      budgetSpentBdt: 850,
+      timeframe: '১৫ দিন',
+      summary: 'রাফি ভাই মাত্র ৮৫০ টাকা বিকাশে ডিপোজিট করে আমাদের নন-ড্রপ ফেসবুক ফলোয়ার ও রিলস ভিউ বুস্ট নেন এবং নিজের ক্লায়েন্টদের কাছে সার্ভিস রিসেল করে প্রথম মাসেই ২৮ হাজার টাকার বেশি মুনাফা করেন।'
+    },
+    secretPromoCode: 'BLOGVIP',
+    secretPromoDiscountText: 'ব্লগ পাঠকদের জন্য স্পেশাল ওয়ালেট রিওয়ার্ড ও প্রোমো ভাউচার কোড!',
+    quiz: {
+      question: 'Boostlagbe.com-এ বিকাশ বা নগদে পেমেন্ট করার কত সময়ের মধ্যে ওয়ালেটে ব্যালেন্স যুক্ত হয়?',
+      options: [
+        '১ সেকেন্ডে (ইনস্ট্যান্ট অটোমেটিক ক্রেডিট)',
+        '২৪ ঘণ্টা পর',
+        '৭ দিন পর'
+      ],
+      correctIndex: 0,
+      rewardPromoCode: 'BLOGVIP',
+      explanation: 'সঠিক উত্তর! Boostlagbe.com-এ অটোমেটেড চেকআউট থাকায় পেমেন্ট করার সাথে সাথেই ১ সেকেন্ডে ব্যালেন্স যুক্ত হয়ে যায়।'
+    },
+    viralHashtags: ['#Boostlagbe', '#SMMPanelBD', '#FacebookBoostBD', '#TikTokViralBD', '#MonetizationBD', '#FCommerceBangladesh'],
+    helpfulYesCount: 184,
+    helpfulNoCount: 3,
+    ratingValue: 4.9,
+    ratingCount: 162,
+    recentOrdersProofCount: 64,
+    comments: [
+      {
+        id: 'cmt-seed-1',
+        userName: 'মাহিন চৌধুরী',
+        userRole: 'Facebook Content Creator, Chittagong',
+        questionOrComment: 'আমি আজ সকালে বিকাশ দিয়ে ২০০ টাকা অ্যাড করে ফেসবুক ফলোয়ার অর্ডার করেছিলাম, ১০ মিনিটের মধ্যেই ফলোয়ার আসা শুরু হয়েছে। দারুণ সার্ভিস!',
+        adminReply: 'ধন্যবাদ মাহিন ভাই! আপনার পেজের মনিটাইজেশন ও গ্রোথের জন্য যেকোনো সময় আমাদের সাপোর্ট টিম পাশে আছে।',
+        rating: 5,
+        verifiedUser: true,
+        createdAt: 1729705000000
+      }
     ],
     faqItems: [
       {
@@ -211,6 +273,8 @@ export const INITIAL_SEO_BLOG_POSTS: SMMBlogPost[] = [
     slug: 'facebook-page-monetization-60k-watchtime-bangladesh-guide',
     excerpt:
       'বাংলাদেশে খুব কম খরচে এবং সম্পূর্ণ নিরাপদে কীভাবে আপনার ফেসবুক পেজের ৫,০০০ ফলোয়ার এবং ৬০,০০০ মিনিট ওয়াচটাইম (60k Watchtime) পূরণ করে ইন-স্ট্রিম অ্যাডস মনিটাইজেশন চালু করবেন।',
+    englishSummary:
+      'Complete 2026 step-by-step guide to unlocking Facebook In-Stream Ads & Content Monetization in Bangladesh. Learn how to safely complete 5,000 active followers and 60,000 minutes watchtime within 24–72 hours using organic-pattern delivery and bKash/Nagad payments on Boostlagbe.com.',
     content: `<h2>ফেসবুক পেজ মনিটাইজেশন (Facebook Monetization BD) কেন এত জনপ্রিয়?</h2>
 <p>বর্তমানে বাংলাদেশের হাজার হাজার কন্টেন্ট ক্রিয়েটর ফেসবুক পেজ ও প্রোফাইল থেকে প্রতি মাসে লক্ষ লক্ষ টাকা আয় করছেন। তবে ফেসবুক <strong>In-Stream Ads Monetization</strong> পাওয়ার জন্য দুটি প্রধান শর্ত পূরণ করতে হয়: সর্বনিম্ন <strong>৫,০০০ অ্যাক্টিভ ফলোয়ার</strong> এবং গত ৬০ দিনে <strong>৬০,০০০ মিনিট ওয়াচটাইম (60k Minutes Watchtime)</strong>।</p>
 
@@ -231,7 +295,7 @@ export const INITIAL_SEO_BLOG_POSTS: SMMBlogPost[] = [
 
 <h3>৩. সঠিক সার্ভিস নির্বাচন</h3>
 <p>আমাদের <a href="/?tab=services&category=Facebook">Facebook Monetization ক্যাটালগ</a> থেকে আপনার ভিডিওর দৈর্ঘ্য অনুযায়ী 1 Hour বা 2 Hours+ Watchtime সার্ভিস সিলেক্ট করে <a href="/?tab=new-order">New Order</a> পেজে লিংক দিন। এছাড়াও দেখে নিন আমাদের <a href="/?tab=blog&slug=boostlagbe-best-automatic-smm-panel-bangladesh">Boostlagbe.com অটোমেটিক SMM প্যানেল গাইড</a>।</p>`,
-    coverImage: BRAND_LOGO_URL,
+    coverImage: 'https://images.pexels.com/photos/267350/pexels-photo-267350.jpeg?auto=compress&cs=tinysrgb&w=1200',
     coverImageAlt: 'ফেসবুক পেজ মনিটাইজেশন ও 60k Watchtime সার্ভিস বাংলাদেশ - Boostlagbe.com',
     category: 'Facebook Monetization',
     tags: ['Facebook Monetization BD', '60k Watchtime', 'Facebook Followers BD', 'বুস্ট লাগবে', 'Boostlagbe'],
@@ -248,6 +312,66 @@ export const INITIAL_SEO_BLOG_POSTS: SMMBlogPost[] = [
       'ফেসবুক ইন-স্ট্রিম অ্যাডস চালু করতে ৫,০০০ ফলোয়ার এবং ৬০,০০০ মিনিট ওয়াচটাইম প্রয়োজন।',
       'অর্ডার দেওয়ার আগে পেজে কমপক্ষে ১ ঘণ্টার কপিরাইটমুক্ত নিজস্ব ভিডিও পাবলিক রাখুন।',
       '২৪ থেকে ৭২ ঘণ্টার মধ্যে সম্পূর্ণ অর্গানিক-প্যাটার্ন ওয়াচটাইম সম্পন্ন হয়ে Set Up অপশন আসে।'
+    ],
+    howToSteps: [
+      {
+        stepNumber: 1,
+        title: 'পেজে ১+ ঘণ্টার কপিরাইটমুক্ত ভিডিও আপলোড করুন',
+        description: 'আপনার ফেসবুক পেজে কিংবা প্রোফাইলে কমপক্ষে ৬০ মিনিটের একটি সম্পূর্ণ নিজস্ব ভয়েস ও ফেসক্যাম ভিডিও বা লাইভ পাবলিক করুন।',
+        tip: 'ব্যাকগ্রাউন্ডে কোনো মিউজিক ব্যবহার করবেন না যাতে Content ID ক্লেইম না আসে।'
+      },
+      {
+        stepNumber: 2,
+        title: '৫টি অ্যাক্টিভ ভিডিও রাখুন',
+        description: 'মনে রাখবেন ফেসবুকের নিয়ম অনুযায়ী পেজে অন্তত ৫টি অরিজিনাল ভিডিও বা রিলস অ্যাক্টিভ থাকতে হবে।',
+        tip: 'পুরাতন কপি বা ডিলিট করা ভিডিও থাকলে আগেই মুছে ফেলুন।'
+      },
+      {
+        stepNumber: 3,
+        title: '60k Watchtime ও 5K Followers অর্ডার করুন',
+        description: 'Boostlagbe.com থেকে Facebook 60k Watchtime এবং Non-Drop Page Followers প্যাক অর্ডার করুন। ৪৮ ঘণ্টার মধ্যে ক্রাইটেরিয়া ১০০% পূরণ হয়ে যাবে।',
+        tip: 'ক্রাইটেরিয়া পূরণ হওয়ার পর Creator Studio / Professional Dashboard থেকে Set Up বাটনে ক্লিক করে ব্যাংক বা পেআউট যুক্ত করুন।'
+      }
+    ],
+    caseStudy: {
+      clientName: 'নুসরাত জাহান — ফুড ভ্লগার ও কন্টেন্ট ক্রিয়েটর (সিলেট)',
+      niche: 'Facebook Cooking & Lifestyle Vlog',
+      beforeMetric: '১,২০০ ফলোয়ার ও মাত্র ৪,৫০০ মিনিট ওয়াচটাইম (৪ মাসে)',
+      afterMetric: '৪৮ ঘণ্টায় 60k Watchtime ও 5K ফলোয়ার সম্পন্ন — প্রথম মাসেই $৩৪০ (৳৪০,০০০+) ইনকাম!',
+      budgetSpentBdt: 620,
+      timeframe: '৪৮ ঘণ্টা',
+      summary: 'নুসরাত আপু তার ১ ঘণ্টা ১৫ মিনিটের কুকিং লাইভ ভিডিওতে আমাদের 60k Watchtime ও ৪,০০০ নন-ড্রপ ফলোয়ার প্যাক নেন। ৩ দিনের মাথায় তার পেজে In-Stream Ads চালু হয় এবং প্রথম মাসেই তিনি ৩৪০ ডলার পেআউট পান।'
+    },
+    secretPromoCode: 'FBMONETIZE',
+    secretPromoDiscountText: 'ফেসবুক মনিটাইজেশন গাইড পাঠকদের জন্য স্পেশাল প্রোমো কোড!',
+    quiz: {
+      question: 'ফেসবুক পেজে In-Stream Ads মনিটাইজেশন চালু করতে সর্বনিম্ন কত মিনিট ওয়াচটাইম ও ফলোয়ার প্রয়োজন?',
+      options: [
+        '৫,০০০ ফলোয়ার এবং ৬০,০০০ মিনিট ওয়াচটাইম',
+        '১০,০০০ ফলোয়ার এবং ৬,০০,০০০ মিনিট ওয়াচটাইম',
+        '১,০০০ ফলোয়ার এবং ৪,০০০ মিনিট ওয়াচটাইম'
+      ],
+      correctIndex: 0,
+      rewardPromoCode: 'FBMONETIZE',
+      explanation: 'একদম সঠিক! বর্তমানে ফেসবুকের নতুন নিয়মে মাত্র ৫,০০০ ফলোয়ার এবং ৬০,০০০ মিনিট ওয়াচটাইম হলেই In-Stream Ads চালু করা যায়।'
+    },
+    viralHashtags: ['#FacebookMonetizationBD', '#60kWatchtime', '#InStreamAdsBD', '#FacebookReelsBD', '#Boostlagbe', '#ContentCreatorBD'],
+    helpfulYesCount: 239,
+    helpfulNoCount: 4,
+    ratingValue: 4.9,
+    ratingCount: 215,
+    recentOrdersProofCount: 52,
+    comments: [
+      {
+        id: 'cmt-seed-2',
+        userName: 'সাব্বির হোসেন',
+        userRole: 'Gaming Streamer, Dhaka',
+        questionOrComment: 'ভাইয়া আমার পেজে ২ ঘণ্টার গেমিং লাইভ ভিডিও আছে, ওটা দিয়ে কি 60k Watchtime নিলে Set Up আসবে?',
+        adminReply: 'জি সাব্বির ভাই! আপনার ২ ঘণ্টার লাইভ ভিডিওতে কোনো কপিরাইট মিউজিক না থাকলে আমাদের 1H/2H+ 60k Watchtime সার্ভিস নিলে মাত্র ২৪–৪৮ ঘণ্টায় ১০০% নিরাপদে Set Up অপশন চলে আসবে।',
+        rating: 5,
+        verifiedUser: true,
+        createdAt: 1729715000000
+      }
     ],
     faqItems: [
       {
@@ -285,6 +409,8 @@ export const INITIAL_SEO_BLOG_POSTS: SMMBlogPost[] = [
     slug: 'youtube-4000-hours-watchtime-tiktok-views-boost-bd',
     excerpt:
       'ইউটিউব চ্যানেল দ্রুত মনিটাইজ করতে ৪০০০ ঘণ্টা ওয়াচটাইম ও ১০০০ সাবস্ক্রাইবার এবং টিকটক ভিডিও ForYou-তে ভাইরাল করার প্রমাণিত গাইডলাইন।',
+    englishSummary:
+      'Discover how Bangladeshi YouTubers and TikTok creators achieve 4,000 Hours YouTube Watchtime, 1,000 non-drop subscribers, and viral TikTok ForYou engagement using high-retention signals on Boostlagbe.com.',
     content: `<h2>ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম (YouTube 4000h Watchtime) ও মনিটাইজেশন</h2>
 <p>একজন ইউটিউবারের সবচেয়ে বড় স্বপ্ন হলো চ্যানেলে Google AdSense মনিটাইজেশন অন করা। এর জন্য ৩৬৫ দিনের মধ্যে <strong>১,০০০ সাবস্ক্রাইবার</strong> এবং <strong>৪,০০০ ঘণ্টা পাবলিক ওয়াচটাইম</strong> প্রয়োজন। <strong>Boostlagbe.com</strong> আপনাকে দিচ্ছে নন-ড্রপ হাই-রিটেনশন ইউটিউব ওয়াচটাইম প্যাক, যা আপনার চ্যানেলকে দ্রুত রিভিউয়ের জন্য প্রস্তুত করে।</p>
 
@@ -301,7 +427,7 @@ export const INITIAL_SEO_BLOG_POSTS: SMMBlogPost[] = [
 
 <h3>ধাপ ২: সার্ভিস ক্যাটালগ থেকে প্যাকেজ বেছে নিন</h3>
 <p>আমাদের <a href="/?tab=services&category=YouTube">YouTube Services</a> অথবা <a href="/?tab=services&category=TikTok">TikTok Services</a> পেজে গিয়ে রেট ও বিবরণ দেখে অর্ডার বাটনে ক্লিক করুন। ফেসবুক ক্রিয়েটরদের জন্য আমাদের <a href="/?tab=blog&slug=facebook-page-monetization-60k-watchtime-bangladesh-guide">ফেসবুক পেজ মনিটাইজেশন গাইড</a> পড়তে ভুলবেন না।</p>`,
-    coverImage: BRAND_LOGO_URL,
+    coverImage: 'https://images.pexels.com/photos/1591060/pexels-photo-1591060.jpeg?auto=compress&cs=tinysrgb&w=1200',
     coverImageAlt: 'ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম ও টিকটক ভিউ বুস্ট বাংলাদেশ - Boostlagbe.com',
     category: 'YouTube & TikTok',
     tags: ['YouTube 4000h Watchtime', 'TikTok Views BD', 'YouTube Subscribers BD', 'Boostlagbe.com'],
@@ -319,6 +445,49 @@ export const INITIAL_SEO_BLOG_POSTS: SMMBlogPost[] = [
       'হাই-রিটেনশন ভিউ ব্যবহারে ইউটিউব অ্যালগরিদমে ভিডিওর অর্গানিক ইম্প্রেশন বৃদ্ধি পায়।',
       'টিকটক ভিডিও আপলোডের প্রথম ৩০ মিনিটের মধ্যে ভিউ ও শেয়ার বুস্ট করলে ForYou-তে যাওয়ার সম্ভাবনা ৩ গুণ বাড়ে।'
     ],
+    howToSteps: [
+      {
+        stepNumber: 1,
+        title: 'চ্যানেলে ১৫–৬০ মিনিটের লং ভিডিও পাবলিক রাখুন',
+        description: 'ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম দ্রুত সম্পন্ন করার জন্য চ্যানেলে কমপক্ষে ১৫ মিনিট বা তার বেশি দৈর্ঘ্যের নিজস্ব ভিডিও আপলোড করুন।',
+        tip: 'এম্বেডিং (Allow Embedding) অপশন অন রাখুন।'
+      },
+      {
+        stepNumber: 2,
+        title: 'হাই-রিটেনশন ওয়াচটাইম ও নন-ড্রপ সাবস্ক্রাইবার অর্ডার করুন',
+        description: 'Boostlagbe.com থেকে YouTube 4000h Monetization Pack সিলেক্ট করে ভিডিও বা চ্যানেল লিংক দিন।',
+        tip: 'একই সাথে ১০০০ সাবস্ক্রাইবার অর্ডার করলে দ্রুত YPP Apply বাটন আনলক হবে।'
+      }
+    ],
+    caseStudy: {
+      clientName: 'তানজিম টেক স্টুডিও — ইউটিউব ও টিকটক ক্রিয়েটর (রাজশাহী)',
+      niche: 'Tech Review & Gadget Unboxing BD',
+      beforeMetric: '৪১০ সাবস্ক্রাইবার ও মাত্র ৯০০ ঘণ্টা ওয়াচটাইম',
+      afterMetric: '৬ দিনে ৪,০০০ ঘণ্টা ওয়াচটাইম + ১,১০০ সাবস্ক্রাইবার ও Google AdSense অ্যাপ্রুভাল!',
+      budgetSpentBdt: 1450,
+      timeframe: '৬ দিন',
+      summary: 'তানজিম ভাই তার ৩০ মিনিটের গ্যাজেট রিভিউ ভিডিওতে আমাদের নন-ড্রপ ইউটিউব ওয়াচটাইম ও সাবস্ক্রাইবার প্যাক অর্ডার করেন এবং ৬ দিনের মাথায় ইউটিউব মনিটাইজেশন অ্যাপ্রুভাল পান।'
+    },
+    secretPromoCode: 'YTVIRAL',
+    secretPromoDiscountText: 'ইউটিউব ও টিকটক ক্রিয়েটরদের জন্য স্পেশাল প্রোমো কোড!',
+    quiz: {
+      question: 'ইউটিউব চ্যানেলে AdSense মনিটাইজেশন চালু করতে ৩৬৫ দিনে কত ঘণ্টা পাবলিক ওয়াচটাইম প্রয়োজন?',
+      options: [
+        '৪,০০০ ঘণ্টা ওয়াচটাইম ও ১,০০০ সাবস্ক্রাইবার',
+        '১০,০০০ ঘণ্টা ওয়াচটাইম',
+        '৫০০ ঘণ্টা ওয়াচটাইম'
+      ],
+      correctIndex: 0,
+      rewardPromoCode: 'YTVIRAL',
+      explanation: 'সঠিক! ১,০০০ সাবস্ক্রাইবার এবং ৪,০০০ ঘণ্টা পাবলিক ওয়াচটাইম পূর্ণ হলেই সম্পূর্ণ AdSense রেভিনিউ শেয়ার চালু হয়।'
+    },
+    viralHashtags: ['#YouTubeMonetizationBD', '#4000HoursWatchtime', '#TikTokForYouBD', '#ViralTikTokBD', '#Boostlagbe', '#YouTuberBD'],
+    helpfulYesCount: 168,
+    helpfulNoCount: 2,
+    ratingValue: 4.9,
+    ratingCount: 145,
+    recentOrdersProofCount: 39,
+    comments: [],
     faqItems: [
       {
         question: 'ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম পূরণ হতে কত দিন সময় লাগে?',

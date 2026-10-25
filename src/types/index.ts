@@ -53,6 +53,8 @@ export interface SMMService {
   refill: boolean;
   description: string;
   averageTime: string;
+  avgTime?: string;
+  ratePer1000?: number;
   status: 'active' | 'disabled';
   providerId?: string;
   providerServiceId?: string;
@@ -205,12 +207,17 @@ export interface SMMCoupon {
   id: string;
   code: string;
   rewardAmount: number; // in BDT
+  amount?: number;
+  description?: string;
+  expiresAt?: number;
   maxUses: number;
   usedCount: number;
   usedBy: string[];
   active: boolean;
   createdAt: number;
 }
+
+export type Coupon = SMMCoupon;
 
 export interface SiteSettings {
   siteName?: string;
@@ -227,6 +234,7 @@ export interface SiteSettings {
   minDepositForBonus: number;
   minDepositAmount?: number;
   whatsappUrl: string;
+  whatsappNumber?: string;
   telegramUrl: string;
   referralCommissionPercent: number;
   minAffiliatePayout: number;
@@ -276,6 +284,48 @@ export interface SMMBlogFaqItem {
   answer: string;
 }
 
+export interface SMMBlogHowToStep {
+  stepNumber?: number;
+  name?: string;
+  title?: string;
+  text?: string;
+  description?: string;
+  tip?: string;
+}
+
+export interface SMMBlogCaseStudy {
+  clientName: string;
+  niche: string;
+  beforeMetric: string;
+  afterMetric: string;
+  budgetSpentBdt: number | string;
+  timeframe: string;
+  summary: string;
+}
+
+export interface SMMBlogQuizItem {
+  question: string;
+  options: string[];
+  correctIndex: number;
+  rewardPromoCode?: string;
+  explanation: string;
+}
+
+export interface SMMBlogComment {
+  id: string;
+  authorName?: string;
+  userName?: string;
+  authorBadge?: string;
+  userRole?: string;
+  text?: string;
+  questionOrComment?: string;
+  adminReply?: string;
+  adminRepliedAt?: number;
+  rating?: number;
+  verifiedUser?: boolean;
+  createdAt: number;
+}
+
 export interface SMMBlogKeywordCandidate {
   keyword: string;
   topicTitle: string;
@@ -283,6 +333,7 @@ export interface SMMBlogKeywordCandidate {
   category: string;
   searchIntent: 'Informational' | 'Commercial' | 'Transactional' | 'Guide';
   intent?: string;
+  intentAngle?: string;
   monthlySearchVolumeBd: string;
   monthlyVolume?: string;
   keywordDifficulty: number;
@@ -291,9 +342,12 @@ export interface SMMBlogKeywordCandidate {
   whyItRanks: string;
   rationale?: string;
   secondaryKeywords?: string[];
+  competitorGapNote?: string;
+  trendVelocity?: string;
   suggestedCoverImage: string;
   suggestedCoverAlt: string;
   isUnique?: boolean;
+  nGramSimilarityPercent?: number;
 }
 
 export interface SMMBlogAutopilotLog {
@@ -309,14 +363,29 @@ export interface SMMBlogAutopilotLog {
   category: string;
   seoScore: number;
   uniquenessScore: number;
+  nGramSimilarityPercent?: number;
+  intentAngle?: string;
   internalLinksInjected: number;
   internalLinksCount?: number;
+  bidirectionalBacklinksCount?: number;
   coverImage: string;
   status: 'published' | 'refined_and_published' | 'skipped_duplicate' | 'error';
   sitemapSynced: boolean;
+  indexNowPinged?: boolean;
   nextScheduledAt?: number;
   summary: string;
   note?: string;
+}
+
+export interface SMMBlogTopicRequest {
+  id: string;
+  topic: string;
+  topicTitle?: string;
+  category: string;
+  requestedBy: string;
+  upvotes: number;
+  createdAt: number;
+  status?: 'pending' | 'queued' | 'published';
 }
 
 export interface SMMBlogPost {
@@ -324,6 +393,8 @@ export interface SMMBlogPost {
   title: string;
   slug: string;
   excerpt: string;
+  sgeDirectAnswer?: string; // 45-word Google AI Overview / Featured Snippet Position #0 box
+  englishSummary?: string;
   content: string; // Rich HTML or structured sections
   coverImage: string;
   coverImageAlt: string;
@@ -331,6 +402,7 @@ export interface SMMBlogPost {
   tags: string[];
   focusKeyword: string;
   secondaryKeywords: string[];
+  banglishKeywords?: string[]; // Phonetic Banglish & Voice Search keywords
   metaTitle?: string;
   metaDescription?: string;
   seoTitle?: string;
@@ -341,6 +413,24 @@ export interface SMMBlogPost {
   metaRobots?: 'index, follow' | 'noindex, follow';
   faqItems: SMMBlogFaqItem[];
   keyTakeaways?: string[];
+  howToSteps?: SMMBlogHowToStep[];
+  videoTutorialUrl?: string;
+  videoDurationSeconds?: number;
+  caseStudy?: SMMBlogCaseStudy;
+  secretPromoCode?: string;
+  secretPromoDiscountText?: string;
+  quiz?: SMMBlogQuizItem;
+  viralHashtags?: string[];
+  helpfulYesCount?: number;
+  helpfulNoCount?: number;
+  ratingValue?: number;
+  ratingCount?: number;
+  recentOrdersProofCount?: number;
+  calculatorClicksCount?: number;
+  attributedOrdersCount?: number;
+  attributedRevenueBdt?: number;
+  pollVotes?: Record<string, number>;
+  comments?: SMMBlogComment[];
   authorName: string;
   authorRole?: string;
   authorBio?: string;
@@ -349,7 +439,12 @@ export interface SMMBlogPost {
   wordCount?: number;
   seoScore: number; // 0 - 100
   uniquenessScore?: number; // 0 - 100
+  nGramSimilarityPercent?: number; // 0 - 100 (Target < 15%)
+  contentFingerprint?: string;
+  intentAngle?: string;
+  blueprintStyle?: string;
   internalLinksCount?: number;
+  bidirectionalBacklinksCount?: number;
   searchIntent?: string;
   keywordDifficulty?: number;
   status: 'published' | 'draft';
@@ -358,6 +453,8 @@ export interface SMMBlogPost {
   relatedCategory?: string;
   aiGenerated?: boolean;
   autopilotGenerated?: boolean;
+  lastRefreshedAt?: number;
+  indexNowPingedAt?: number;
   publishedAt: number;
   createdAt: number;
   updatedAt: number;

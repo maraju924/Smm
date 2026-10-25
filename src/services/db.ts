@@ -38,7 +38,8 @@ import {
   ZiniPayGatewayLog,
   ServerHealthStatus,
   SMMBlogPost,
-  SMMBlogFaqItem
+  SMMBlogFaqItem,
+  AffiliatePayoutRecord
 } from '../types';
 import { 
   DEFAULT_SITE_SETTINGS,

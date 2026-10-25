@@ -1,6 +1,12 @@
 User-agent: *
 Allow: /
+Allow: /?tab=blog
+Allow: /?tab=blog&slug=
+Allow: /?tab=blog&pseo=
+Allow: /?tab=blog&division=
+Allow: /blog
 Allow: /?tab=services
+Allow: /?tab=new-order
 Allow: /?tab=about
 Allow: /?tab=contact
 Allow: /?tab=refund
@@ -16,4 +22,5 @@ Disallow: /?tab=admin
 Disallow: /?tab=404
 Disallow: /?tab=maintenance
 
-Sitemap: https://smm.khatirajbd.com/sitemap.xml
+Sitemap: https://boostlagbe.com/sitemap.xml
+Sitemap: https://boostlagbe.com/rss.xml

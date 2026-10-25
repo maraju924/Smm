@@ -22,8 +22,12 @@
     }
   ],
   "rewrites": [
+    { "source": "/sitemap.xml", "destination": "/api/index" },
+    { "source": "/robots.txt", "destination": "/api/index" },
+    { "source": "/rss.xml", "destination": "/api/index" },
+    { "source": "/feed.xml", "destination": "/api/index" },
     { "source": "/((?!index\\.html$)[^/]+\\.html)", "destination": "/api/index" },
     { "source": "/api/(.*)", "destination": "/api/index" },
-    { "source": "/((?!api/|assets/|robots\\.txt|sitemap\\.xml|[^/]+\\.html).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|assets/|robots\\.txt|sitemap\\.xml|rss\\.xml|feed\\.xml|[^/]+\\.html).*)", "destination": "/index.html" }
   ]
 }

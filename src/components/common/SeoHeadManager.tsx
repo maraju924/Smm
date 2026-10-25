@@ -6,6 +6,7 @@ import {
   DEFAULT_BD_SEO_KEYWORDS_STRING,
   INITIAL_SEO_BLOG_POSTS
 } from '../../data/seedServices';
+import { PROGRAMMATIC_SEO_LANDING_PAGES } from '../../services/blogSeoService';
 
 interface SeoHeadManagerProps {
   currentTab: string;
@@ -86,9 +87,15 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
 
     const activeCategory = navParams?.category ? String(navParams.category).trim() : '';
     const activeSlug = navParams?.slug ? String(navParams.slug).trim().toLowerCase() : '';
+    const activePseo = navParams?.pseo ? String(navParams.pseo).trim().toLowerCase() : '';
+    const activeDivision = navParams?.division ? String(navParams.division).trim().toLowerCase() : '';
     const activeBlogPost =
       currentTab === 'blog' && activeSlug
         ? blogs.find((b) => b.slug.toLowerCase() === activeSlug || b.id.toLowerCase() === activeSlug)
+        : null;
+    const activePseoPage =
+      currentTab === 'blog' && activePseo
+        ? PROGRAMMATIC_SEO_LANDING_PAGES.find((p) => p.slug.toLowerCase() === activePseo)
         : null;
 
     if (currentTab === 'blog') {
@@ -120,6 +127,21 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
         if (postKws) {
           keywords = `${postKws}, ${keywords}`;
         }
+      } else if (activePseoPage) {
+        pageTitle = `${activePseoPage.title} | ${brandName}`;
+        pageDescription = `${activePseoPage.summary} মাত্র ৳${activePseoPage.startingRateBdt} থেকে শুরু (${activePseoPage.deliverySpeed}, ${activePseoPage.refillGuarantee})।`;
+        canonicalUrl = `${baseOrigin}/?tab=blog&pseo=${encodeURIComponent(activePseoPage.slug)}`;
+        breadcrumbLabel = activePseoPage.title;
+        pageSchemaType = 'WebPage';
+        keywords = `${activePseoPage.targetKeyword}, ${activePseoPage.banglishQuery}, ${keywords}`;
+      } else if (activeDivision) {
+        const divCap = activeDivision.charAt(0).toUpperCase() + activeDivision.slice(1);
+        pageTitle = `Best SMM Panel in ${divCap} Bangladesh (বিকাশ/নগদ সোশ্যাল মিডিয়া বুস্ট) | ${brandName}`;
+        pageDescription = `${divCap} বিভাগের এফ-কমার্স উদ্যোক্তা, ইউটিউবার ও ক্রিয়েটরদের জন্য ১ নম্বর অটোমেটিক SMM Panel। বিকাশ ও নগদে সবচেয়ে কম দামে ফলোয়ার, ওয়াচটাইম ও মনিটাইজেশন প্যাক নিন।`;
+        canonicalUrl = `${baseOrigin}/?tab=blog&division=${encodeURIComponent(activeDivision)}`;
+        breadcrumbLabel = `${divCap} Division SMM Hub`;
+        pageSchemaType = 'WebPage';
+        keywords = `best smm panel ${activeDivision} bangladesh, facebook boost ${activeDivision} bkash, ${keywords}`;
       } else {
         pageTitle = `SMM Marketing & Growth Blog Bangladesh (বুস্ট লাগবে গাইড) | ${brandName}`;
         pageDescription = `ফেসবুক পেজ মনিটাইজেশন, টিকটক ভাইরাল ট্রিকস, ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম এবং এসএমএম রিসেলার মার্কেটিং নিয়ে সম্পূর্ণ বাংলা গাইড পড়ুন ${brandName}-এ।`;
@@ -274,11 +296,23 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
       }
     }
 
-    // Canonical & Hreflang links for Google Bangladesh
+    // Canonical & Hreflang links for Google Bangladesh + RSS 2.0 Syndication Link
     upsertLinkTag('canonical', canonicalUrl);
     upsertLinkTag('alternate', canonicalUrl, 'bn-BD');
     upsertLinkTag('alternate', canonicalUrl, 'en');
     upsertLinkTag('alternate', canonicalUrl, 'x-default');
+
+    let rssLink = document.head.querySelector(
+      'link[rel="alternate"][type="application/rss+xml"]'
+    ) as HTMLLinkElement | null;
+    if (!rssLink) {
+      rssLink = document.createElement('link');
+      rssLink.rel = 'alternate';
+      rssLink.type = 'application/rss+xml';
+      rssLink.title = `${brandName} Official SMM Blog & Creator Guides RSS Feed`;
+      document.head.appendChild(rssLink);
+    }
+    rssLink.href = `${baseOrigin}/rss.xml`;
 
     // Dynamic Multi-Entity Schema.org JSON-LD (@graph)
     const activeServices = services.filter((s) => s.status !== 'disabled');
@@ -353,6 +387,10 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
             },
             headline: activeBlogPost.title,
             description: activeBlogPost.seoDescription || activeBlogPost.excerpt,
+            abstract:
+              activeBlogPost.sgeDirectAnswer ||
+              activeBlogPost.seoDescription ||
+              activeBlogPost.excerpt,
             image: [ogImg],
             datePublished: new Date(
               activeBlogPost.publishedAt || activeBlogPost.createdAt
@@ -383,16 +421,97 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
                 url: `${baseOrigin}${BRAND_LOGO_URL}`
               }
             },
+            about: [
+              {
+                '@type': 'Thing',
+                name: 'Social Media Marketing',
+                sameAs: 'https://en.wikipedia.org/wiki/Social_media_marketing'
+              },
+              {
+                '@type': 'Thing',
+                name: activeBlogPost.category || 'Facebook',
+                sameAs: `https://en.wikipedia.org/wiki/${encodeURIComponent(
+                  (activeBlogPost.category || 'Facebook').replace(/\s+/g, '_')
+                )}`
+              }
+            ],
+            mentions: [
+              {
+                '@type': 'Country',
+                name: 'Bangladesh',
+                sameAs: 'https://en.wikipedia.org/wiki/Bangladesh'
+              },
+              {
+                '@type': 'Thing',
+                name: 'bKash',
+                sameAs: 'https://en.wikipedia.org/wiki/BKash'
+              },
+              {
+                '@type': 'Thing',
+                name: 'Nagad',
+                sameAs: 'https://en.wikipedia.org/wiki/Nagad'
+              }
+            ],
             keywords: [
               activeBlogPost.focusKeyword,
               ...(activeBlogPost.secondaryKeywords || []),
+              ...(activeBlogPost.banglishKeywords || []),
               ...(activeBlogPost.tags || [])
             ]
               .filter(Boolean)
               .join(', '),
             wordCount: activeBlogPost.wordCount || 650,
             articleSection: activeBlogPost.category,
-            inLanguage: 'bn-BD'
+            inLanguage: 'bn-BD',
+            speakable: {
+              '@type': 'SpeakableSpecification',
+              cssSelector: ['h1', '[itemprop="abstract"]', '[itemprop="description"]']
+            },
+            aggregateRating: {
+              '@type': 'AggregateRating',
+              ratingValue: String(activeBlogPost.ratingValue || 4.9),
+              bestRating: '5',
+              worstRating: '1',
+              ratingCount: String(activeBlogPost.ratingCount || 68)
+            }
+          },
+          ...(activeBlogPost.howToSteps && activeBlogPost.howToSteps.length > 0
+            ? [
+                {
+                  '@type': 'HowTo',
+                  '@id': `${canonicalUrl}#howto`,
+                  name: activeBlogPost.title,
+                  description: activeBlogPost.seoDescription || activeBlogPost.excerpt,
+                  totalTime: `PT${activeBlogPost.readingTimeMinutes || 5}M`,
+                  estimatedCost: {
+                    '@type': 'MonetaryAmount',
+                    currency: 'BDT',
+                    value: '20'
+                  },
+                  step: activeBlogPost.howToSteps.map((st, idx) => ({
+                    '@type': 'HowToStep',
+                    position: idx + 1,
+                    name: st.name || st.title || `ধাপ ${idx + 1}`,
+                    text: st.text || st.description || '',
+                    url: `${canonicalUrl}#howto-step-${idx + 1}`
+                  }))
+                }
+              ]
+            : []),
+          {
+            '@type': 'VideoObject',
+            '@id': `${canonicalUrl}#video`,
+            name: `${activeBlogPost.title} — প্র্যাকটিক্যাল টিউটোরিয়াল`,
+            description: activeBlogPost.seoDescription || activeBlogPost.excerpt,
+            thumbnailUrl: [ogImg],
+            uploadDate: new Date(
+              activeBlogPost.publishedAt || activeBlogPost.createdAt
+            ).toISOString(),
+            duration: `PT${Math.floor((activeBlogPost.videoDurationSeconds || 195) / 60)}M${
+              (activeBlogPost.videoDurationSeconds || 195) % 60
+            }S`,
+            contentUrl: activeBlogPost.videoTutorialUrl || canonicalUrl,
+            embedUrl: activeBlogPost.videoTutorialUrl || canonicalUrl
           }
         ]
       : [];

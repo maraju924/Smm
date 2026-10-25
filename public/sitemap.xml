@@ -1,57 +1,197 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+        xmlns:xhtml="http://www.w3.org/1999/xhtml"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+  <!-- Core Public & Landing Pages -->
   <url>
-    <loc>https://smm.khatirajbd.com/</loc>
+    <loc>https://boostlagbe.com/</loc>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
-    <xhtml:link rel="alternate" hreflang="bn-BD" href="https://smm.khatirajbd.com/" />
-    <xhtml:link rel="alternate" hreflang="en" href="https://smm.khatirajbd.com/" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://smm.khatirajbd.com/" />
+    <xhtml:link rel="alternate" hreflang="bn-BD" href="https://boostlagbe.com/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://boostlagbe.com/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://boostlagbe.com/" />
   </url>
   <url>
-    <loc>https://smm.khatirajbd.com/?tab=services</loc>
+    <loc>https://boostlagbe.com/?tab=services</loc>
     <changefreq>hourly</changefreq>
     <priority>0.95</priority>
   </url>
   <url>
-    <loc>https://smm.khatirajbd.com/?tab=about</loc>
+    <loc>https://boostlagbe.com/?tab=new-order</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=blog</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=about</loc>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
   </url>
   <url>
-    <loc>https://smm.khatirajbd.com/?tab=contact</loc>
+    <loc>https://boostlagbe.com/?tab=contact</loc>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
   </url>
   <url>
-    <loc>https://smm.khatirajbd.com/?tab=refund</loc>
+    <loc>https://boostlagbe.com/?tab=refund</loc>
     <changefreq>monthly</changefreq>
     <priority>0.80</priority>
   </url>
   <url>
-    <loc>https://smm.khatirajbd.com/?tab=terms</loc>
+    <loc>https://boostlagbe.com/?tab=terms</loc>
     <changefreq>monthly</changefreq>
     <priority>0.70</priority>
   </url>
   <url>
-    <loc>https://smm.khatirajbd.com/?tab=privacy</loc>
+    <loc>https://boostlagbe.com/?tab=privacy</loc>
     <changefreq>monthly</changefreq>
     <priority>0.70</priority>
   </url>
   <url>
-    <loc>https://smm.khatirajbd.com/?tab=api</loc>
+    <loc>https://boostlagbe.com/?tab=api</loc>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
   </url>
   <url>
-    <loc>https://smm.khatirajbd.com/?tab=track</loc>
+    <loc>https://boostlagbe.com/?tab=track</loc>
     <changefreq>daily</changefreq>
     <priority>0.80</priority>
   </url>
   <url>
-    <loc>https://smm.khatirajbd.com/?tab=add-funds</loc>
+    <loc>https://boostlagbe.com/?tab=add-funds</loc>
     <changefreq>weekly</changefreq>
     <priority>0.80</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=affiliates</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.75</priority>
+  </url>
+
+  <!-- Service Category Landing Pages -->
+  <url>
+    <loc>https://boostlagbe.com/?tab=services&amp;category=Facebook</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=services&amp;category=YouTube</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=services&amp;category=TikTok</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=services&amp;category=Instagram</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=services&amp;category=Telegram</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.85</priority>
+  </url>
+
+  <!-- Programmatic SEO Commercial Landing Pages -->
+  <url>
+    <loc>https://boostlagbe.com/?tab=blog&amp;pseo=buy-facebook-followers-bangladesh-bkash</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.88</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=blog&amp;pseo=facebook-60k-watchtime-monetization-pack-bd</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.88</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=blog&amp;pseo=youtube-4000-hours-watchtime-1000-subscribers-bd</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.88</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=blog&amp;pseo=tiktok-viral-views-followers-likes-bangladesh</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.88</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=blog&amp;pseo=instagram-followers-reels-views-bangladesh</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.88</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=blog&amp;pseo=telegram-channel-members-post-views-bangladesh</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.88</priority>
+  </url>
+
+  <!-- 8 Divisional Local SEO Landing Pages (Bangladesh) -->
+  <url>
+    <loc>https://boostlagbe.com/?tab=blog&amp;division=dhaka</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.82</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=blog&amp;division=chattogram</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.82</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=blog&amp;division=sylhet</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.82</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=blog&amp;division=rajshahi</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.82</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=blog&amp;division=khulna</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.82</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=blog&amp;division=barishal</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.82</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=blog&amp;division=rangpur</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.82</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=blog&amp;division=mymensingh</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.82</priority>
+  </url>
+
+  <!-- Featured Pillar SEO Blog Articles -->
+  <url>
+    <loc>https://boostlagbe.com/?tab=blog&amp;slug=boostlagbe-best-automatic-smm-panel-bangladesh</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=blog&amp;slug=facebook-page-monetization-60k-watchtime-bangladesh-guide</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=blog&amp;slug=youtube-4000-hours-watchtime-tiktok-views-boost-bd</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://boostlagbe.com/?tab=blog&amp;slug=tiktok-foryou-viral-instagram-reels-growth-bangladesh</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.90</priority>
   </url>
 </urlset>

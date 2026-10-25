@@ -36,29 +36,43 @@ import {
 } from './services/db';
 import { subscribeBlogs } from './services/blogSeoService';
 import { DEFAULT_SITE_SETTINGS, INITIAL_SEO_BLOG_POSTS } from './data/seedServices';
+import { AdminView } from './components/views/AdminView';
+import { BlogView } from './components/views/BlogView';
 
-// Code-split heavy workspace, admin, and modal views for 95+ Mobile Lighthouse Performance
-const Navbar = lazy(() => import('./components/layout/Navbar').then(m => ({ default: m.Navbar })));
-const BottomNav = lazy(() => import('./components/layout/BottomNav').then(m => ({ default: m.BottomNav })));
-const DesktopSidebar = lazy(() => import('./components/layout/DesktopSidebar').then(m => ({ default: m.DesktopSidebar })));
-const HomeView = lazy(() => import('./components/views/HomeView').then(m => ({ default: m.HomeView })));
-const NewOrderView = lazy(() => import('./components/views/NewOrderView').then(m => ({ default: m.NewOrderView })));
-const MassOrderView = lazy(() => import('./components/views/MassOrderView').then(m => ({ default: m.MassOrderView })));
-const OrdersView = lazy(() => import('./components/views/OrdersView').then(m => ({ default: m.OrdersView })));
-const ServicesView = lazy(() => import('./components/views/ServicesView').then(m => ({ default: m.ServicesView })));
-const AddFundsView = lazy(() => import('./components/views/AddFundsView').then(m => ({ default: m.AddFundsView })));
-const AnalyticsView = lazy(() => import('./components/views/AnalyticsView').then(m => ({ default: m.AnalyticsView })));
-const AffiliatesView = lazy(() => import('./components/views/AffiliatesView').then(m => ({ default: m.AffiliatesView })));
-const TicketsView = lazy(() => import('./components/views/TicketsView').then(m => ({ default: m.TicketsView })));
-const TrackOrderView = lazy(() => import('./components/views/TrackOrderView').then(m => ({ default: m.TrackOrderView })));
-const ApiDocsView = lazy(() => import('./components/views/ApiDocsView').then(m => ({ default: m.ApiDocsView })));
-const ProfileView = lazy(() => import('./components/views/ProfileView').then(m => ({ default: m.ProfileView })));
-const MenuView = lazy(() => import('./components/views/MenuView').then(m => ({ default: m.MenuView })));
-const AdminView = lazy(() => import('./components/views/AdminView').then(m => ({ default: m.AdminView })));
-const BlogView = lazy(() => import('./components/views/BlogView').then(m => ({ default: m.BlogView })));
-const ProductionPagesView = lazy(() => import('./components/views/ProductionPagesView').then(m => ({ default: m.ProductionPagesView })));
-const AuthModal = lazy(() => import('./components/modals/AuthModal').then(m => ({ default: m.AuthModal })));
-const CommandPaletteModal = lazy(() => import('./components/modals/CommandPaletteModal').then(m => ({ default: m.CommandPaletteModal })));
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  importer: () => Promise<{ default: T }>
+) {
+  return lazy(() =>
+    importer().catch(() =>
+      new Promise<{ default: T }>((resolve, reject) => {
+        setTimeout(() => {
+          importer().then(resolve).catch(reject);
+        }, 350);
+      })
+    )
+  );
+}
+
+// Code-split workspace and modal views with automatic retry resilience
+const Navbar = lazyWithRetry(() => import('./components/layout/Navbar').then(m => ({ default: m.Navbar })));
+const BottomNav = lazyWithRetry(() => import('./components/layout/BottomNav').then(m => ({ default: m.BottomNav })));
+const DesktopSidebar = lazyWithRetry(() => import('./components/layout/DesktopSidebar').then(m => ({ default: m.DesktopSidebar })));
+const HomeView = lazyWithRetry(() => import('./components/views/HomeView').then(m => ({ default: m.HomeView })));
+const NewOrderView = lazyWithRetry(() => import('./components/views/NewOrderView').then(m => ({ default: m.NewOrderView })));
+const MassOrderView = lazyWithRetry(() => import('./components/views/MassOrderView').then(m => ({ default: m.MassOrderView })));
+const OrdersView = lazyWithRetry(() => import('./components/views/OrdersView').then(m => ({ default: m.OrdersView })));
+const ServicesView = lazyWithRetry(() => import('./components/views/ServicesView').then(m => ({ default: m.ServicesView })));
+const AddFundsView = lazyWithRetry(() => import('./components/views/AddFundsView').then(m => ({ default: m.AddFundsView })));
+const AnalyticsView = lazyWithRetry(() => import('./components/views/AnalyticsView').then(m => ({ default: m.AnalyticsView })));
+const AffiliatesView = lazyWithRetry(() => import('./components/views/AffiliatesView').then(m => ({ default: m.AffiliatesView })));
+const TicketsView = lazyWithRetry(() => import('./components/views/TicketsView').then(m => ({ default: m.TicketsView })));
+const TrackOrderView = lazyWithRetry(() => import('./components/views/TrackOrderView').then(m => ({ default: m.TrackOrderView })));
+const ApiDocsView = lazyWithRetry(() => import('./components/views/ApiDocsView').then(m => ({ default: m.ApiDocsView })));
+const ProfileView = lazyWithRetry(() => import('./components/views/ProfileView').then(m => ({ default: m.ProfileView })));
+const MenuView = lazyWithRetry(() => import('./components/views/MenuView').then(m => ({ default: m.MenuView })));
+const ProductionPagesView = lazyWithRetry(() => import('./components/views/ProductionPagesView').then(m => ({ default: m.ProductionPagesView })));
+const AuthModal = lazyWithRetry(() => import('./components/modals/AuthModal').then(m => ({ default: m.AuthModal })));
+const CommandPaletteModal = lazyWithRetry(() => import('./components/modals/CommandPaletteModal').then(m => ({ default: m.CommandPaletteModal })));
 
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
@@ -133,6 +147,8 @@ function resolveInitialRoute(): { tab: string; isWorkspace: boolean; params: any
   const tabParam = searchParams.get('tab');
   const catParam = searchParams.get('category');
   const slugParam = searchParams.get('slug');
+  const pseoParam = searchParams.get('pseo');
+  const divParam = searchParams.get('division');
   const refParam = searchParams.get('ref') || searchParams.get('referral');
   if (refParam && refParam.trim()) {
     try {
@@ -146,6 +162,8 @@ function resolveInitialRoute(): { tab: string; isWorkspace: boolean; params: any
   const routeParams: Record<string, string> = {};
   if (catParam) routeParams.category = catParam;
   if (slugParam) routeParams.slug = slugParam;
+  if (pseoParam) routeParams.pseo = pseoParam;
+  if (divParam) routeParams.division = divParam;
 
   if (tabParam) {
     const resolved = normalizeTabId(tabParam);
@@ -421,6 +439,16 @@ const MainAppContent: React.FC = () => {
         } else {
           url.searchParams.delete('slug');
         }
+        if (params?.pseo) {
+          url.searchParams.set('pseo', String(params.pseo));
+        } else {
+          url.searchParams.delete('pseo');
+        }
+        if (params?.division) {
+          url.searchParams.set('division', String(params.division));
+        } else {
+          url.searchParams.delete('division');
+        }
       }
       window.history.pushState({ tab: normalized, params: params || {} }, '', url.toString());
     } catch {
@@ -538,6 +566,8 @@ const MainAppContent: React.FC = () => {
             blogs={blogs}
             services={services}
             siteSettings={siteSettings}
+            userProfile={profile}
+            coupons={coupons}
             selectedSlug={navParams?.slug || null}
             onSelectSlug={(slug) => handleNavigate('blog', slug ? { slug } : {})}
             onNavigate={(tabId) => handleNavigate(tabId)}
@@ -862,6 +892,8 @@ const MainAppContent: React.FC = () => {
                   blogs={blogs}
                   services={services}
                   siteSettings={siteSettings}
+                  userProfile={profile}
+                  coupons={coupons}
                   selectedSlug={navParams?.slug || null}
                   onSelectSlug={(slug) => handleNavigate('blog', slug ? { slug } : {})}
                   onNavigate={(tabId) => handleNavigate(tabId)}

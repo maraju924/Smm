@@ -242,7 +242,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 try {
                   const pendingRefCode = sessionStorage.getItem('boostlagbe_ref_code');
                   if (pendingRefCode && pendingRefCode.trim()) {
-                    await applyReferralCode(newProfile, pendingRefCode.trim());
+                    await applyReferralCode(pendingRefCode.trim(), newProfile);
                   }
                 } catch {
                   // Ignore invalid or expired referral code during signup

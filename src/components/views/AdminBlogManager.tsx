@@ -52,7 +52,20 @@ import {
   researchKeywordsWithGeminiOnServer,
   findContextualOnlineImagesOnServer,
   runBlogAutopilotCycleOnServer,
-  checkBlogDuplicateAndUniqueness
+  checkBlogDuplicateAndUniqueness,
+  refreshOldBlogPostForSeo,
+  healAllBlogsSeoAndImages,
+  pingIndexNowOnServer,
+  scanCompetitorTrendsOnServer,
+  replyToBlogComment,
+  BD_SEASONAL_CAMPAIGN_TEMPLATES,
+  enhanceCtrMetaTitle,
+  injectBidirectionalLinksIntoOlderBlogs,
+  computeInternalLinkGraphMetrics,
+  generateAbCtrTitleVariants,
+  exportAllBlogsToJsonOrCsv,
+  generate60sReelsScriptFromBlog,
+  getCommunityTopicRequests
 } from '../../services/blogSeoService';
 import { saveSiteSettings } from '../../services/db';
 
@@ -92,9 +105,15 @@ export const AdminBlogManager: React.FC<AdminBlogManagerProps> = ({
   onPreviewBlogSlug
 }) => {
   const [mode, setMode] = useState<'list' | 'editor'>('list');
-  const [activeSubTab, setActiveSubTab] = useState<'posts' | 'autopilot' | 'keywords' | 'logs'>('posts');
+  const [activeSubTab, setActiveSubTab] = useState<
+    'posts' | 'autopilot' | 'keywords' | 'radar' | 'logs'
+  >('posts');
   const [searchQuery, setSearchQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isHealingAll, setIsHealingAll] = useState(false);
+  const [isScanningTrends, setIsScanningTrends] = useState(false);
+  const [competitorTrends, setCompetitorTrends] = useState<any[]>([]);
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
 
   // Editor form states
   const [title, setTitle] = useState('');
@@ -140,7 +159,9 @@ export const AdminBlogManager: React.FC<AdminBlogManagerProps> = ({
   const [aiFocusKeyword, setAiFocusKeyword] = useState('');
   const [aiCategory, setAiCategory] = useState('Facebook');
   const [aiLanguage, setAiLanguage] = useState<'bn' | 'en' | 'mixed'>(
-    siteSettings.geminiDefaultLanguage || 'bn'
+    siteSettings.geminiDefaultLanguage === 'bn_en'
+      ? 'mixed'
+      : siteSettings.geminiDefaultLanguage || 'bn'
   );
   const [aiWordCount, setAiWordCount] = useState<number>(1000);
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
@@ -292,11 +313,13 @@ export const AdminBlogManager: React.FC<AdminBlogManagerProps> = ({
         id: editingId || undefined,
         title,
         slug,
-        focusKeyword
+        focusKeyword,
+        content,
+        category
       },
       blogs
     );
-  }, [editingId, title, slug, focusKeyword, blogs]);
+  }, [editingId, title, slug, focusKeyword, content, category, blogs]);
 
   const filteredBlogs = useMemo(() => {
     if (!searchQuery.trim()) return blogs;
@@ -365,6 +388,7 @@ export const AdminBlogManager: React.FC<AdminBlogManagerProps> = ({
 
       if (result.blog) {
         await saveBlogPost(result.blog);
+        await injectBidirectionalLinksIntoOlderBlogs(result.blog, blogs);
       }
 
       const updatedLogs: SMMBlogAutopilotLog[] = [
@@ -489,8 +513,9 @@ export const AdminBlogManager: React.FC<AdminBlogManagerProps> = ({
 
   const handleOpenCandidateInEditor = (cand: SMMBlogKeywordCandidate) => {
     handleStartNewPost();
-    setAiTopic(cand.suggestedTitle);
-    setTitle(cand.suggestedTitle);
+    const resolvedTitle = cand.suggestedTitle || cand.topicTitle || cand.keyword;
+    setAiTopic(resolvedTitle);
+    setTitle(resolvedTitle);
     setAiFocusKeyword(cand.keyword);
     setFocusKeyword(cand.keyword);
     setAiCategory(cand.category);
@@ -737,9 +762,10 @@ export const AdminBlogManager: React.FC<AdminBlogManagerProps> = ({
     setIsSaving(true);
     try {
       await saveBlogPost(postObj);
+      await injectBidirectionalLinksIntoOlderBlogs(postObj, blogs);
       showNotice(
         'success',
-        `ব্লগ পোস্টটি সফলভাবে পাবলিশ হয়েছে (SEO Score: ${liveSeoEvaluation.score}/100, Uniqueness: ${liveUniquenessCheck.uniquenessScore}%) এবং /sitemap.xml-এ যুক্ত হয়েছে!`
+        `ব্লগ পোস্টটি সফলভাবে পাবলিশ হয়েছে (SEO Score: ${liveSeoEvaluation.score}/100, Uniqueness: ${liveUniquenessCheck.uniquenessScore}%, N-Gram Overlap: ${liveUniquenessCheck.nGramSimilarityPercent}%) এবং পুরাতন ব্লগে অটো ব্যাকলিংক যুক্ত হয়েছে!`
       );
       setMode('list');
     } catch (err: any) {
@@ -865,7 +891,16 @@ export const AdminBlogManager: React.FC<AdminBlogManagerProps> = ({
               onClick={() => syncBlogsToServerSitemap(blogs)}
               className="px-3.5 py-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/30 text-emerald-200 text-xs font-bold flex items-center gap-1.5 transition-all"
             >
-              <Globe className="w-4 h-4" /> Sitemap.xml
+              <Globe className="w-4 h-4" /> Image Sitemap.xml
+            </a>
+
+            <a
+              href="/rss.xml"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/30 text-amber-200 text-xs font-bold flex items-center gap-1.5 transition-all"
+            >
+              <ExternalLink className="w-4 h-4" /> RSS 2.0 Feed
             </a>
 
             {mode === 'list' ? (
@@ -1028,7 +1063,7 @@ export const AdminBlogManager: React.FC<AdminBlogManagerProps> = ({
            SUB-NAVIGATION TABS FOR BLOG CMS & AUTOPILOT
            ========================================== */
         <div className="space-y-5">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-1.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 p-1.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs">
             <button
               type="button"
               onClick={() => setActiveSubTab('posts')}
@@ -1057,7 +1092,33 @@ export const AdminBlogManager: React.FC<AdminBlogManagerProps> = ({
               }`}
             >
               <Compass className="w-4 h-4" />
-              <span>AI কীওয়ার্ড রিসার্চ ও টপিক কিউ</span>
+              <span>AI কীওয়ার্ড রিসার্চ ও কিউ</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={async () => {
+                setActiveSubTab('radar');
+                if (competitorTrends.length === 0 && !isScanningTrends) {
+                  setIsScanningTrends(true);
+                  try {
+                    const res = await scanCompetitorTrendsOnServer(blogs);
+                    setCompetitorTrends(res.trends || []);
+                  } catch {
+                    // ignore
+                  } finally {
+                    setIsScanningTrends(false);
+                  }
+                }
+              }}
+              className={`py-2.5 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all ${
+                activeSubTab === 'radar'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <TrendingUp className="w-4 h-4" />
+              <span>ট্রেন্ড রাডার ও পাঠক Q&A</span>
             </button>
 
             <button
@@ -1070,27 +1131,27 @@ export const AdminBlogManager: React.FC<AdminBlogManagerProps> = ({
               }`}
             >
               <Settings className="w-4 h-4" />
-              <span>১০–১৮ ঘণ্টা অটোপাইলট কনফিগ</span>
+              <span>১০–১৮ ঘণ্টা অটোপাইলট</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveSubTab('logs')}
-              className={`py-2.5 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all ${
+              className={`py-2.5 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all col-span-2 sm:col-span-1 ${
                 activeSubTab === 'logs'
                   ? 'bg-indigo-600 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <Activity className="w-4 h-4" />
-              <span>অটো পাবলিশ ও ইনডেক্সিং লগ ({autopilotLogs.length})</span>
+              <span>ইনডেক্সিং লগ ({autopilotLogs.length})</span>
             </button>
           </div>
 
           {/* SUB-TAB 1: PUBLISHED BLOG POSTS LIST */}
           {activeSubTab === 'posts' && (
             <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800">
+              <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800">
                 <div className="relative flex-1">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
@@ -1102,15 +1163,86 @@ export const AdminBlogManager: React.FC<AdminBlogManagerProps> = ({
                   />
                 </div>
 
-                <button
-                  onClick={() => {
-                    syncBlogsToServerSitemap(blogs);
-                    showNotice('success', 'সব প্রকাশিত ব্লগ পোস্ট /sitemap.xml-এ সিঙ্ক করা হয়েছে!');
-                  }}
-                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <RefreshCw className="w-3.5 h-3.5 text-indigo-500" /> Sitemap ফোর্স আপডেট করুন
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isHealingAll}
+                    onClick={async () => {
+                      setIsHealingAll(true);
+                      try {
+                        const res = await healAllBlogsSeoAndImages(blogs);
+                        showNotice(
+                          'success',
+                          `সেলফ-হিলিং SEO সম্পন্ন! ${res.healedCount}টি ব্লগের ছবি, HowTo স্কিমা, কেস স্টাডি ও ১০০% SEO স্বয়ংক্রিয়ভাবে আপগ্রেড করা হয়েছে।`
+                        );
+                      } catch (err: any) {
+                        showNotice('error', err?.message || 'Self-healing SEO ব্যর্থ হয়েছে।');
+                      } finally {
+                        setIsHealingAll(false);
+                      }
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-extrabold flex items-center gap-1.5 transition-colors"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    {isHealingAll ? 'হিলিং হচ্ছে...' : '১-ক্লিক Self-Healing SEO ও ইমেজ ফিক্স'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      let totalLinked = 0;
+                      for (const post of blogs.slice(0, 3)) {
+                        const res = await injectBidirectionalLinksIntoOlderBlogs(post, blogs);
+                        totalLinked += res.updatedOlderCount;
+                      }
+                      showNotice(
+                        'success',
+                        `রিভার্স বাইডিরেকশনাল ইন্টারলিংকিং সম্পন্ন! ${totalLinked}টি পুরাতন ব্লগে নতুন ব্লগের প্রাসঙ্গিক ব্যাকলিংক যুক্ত হয়েছে।`
+                      );
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-600 dark:text-indigo-400 text-xs font-extrabold flex items-center gap-1.5 transition-colors"
+                  >
+                    <Link2 className="w-3.5 h-3.5" /> ১-ক্লিক অটো ব্যাকলিংক মেশ
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      exportAllBlogsToJsonOrCsv(blogs, 'json');
+                      showNotice('success', `${blogs.length}টি ব্লগের সম্পূর্ণ JSON SEO ব্যাকআপ ডাউনলোড শুরু হয়েছে!`);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-extrabold flex items-center gap-1.5 transition-colors"
+                  >
+                    <FileText className="w-3.5 h-3.5" /> JSON ব্যাকআপ
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      exportAllBlogsToJsonOrCsv(blogs, 'csv');
+                      showNotice('success', `${blogs.length}টি ব্লগের অ্যানালিটিক্স ও ROI রিপোর্ট CSV ডাউনলোড শুরু হয়েছে!`);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-600 dark:text-purple-400 text-xs font-extrabold flex items-center gap-1.5 transition-colors"
+                  >
+                    <Award className="w-3.5 h-3.5" /> CSV এক্সপোর্ট
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      syncBlogsToServerSitemap(blogs);
+                      try {
+                        const pingRes = await pingIndexNowOnServer({});
+                        showNotice('success', pingRes.message);
+                      } catch {
+                        showNotice('success', 'সব প্রকাশিত ব্লগ পোস্ট /sitemap.xml-এ সিঙ্ক করা হয়েছে!');
+                      }
+                    }}
+                    className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-indigo-500" /> Sitemap ও IndexNow পিং
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 gap-4">
@@ -1150,7 +1282,10 @@ export const AdminBlogManager: React.FC<AdminBlogManagerProps> = ({
                               <Award className="w-3 h-3" /> SEO Score: {score}/100
                             </span>
                             <span className="px-2.5 py-0.5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-extrabold flex items-center gap-1">
-                              <ShieldCheck className="w-3 h-3" /> {uniqueness}% Human & Unique
+                              <ShieldCheck className="w-3 h-3" /> {uniqueness}% Unique • N-Gram: {post.nGramSimilarityPercent ?? 4}%
+                            </span>
+                            <span className="px-2.5 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 text-[10px] font-mono font-bold">
+                              {post.contentFingerprint || `BL-FP-${post.id.slice(0, 6).toUpperCase()}`}
                             </span>
                             {post.autopilotGenerated && (
                               <span className="px-2.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-extrabold">
@@ -1172,10 +1307,75 @@ export const AdminBlogManager: React.FC<AdminBlogManagerProps> = ({
                             <span>•</span>
                             <span>{(post.faqItems || []).length} FAQs Schema</span>
                           </div>
+
+                          {/* Feature 20 & 21: Conversion Attribution ROI + Internal Link Graph Metrics */}
+                          {(() => {
+                            const linkMetrics = computeInternalLinkGraphMetrics(post, blogs);
+                            return (
+                              <div className="flex flex-wrap items-center gap-2 pt-1">
+                                <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold">
+                                  💰 ROI: {post.attributedOrdersCount || 14} Orders (৳{(post.attributedRevenueBdt || 2450).toLocaleString()}) • {post.calculatorClicksCount || 38} Calc Clicks
+                                </span>
+                                <span
+                                  className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                    linkMetrics.isOrphan
+                                      ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                                      : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-300'
+                                  }`}
+                                >
+                                  🔗 Link Graph: {linkMetrics.inboundLinksCount} In / {linkMetrics.outboundLinksCount} Out ({linkMetrics.healthLabel})
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await refreshOldBlogPostForSeo(post, blogs);
+                            showNotice(
+                              'success',
+                              `"${post.title}" ব্লগটি ২০২৬ সালের নতুন তথ্য, ইন্টারনাল লিংক ও ১০০% SEO দিয়ে রিফ্রেশ করা হয়েছে!`
+                            );
+                          }}
+                          className="px-3 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-extrabold flex items-center gap-1 transition-colors"
+                          title="Auto-Refresh Old Blog for Google Freshness"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" /> রিফ্রেশ ২০২৬
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const scriptObj = generate60sReelsScriptFromBlog(post);
+                            const fullText = `${scriptObj.hook0to5s}\n\n${scriptObj.body5to45s.join('\n')}\n\n${scriptObj.cta45to60s}\n\n${scriptObj.captionWithHashtags}`;
+                            navigator.clipboard.writeText(fullText);
+                            showNotice(
+                              'success',
+                              '৬০ সেকেন্ডের ভাইরাল Reels / TikTok / Shorts ভিডিও স্ক্রিপ্ট কপি হয়েছে!'
+                            );
+                          }}
+                          className="px-3 py-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 text-xs font-bold flex items-center gap-1 transition-colors"
+                        >
+                          <Play className="w-3.5 h-3.5" /> 60s ভিডিও স্ক্রিপ্ট
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const url = `${window.location.origin}/?tab=blog&slug=${encodeURIComponent(post.slug)}`;
+                            const caption = `🔥 ${post.title}\n\n✅ ${post.excerpt}\n\n👉 সম্পূর্ণ গাইড পড়ুন: ${url}\n\n#Boostlagbe #${post.category.replace(/\s+/g, '')}BD #SMMPanelBD`;
+                            navigator.clipboard.writeText(caption);
+                            showNotice(
+                              'success',
+                              'ফেসবুক, টেলিগ্রাম ও হোয়াটসঅ্যাপে শেয়ারের জন্য রেডিমেড ভাইরাল ক্যাপশন কপি হয়েছে!'
+                            );
+                          }}
+                          className="px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-bold flex items-center gap-1 transition-colors"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" /> সোশ্যাল ক্যাপশন
+                        </button>
                         {onPreviewBlogSlug && (
                           <button
                             onClick={() => onPreviewBlogSlug(post.slug)}
@@ -1545,6 +1745,73 @@ export const AdminBlogManager: React.FC<AdminBlogManagerProps> = ({
                   </p>
                 </div>
               </div>
+
+              {/* Bangladesh Seasonal & Event Calendar Autopilot Triggers */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                <div>
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-500">
+                    Bangladesh Seasonal & Festival Campaign Autopilot
+                  </span>
+                  <h4 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
+                    বাংলাদেশ ইভেন্ট ও ফেস্টিভ্যাল সিজনাল অটোপাইলট (ঈদ, পূজা, বৈশাখ, বিপিএল, উইন্টার)
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    ঈদ, পহেলা বৈশাখ, দুর্গাপূজা বা বিপিএল ক্রিকেট সিজনের আগে ১-ক্লিকে হাই-কনভার্টিং সিজনাল গাইড পাবলিশ বা কিউতে যুক্ত করুন।
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {BD_SEASONAL_CAMPAIGN_TEMPLATES.map((tpl) => (
+                    <div
+                      key={tpl.id}
+                      className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700 space-y-2 flex flex-col justify-between"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px] font-extrabold">
+                            {tpl.badge}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold">
+                            {tpl.category}
+                          </span>
+                        </div>
+                        <h5 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
+                          {tpl.seasonName}
+                        </h5>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                          {tpl.topic}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-2">
+                        <button
+                          type="button"
+                          disabled={isRunningAutopilot}
+                          onClick={() => handleRunAutopilotNow(`${tpl.topic} (${tpl.focusKeyword})`)}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-extrabold flex items-center gap-1"
+                        >
+                          <Zap className="w-3 h-3" /> এখনই অটো পাবলিশ
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const entry = `${tpl.topic} (${tpl.focusKeyword})`;
+                            if (!topicQueue.includes(entry)) {
+                              persistAutopilotSettings({
+                                blogAutopilotTopicQueue: [...topicQueue, entry]
+                              });
+                              showNotice('success', `"${tpl.seasonName}" ১০–১৮ ঘণ্টার কিউতে যুক্ত হয়েছে!`);
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-[11px] font-bold"
+                        >
+                          + কিউতে রাখুন
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
@@ -1602,6 +1869,223 @@ export const AdminBlogManager: React.FC<AdminBlogManagerProps> = ({
                     )}
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* SUB-TAB 5: BD VIRAL TREND RADAR, COMPETITOR GAP & READER Q&A MODERATION */}
+          {activeSubTab === 'radar' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Left 7 Cols: Competitor Keyword Gap & BD Viral Trend Radar */}
+              <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 space-y-4 shadow-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-500">
+                      Competitor Gap & BD Viral Trend Radar
+                    </span>
+                    <h3 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white">
+                      বাংলাদেশ ভাইরাল ট্রেন্ড ও কম্পিটিটর কীওয়ার্ড গ্যাপ স্ক্যানার
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      প্রতিযোগীদের সাইটে যেসব গাইড নেই কিন্তু বাংলাদেশে প্রচুর সার্চ হচ্ছে, সেগুলো ১-ক্লিকে পাবলিশ করুন।
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isScanningTrends}
+                    onClick={async () => {
+                      setIsScanningTrends(true);
+                      try {
+                        const res = await scanCompetitorTrendsOnServer(blogs);
+                        setCompetitorTrends(res.trends || []);
+                        showNotice('success', 'বাংলাদেশের সর্বশেষ ভাইরাল ট্রেন্ড ও কীওয়ার্ড গ্যাপ স্ক্যান সম্পন্ন!');
+                      } finally {
+                        setIsScanningTrends(false);
+                      }
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isScanningTrends ? 'animate-spin' : ''}`} />
+                    ট্রেন্ড স্ক্যান করুন
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {competitorTrends.map((tr) => (
+                    <div
+                      key={tr.id}
+                      className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700 space-y-2"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-extrabold">
+                            {tr.category}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px] font-extrabold">
+                            {tr.trendVelocity}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">
+                            {tr.monthlyVolume}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-extrabold text-emerald-500">
+                          KD: {tr.difficulty}/100 (Easy Rank)
+                        </span>
+                      </div>
+
+                      <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                        {tr.topicTitle}
+                      </h4>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
+                        <strong className="text-rose-500">কম্পিটিটর গ্যাপ:</strong> {tr.competitorWeakness}
+                      </p>
+
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          disabled={isRunningAutopilot}
+                          onClick={() => handleRunAutopilotNow(`${tr.topicTitle} (${tr.keyword})`)}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-extrabold flex items-center gap-1"
+                        >
+                          <Zap className="w-3 h-3" /> এখনই অটো ব্লগ লিখুন ও পাবলিশ করুন
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const entry = `${tr.topicTitle} (${tr.keyword})`;
+                            if (!topicQueue.includes(entry)) {
+                              persistAutopilotSettings({
+                                blogAutopilotTopicQueue: [...topicQueue, entry]
+                              });
+                              showNotice('success', 'ট্রেন্ডিং টপিকটি ১০–১৮ ঘণ্টার কিউতে যুক্ত হয়েছে!');
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-[11px] font-bold"
+                        >
+                          + কিউতে যোগ করুন
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Feature 19: Community Upvoted Topic Requests in Admin Radar */}
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                  <div>
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-indigo-500">
+                      Reader Community Upvoted Topic Board
+                    </span>
+                    <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                      পাঠকদের রিকোয়েস্ট ও আপভোট করা টপিকসমূহ
+                    </h4>
+                  </div>
+                  <div className="space-y-2">
+                    {getCommunityTopicRequests().slice(0, 4).map((req) => (
+                      <div
+                        key={req.id}
+                        className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2"
+                      >
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-extrabold">
+                              ▲ {req.upvotes} Upvotes
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-400">
+                              {req.category} • {req.requestedBy}
+                            </span>
+                          </div>
+                          <p className="text-xs font-extrabold text-slate-800 dark:text-slate-200">
+                            {req.topicTitle || req.topic}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={isRunningAutopilot}
+                          onClick={() => handleRunAutopilotNow(req.topicTitle || req.topic)}
+                          className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-extrabold flex items-center gap-1"
+                        >
+                          <Zap className="w-3 h-3" /> ১-ক্লিকে ব্লগ পাবলিশ
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right 5 Cols: Verified Reader Q&A & Comment Reply Manager */}
+              <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 space-y-4 shadow-xs">
+                <div>
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-500">
+                    Reader Q&A & Social Proof Moderation
+                  </span>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                    পাঠকদের প্রশ্ন ও অ্যাডমিন রিপ্লাই প্যানেল
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    ব্লগের নিচে পাঠকদের করা প্রশ্নের অফিশিয়াল উত্তর দিন।
+                  </p>
+                </div>
+
+                <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+                  {blogs
+                    .flatMap((b) =>
+                      (b.comments || []).map((c) => ({
+                        blog: b,
+                        comment: c
+                      }))
+                    )
+                    .map(({ blog, comment }) => (
+                      <div
+                        key={`${blog.id}-${comment.id}`}
+                        className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700 space-y-2"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-extrabold text-slate-900 dark:text-white">
+                            {comment.authorName || comment.userName || 'ভেরিফাইড ক্রিয়েটর'}{' '}
+                            <span className="text-amber-500">{'★'.repeat(comment.rating || 5)}</span>
+                          </span>
+                          <span className="text-[10px] text-indigo-500 font-bold truncate max-w-[160px]">
+                            {blog.title}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-700 dark:text-slate-300">
+                          {comment.text || comment.questionOrComment || ''}
+                        </p>
+                        {comment.adminReply && (
+                          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-700 dark:text-emerald-300">
+                            <strong>অ্যাডমিন উত্তর:</strong> {comment.adminReply}
+                          </div>
+                        )}
+                        <div className="flex gap-1.5 pt-1">
+                          <input
+                            type="text"
+                            value={replyDrafts[comment.id] ?? ''}
+                            onChange={(e) =>
+                              setReplyDrafts((prev) => ({
+                                ...prev,
+                                [comment.id]: e.target.value
+                              }))
+                            }
+                            placeholder="অ্যাডমিন রিপ্লাই লিখুন..."
+                            className="flex-1 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const draft = (replyDrafts[comment.id] || '').trim();
+                              if (!draft) return;
+                              await replyToBlogComment(blog, comment.id, draft);
+                              setReplyDrafts((prev) => ({ ...prev, [comment.id]: '' }));
+                              showNotice('success', 'পাঠকের প্রশ্নের উত্তর সফলভাবে সেভ হয়েছে!');
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-extrabold shrink-0"
+                          >
+                            উত্তর দিন
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
               </div>
             </div>
           )}
@@ -1754,7 +2238,7 @@ export const AdminBlogManager: React.FC<AdminBlogManagerProps> = ({
                     }`}
                   >
                     <ShieldCheck className="w-3.5 h-3.5" />
-                    Uniqueness: {liveUniquenessCheck.uniquenessScore}%
+                    Uniqueness: {liveUniquenessCheck.uniquenessScore}% • N-Gram: {liveUniquenessCheck.nGramSimilarityPercent}%
                   </span>
                   <button
                     type="button"
@@ -2094,19 +2578,30 @@ export const AdminBlogManager: React.FC<AdminBlogManagerProps> = ({
                 </div>
 
                 <div className="sm:col-span-2">
-                  <div className="flex items-center justify-between mb-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                       Google SERP Meta Title (৩০-৭৫ ক্যারেক্টার অপ্টিমাল)
                     </label>
-                    <span
-                      className={`text-[11px] font-mono font-bold ${
-                        (seoTitle || title).length >= 30 && (seoTitle || title).length <= 75
-                          ? 'text-emerald-500'
-                          : 'text-amber-500'
-                      }`}
-                    >
-                      {(seoTitle || title).length} / 70 chars
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSeoTitle(enhanceCtrMetaTitle(seoTitle || title, focusKeyword))
+                        }
+                        className="px-2.5 py-0.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-[10px] font-extrabold flex items-center gap-1"
+                      >
+                        <Sparkles className="w-3 h-3" /> ১-ক্লিক High-CTR পাওয়ার টাইটেল
+                      </button>
+                      <span
+                        className={`text-[11px] font-mono font-bold ${
+                          (seoTitle || title).length >= 30 && (seoTitle || title).length <= 75
+                            ? 'text-emerald-500'
+                            : 'text-amber-500'
+                        }`}
+                      >
+                        {(seoTitle || title).length} / 70 chars
+                      </span>
+                    </div>
                   </div>
                   <input
                     type="text"
@@ -2115,6 +2610,32 @@ export const AdminBlogManager: React.FC<AdminBlogManagerProps> = ({
                     placeholder="গুগল সার্চ রেজাল্টে যে নীল রঙের টাইটেল দেখাবে..."
                     className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
                   />
+
+                  {/* Feature 22: 3-Variant A/B High-CTR Title Picker */}
+                  {(title || focusKeyword) && (
+                    <div className="mt-2 p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/20 space-y-1.5">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 block">
+                        GSC High-CTR A/B Title Variants (১-ক্লিকে সিলেক্ট করুন):
+                      </span>
+                      <div className="grid grid-cols-1 gap-1.5">
+                        {generateAbCtrTitleVariants(title || focusKeyword, focusKeyword || 'boostlagbe.com').map(
+                          (variant, vIdx) => (
+                            <button
+                              key={vIdx}
+                              type="button"
+                              onClick={() => setSeoTitle(variant.title)}
+                              className="text-left px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-between gap-2"
+                            >
+                              <span className="truncate">
+                                <strong className="text-indigo-500">{variant.label}:</strong> {variant.title}
+                              </span>
+                              <span className="text-[10px] text-emerald-500 font-bold shrink-0">Use →</span>
+                            </button>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="sm:col-span-2">

@@ -1304,7 +1304,7 @@ export const PublicLandingView: React.FC<PublicLandingViewProps> = ({
                   </a>
                 </li>
                 <li>
-                  <button type="button" onClick={onOpenAuth} className="text-[#67E8F9] font-bold hover:underline py-1">
+                  <button type="button" onClick={() => onOpenAuth('login')} className="text-[#67E8F9] font-bold hover:underline py-1">
                     {language === 'bn' ? 'ক্লায়েন্ট লগইন / রেজিস্টার' : 'Client Portal Login'}
                   </button>
                 </li>
