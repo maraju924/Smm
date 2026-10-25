@@ -2925,7 +2925,7 @@ export const AdminBlogManager: React.FC<AdminBlogManagerProps> = ({
                       Boostlagbe.com
                     </span>
                     <span className="text-[11px] text-slate-500 block truncate max-w-[230px]">
-                      https://boostlagbe.com › blog › {slug || 'seo-guide'}
+                      {typeof window !== 'undefined' ? window.location.origin : 'https://boostlagbe.com'} › blog › {slug || 'seo-guide'}
                     </span>
                   </div>
                 </div>

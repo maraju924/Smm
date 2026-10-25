@@ -42,6 +42,24 @@ export const DEFAULT_BD_SEO_KEYWORDS_STRING = [
   ...BD_SUB_SEO_KEYWORDS
 ].join(', ');
 
+export function getLiveSiteOrigin(siteSettings?: SiteSettings): string {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    const host = window.location.hostname;
+    if (host && host !== 'localhost' && host !== '127.0.0.1') {
+      return window.location.origin.replace(/\/+$/, '');
+    }
+  }
+  const configured = (siteSettings?.seoCanonicalDomain || siteSettings?.zinipayBrandDomain || '').trim();
+  if (configured) {
+    const normalized = configured.startsWith('http') ? configured : `https://${configured}`;
+    return normalized.replace(/\/+$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin.replace(/\/+$/, '');
+  }
+  return 'https://boostlagbe.com';
+}
+
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   siteName: 'Boostlagbe.com',
   bkashNumber: '',
@@ -63,7 +81,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   zinipayMode: 'sandbox',
   zinipayApiKey: '',
   zinipayBaseUrl: 'https://api.zinipay.com',
-  zinipayBrandDomain: '',
+  zinipayBrandDomain: typeof window !== 'undefined' ? window.location.origin : '',
   zinipayBonusPercent: 3,
   zinipayAutoVerifyTrx: true,
   zinipayFeePassToUser: false,
@@ -72,7 +90,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   seoDescription:
     'Boostlagbe.com (বুস্টলাগবে / বুস্ট লাগবে ডট কম) — বাংলাদেশের ১ নম্বর ও সবচেয়ে কম দামে অটোমেটিক SMM Panel। বিকাশ ও নগদে তাৎক্ষণিক ডিপোজিট করে Facebook Page Monetization, 60k Watchtime, Non-Drop Followers, YouTube 4000h Watchtime ও TikTok Views নিন।',
   seoKeywords: DEFAULT_BD_SEO_KEYWORDS_STRING,
-  seoCanonicalDomain: 'https://boostlagbe.com',
+  seoCanonicalDomain: typeof window !== 'undefined' ? window.location.origin : '',
   googleSiteVerification: 'w7Ug6xh6chsouuQ8WzhrdMJ1KvTELUYnYZBG1KAJJrE',
   googleAnalyticsId: '',
   seoOgImage: BRAND_LOGO_URL,

@@ -2,7 +2,11 @@ import express, { Request, Response, NextFunction } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import app, { ServerApiTrafficLog, getServerGoogleVerificationToken } from './api/index';
+import app, {
+  ServerApiTrafficLog,
+  getServerGoogleVerificationToken,
+  resolveLiveRequestOrigin
+} from './api/index';
 
 export type { ServerApiTrafficLog };
 export { app };
@@ -11,17 +15,25 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PORT = Number(process.env.PORT) || 3000;
 
-function injectVerificationMetaIntoHtml(rawHtml: string, token: string): string {
-  if (!token) return rawHtml;
+function injectVerificationAndLiveDomainIntoHtml(
+  rawHtml: string,
+  liveOrigin: string,
+  token: string
+): string {
+  let html = rawHtml;
+  if (liveOrigin) {
+    html = html.replace(/https:\/\/boostlagbe\.com/g, liveOrigin.replace(/\/+$/, ''));
+  }
+  if (!token) return html;
   const safeToken = token.replace(/["'<>]/g, '');
   const metaTag = `<meta name="google-site-verification" content="${safeToken}" />`;
-  if (rawHtml.includes('name="google-site-verification"')) {
-    return rawHtml.replace(
+  if (html.includes('name="google-site-verification"')) {
+    return html.replace(
       /<meta\s+name=["']google-site-verification["'][^>]*>/i,
       metaTag
     );
   }
-  return rawHtml.replace('<head>', `<head>\n    ${metaTag}`);
+  return html.replace('<head>', `<head>\n    ${metaTag}`);
 }
 
 async function startServer() {
@@ -32,7 +44,7 @@ async function startServer() {
       appType: 'spa'
     });
 
-    // Intercept root HTML requests in dev/preview to inject server-side Google Search Console meta tag
+    // Intercept root HTML requests in dev/preview to inject server-side Live Domain & Google Search Console meta tag
     app.use(async (req: Request, res: Response, next: NextFunction) => {
       if (
         req.method === 'GET' &&
@@ -41,14 +53,13 @@ async function startServer() {
       ) {
         try {
           const token = await getServerGoogleVerificationToken();
-          if (token) {
-            const templatePath = path.join(__dirname, 'index.html');
-            let template = fs.readFileSync(templatePath, 'utf-8');
-            template = await vite.transformIndexHtml(req.originalUrl, template);
-            template = injectVerificationMetaIntoHtml(template, token);
-            res.status(200).set({ 'Content-Type': 'text/html; charset=utf-8' }).end(template);
-            return;
-          }
+          const liveOrigin = resolveLiveRequestOrigin(req);
+          const templatePath = path.join(__dirname, 'index.html');
+          let template = fs.readFileSync(templatePath, 'utf-8');
+          template = await vite.transformIndexHtml(req.originalUrl, template);
+          template = injectVerificationAndLiveDomainIntoHtml(template, liveOrigin, token);
+          res.status(200).set({ 'Content-Type': 'text/html; charset=utf-8' }).end(template);
+          return;
         } catch {
           // fallback to standard vite middleware
         }
@@ -60,13 +71,14 @@ async function startServer() {
   } else {
     const distPath = path.join(__dirname, 'dist');
     app.use(express.static(distPath, { index: false }));
-    app.get('*', async (_req: Request, res: Response) => {
+    app.get('*', async (req: Request, res: Response) => {
       const indexPath = path.join(distPath, 'index.html');
       try {
         const token = await getServerGoogleVerificationToken();
-        if (token && fs.existsSync(indexPath)) {
+        const liveOrigin = resolveLiveRequestOrigin(req);
+        if (fs.existsSync(indexPath)) {
           const rawHtml = fs.readFileSync(indexPath, 'utf-8');
-          const injected = injectVerificationMetaIntoHtml(rawHtml, token);
+          const injected = injectVerificationAndLiveDomainIntoHtml(rawHtml, liveOrigin, token);
           res.status(200).set({ 'Content-Type': 'text/html; charset=utf-8' }).send(injected);
           return;
         }

@@ -2360,6 +2360,29 @@ app.get('/api/zinipay/logs', (_req: Request, res: Response) => {
 // ============================================================================
 // 5B. DYNAMIC GOOGLE BANGLADESH SEO ENGINE (/sitemap.xml & /robots.txt)
 // ============================================================================
+export function resolveLiveRequestOrigin(req: Request, customFallback?: string): string {
+  const forwardedProto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
+  const proto = forwardedProto.split(',')[0].trim() || 'https';
+  const rawHost = (req.headers['x-forwarded-host'] as string) || req.get('host') || '';
+  const cleanHost = rawHost.split(',')[0].trim();
+
+  if (cleanHost && !cleanHost.startsWith('localhost') && !cleanHost.startsWith('127.0.0.1')) {
+    const effectiveProto = cleanHost.includes('localhost') ? proto : 'https';
+    return `${effectiveProto}://${cleanHost}`.replace(/\/+$/, '');
+  }
+
+  if (customFallback && customFallback.trim()) {
+    const c = customFallback.trim();
+    return (c.startsWith('http') ? c : `https://${c}`).replace(/\/+$/, '');
+  }
+
+  if (cleanHost) {
+    return `${proto}://${cleanHost}`.replace(/\/+$/, '');
+  }
+
+  return 'https://boostlagbe.com';
+}
+
 const handleSitemapXml = async (req: Request, res: Response) => {
   try {
     let customDomain = '';
@@ -2393,13 +2416,7 @@ const handleSitemapXml = async (req: Request, res: Response) => {
       // fallback to default platform categories
     }
 
-    const forwardedProto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
-    const hostHeader = (req.headers['x-forwarded-host'] as string) || req.get('host') || 'smm.khatirajbd.com';
-    const baseOrigin = customDomain
-      ? customDomain.startsWith('http')
-        ? customDomain.replace(/\/+$/, '')
-        : `https://${customDomain.replace(/\/+$/, '')}`
-      : `${forwardedProto.split(',')[0].trim()}://${hostHeader.split(',')[0].trim()}`;
+    const baseOrigin = resolveLiveRequestOrigin(req, customDomain);
 
     const todayIso = new Date().toISOString().split('T')[0];
 
@@ -2630,13 +2647,7 @@ const handleRobotsTxt = async (req: Request, res: Response) => {
     // ignore
   }
 
-  const forwardedProto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
-  const hostHeader = (req.headers['x-forwarded-host'] as string) || req.get('host') || 'boostlagbe.com';
-  const baseOrigin = customDomain
-    ? customDomain.startsWith('http')
-      ? customDomain.replace(/\/+$/, '')
-      : `https://${customDomain.replace(/\/+$/, '')}`
-    : `${forwardedProto.split(',')[0].trim()}://${hostHeader.split(',')[0].trim()}`;
+  const baseOrigin = resolveLiveRequestOrigin(req, customDomain);
 
   const robotsContent = `User-agent: *
 Allow: /
@@ -4583,11 +4594,12 @@ app.post('/api/gemini/autopilot-run', async (req: Request, res: Response) => {
 app.post('/api/seo/ping-indexnow', async (req: Request, res: Response) => {
   try {
     const { slug = '', title = '', url = '' } = req.body || {};
+    const liveOrigin = resolveLiveRequestOrigin(req);
     const targetUrl =
       url ||
       (slug
-        ? `https://boostlagbe.com/?tab=blog&slug=${encodeURIComponent(slug)}`
-        : 'https://boostlagbe.com/sitemap.xml');
+        ? `${liveOrigin}/?tab=blog&slug=${encodeURIComponent(slug)}`
+        : `${liveOrigin}/sitemap.xml`);
 
     const timestamp = Date.now();
     res.json({
@@ -4778,12 +4790,7 @@ function escapeXml(unsafe: string): string {
 
 const handleRssXml = async (req: Request, res: Response) => {
   try {
-    const forwardedProto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
-    const hostHeader =
-      (req.headers['x-forwarded-host'] as string) || req.get('host') || 'boostlagbe.com';
-    const baseOrigin = `${forwardedProto.split(',')[0].trim()}://${hostHeader
-      .split(',')[0]
-      .trim()}`;
+    const baseOrigin = resolveLiveRequestOrigin(req);
 
     const allPosts = await gatherAllExistingBlogsOnServer();
     const itemsXml = allPosts

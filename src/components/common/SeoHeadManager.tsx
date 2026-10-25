@@ -4,7 +4,8 @@ import {
   BRAND_LOGO_URL,
   BD_MAIN_SEO_KEYWORD,
   DEFAULT_BD_SEO_KEYWORDS_STRING,
-  INITIAL_SEO_BLOG_POSTS
+  INITIAL_SEO_BLOG_POSTS,
+  getLiveSiteOrigin
 } from '../../data/seedServices';
 import { PROGRAMMATIC_SEO_LANDING_PAGES } from '../../services/blogSeoService';
 
@@ -53,17 +54,7 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
 }) => {
   useEffect(() => {
     const brandName = siteSettings.siteName?.trim() || 'Boostlagbe.com';
-    const rawDomain = (
-      siteSettings.seoCanonicalDomain ||
-      siteSettings.zinipayBrandDomain ||
-      window.location.origin
-    ).trim();
-
-    const baseOrigin = rawDomain
-      ? rawDomain.startsWith('http')
-        ? rawDomain.replace(/\/+$/, '')
-        : `https://${rawDomain.replace(/\/+$/, '')}`
-      : window.location.origin;
+    const baseOrigin = getLiveSiteOrigin(siteSettings);
 
     const baseTitle =
       siteSettings.seoTitle?.trim() ||
@@ -102,9 +93,7 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
       if (activeBlogPost) {
         pageTitle = activeBlogPost.seoTitle?.trim() || `${activeBlogPost.title} | ${brandName}`;
         pageDescription = activeBlogPost.seoDescription?.trim() || activeBlogPost.excerpt;
-        canonicalUrl =
-          activeBlogPost.canonicalUrl?.trim() ||
-          `${baseOrigin}/?tab=blog&slug=${encodeURIComponent(activeBlogPost.slug)}`;
+        canonicalUrl = `${baseOrigin}/?tab=blog&slug=${encodeURIComponent(activeBlogPost.slug)}`;
         breadcrumbLabel = activeBlogPost.title;
         robotsDirective =
           activeBlogPost.metaRobots === 'noindex, follow'

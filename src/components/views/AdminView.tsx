@@ -4185,7 +4185,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       <span className="text-emerald-400">Schema.org Rich Snippets Active</span>
                     </div>
                     <div className="text-xs text-slate-300 font-mono truncate">
-                      {settingsForm.seoCanonicalDomain?.trim() || window.location.origin} › bangladesh-smm-panel
+                      {window.location.origin} › bangladesh-smm-panel
                     </div>
                     <div className="text-base font-bold text-[#8AB4F8] leading-snug">
                       {settingsForm.seoTitle?.trim() ||
@@ -4320,16 +4320,31 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   {/* Canonical Domain, Google Search Console Verification & GA4 ID */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-white/[0.07]">
                     <div>
-                      <label className="text-[10px] font-bold text-slate-300 uppercase block mb-1">
-                        Canonical Website Domain
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] font-bold text-slate-300 uppercase">
+                          Live Website Domain (Auto-Detected)
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSettingsForm({
+                              ...settingsForm,
+                              seoCanonicalDomain: window.location.origin,
+                              zinipayBrandDomain: window.location.origin
+                            })
+                          }
+                          className="text-[10px] font-bold text-emerald-400 hover:underline cursor-pointer"
+                        >
+                          Sync Live URL
+                        </button>
+                      </div>
                       <input
                         type="text"
-                        value={settingsForm.seoCanonicalDomain || ''}
+                        value={settingsForm.seoCanonicalDomain || window.location.origin}
                         onChange={(e) =>
                           setSettingsForm({ ...settingsForm, seoCanonicalDomain: e.target.value })
                         }
-                        placeholder="https://m.khatirajbd.com"
+                        placeholder={window.location.origin}
                         className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
                       />
                     </div>
@@ -4408,25 +4423,19 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-2">
                       <div className="min-w-0">
                         <div className="text-[10px] font-bold text-emerald-400 uppercase">
-                          Dynamic XML Sitemap URL
+                          Dynamic XML Sitemap URL (Live Domain)
                         </div>
                         <div className="text-[11px] font-mono text-slate-300 truncate">
-                          {(settingsForm.seoCanonicalDomain?.trim() || window.location.origin).replace(
-                            /\/+$/,
-                            ''
-                          )}
-                          /sitemap.xml
+                          {window.location.origin.replace(/\/+$/, '')}/sitemap.xml
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           type="button"
                           onClick={() => {
-                            const url = `${(
-                              settingsForm.seoCanonicalDomain?.trim() || window.location.origin
-                            ).replace(/\/+$/, '')}/sitemap.xml`;
+                            const url = `${window.location.origin.replace(/\/+$/, '')}/sitemap.xml`;
                             navigator.clipboard.writeText(url);
-                            onShowToast('Sitemap.xml URL copied for Google Search Console!', 'success');
+                            onShowToast('Live Sitemap.xml URL copied for Google Search Console!', 'success');
                           }}
                           className="px-2.5 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold text-[10px] cursor-pointer"
                         >
@@ -4446,25 +4455,19 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-2">
                       <div className="min-w-0">
                         <div className="text-[10px] font-bold text-cyan-400 uppercase">
-                          Crawler Robots.txt URL
+                          Crawler Robots.txt URL (Live Domain)
                         </div>
                         <div className="text-[11px] font-mono text-slate-300 truncate">
-                          {(settingsForm.seoCanonicalDomain?.trim() || window.location.origin).replace(
-                            /\/+$/,
-                            ''
-                          )}
-                          /robots.txt
+                          {window.location.origin.replace(/\/+$/, '')}/robots.txt
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           type="button"
                           onClick={() => {
-                            const url = `${(
-                              settingsForm.seoCanonicalDomain?.trim() || window.location.origin
-                            ).replace(/\/+$/, '')}/robots.txt`;
+                            const url = `${window.location.origin.replace(/\/+$/, '')}/robots.txt`;
                             navigator.clipboard.writeText(url);
-                            onShowToast('Robots.txt URL copied!', 'success');
+                            onShowToast('Live Robots.txt URL copied!', 'success');
                           }}
                           className="px-2.5 py-1.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 font-bold text-[10px] cursor-pointer"
                         >
