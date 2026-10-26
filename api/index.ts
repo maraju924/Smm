@@ -2669,6 +2669,13 @@ const handleRobotsTxt = async (req: Request, res: Response) => {
 
   const robotsContent = `User-agent: *
 Allow: /
+Allow: /favicon.ico
+Allow: /favicon-48x48.png
+Allow: /favicon-96x96.png
+Allow: /favicon-192x192.png
+Allow: /apple-touch-icon.png
+Allow: /logo-512x512.png
+Allow: /site.webmanifest
 Allow: /?tab=blog
 Allow: /?tab=blog&slug=
 Allow: /?tab=blog&pseo=
@@ -2690,6 +2697,12 @@ Disallow: /api/zinipay/
 Disallow: /?tab=admin
 Disallow: /?tab=404
 Disallow: /?tab=maintenance
+
+User-agent: Googlebot-Favicon
+Allow: /
+
+User-agent: Googlebot-Image
+Allow: /
 
 Sitemap: ${baseOrigin}/sitemap.xml
 Sitemap: ${baseOrigin}/rss.xml

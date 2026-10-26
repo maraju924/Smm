@@ -230,9 +230,9 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
     upsertMetaTag('property', 'og:site_name', `${brandName} – বুস্ট লাগবে`);
     upsertMetaTag('name', 'twitter:title', pageTitle);
     upsertMetaTag('name', 'twitter:description', pageDescription);
-    upsertMetaTag('property', 'og:image', ogImg);
-    upsertMetaTag('name', 'twitter:image', ogImg);
-    upsertLinkTag('icon', BRAND_LOGO_URL);
+    const resolvedOgImage = ogImg.startsWith('http') ? ogImg : `${baseOrigin}/logo-512x512.png`;
+    upsertMetaTag('property', 'og:image', resolvedOgImage);
+    upsertMetaTag('name', 'twitter:image', resolvedOgImage);
 
     if (activeBlogPost) {
       upsertMetaTag(
@@ -407,7 +407,9 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
               name: brandName,
               logo: {
                 '@type': 'ImageObject',
-                url: `${baseOrigin}${BRAND_LOGO_URL}`
+                url: `${baseOrigin}/logo-512x512.png`,
+                width: 512,
+                height: 512
               }
             },
             about: [
@@ -576,7 +578,14 @@ export const SeoHeadManager: React.FC<SeoHeadManagerProps> = ({
             'boost lagbe',
             'boost lagobe'
           ],
-          logo: `${baseOrigin}${BRAND_LOGO_URL}`,
+          logo: {
+            '@type': 'ImageObject',
+            url: `${baseOrigin}/logo-512x512.png`,
+            contentUrl: `${baseOrigin}/logo-512x512.png`,
+            width: 512,
+            height: 512
+          },
+          image: `${baseOrigin}/logo-512x512.png`,
           url: `${baseOrigin}/`,
           areaServed: 'BD',
           knowsLanguage: ['bn-BD', 'en'],
