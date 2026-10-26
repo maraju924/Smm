@@ -2905,10 +2905,15 @@ export function syncBlogsToServerSitemap(blogs: SMMBlogPost[]): void {
   const publishedPayload = blogs
     .filter((b) => b.status === 'published' && b.slug)
     .map((b) => ({
+      id: b.id,
       slug: b.slug,
       updatedAt: b.updatedAt || b.publishedAt || Date.now(),
+      publishedAt: b.publishedAt || b.createdAt || Date.now(),
       status: b.status,
-      title: b.title
+      title: b.title,
+      focusKeyword: b.focusKeyword,
+      category: b.category,
+      coverImage: b.coverImage
     }));
 
   fetch('/api/seo/sync-blogs', {
@@ -3157,6 +3162,97 @@ const DIVERSIFIED_BLOG_TOPICS_POOL: {
     category: 'Facebook',
     slugBase: 'bkash-nagad-facebook-page-post-boost-without-dollar-card-bd',
     coverImage: 'https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'ইউটিউব ১০০০ সাবস্ক্রাইবার দ্রুত পূরণ করার উপায়',
+    topicTitle: 'নতুন ইউটিউব চ্যানেলে প্রথম ১০০০ নন-ড্রপ সাবস্ক্রাইবার ও ইউটিউব পার্টনার প্রোগ্রাম পাওয়ার কৌশল',
+    category: 'YouTube',
+    slugBase: 'youtube-1000-subscribers-monetization-bangladesh-guide',
+    coverImage: 'https://images.pexels.com/photos/2510428/pexels-photo-2510428.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'ফেসবুক পারফরম্যান্স বোনাস প্রোগ্রাম বাংলাদেশ',
+    topicTitle: 'ফেসবুক Performance Bonus ইনভাইটেশন পাওয়ার গোপন শর্ত ও পেজ এনগেজমেন্ট বাড়ানোর নিয়ম',
+    category: 'Facebook',
+    slugBase: 'facebook-performance-bonus-program-invitation-bangladesh',
+    coverImage: 'https://images.pexels.com/photos/3183150/pexels-photo-3183150.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'ই-কমার্স পেজে কাস্টমার রিভিউ ও ট্রাস্ট বাড়ানোর কৌশল',
+    topicTitle: 'অনলাইন শপ ও ফেসবুক বিজনেস পেজে সোশ্যাল প্রুফ, রিঅ্যাকশন এবং কাস্টমার ট্রাস্ট তৈরির গাইড',
+    category: 'SMM Guide',
+    slugBase: 'ecommerce-customer-review-trust-social-proof-guide-bangladesh',
+    coverImage: 'https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'ফেসবুক রিলস মনিটাইজেশন ও Ads on Reels গাইড',
+    topicTitle: 'ফেসবুক রিলস (Facebook Reels) মনিটাইজেশন ও Ads on Reels থেকে ডলারে আয়ের গোপন কৌশল',
+    category: 'Facebook',
+    slugBase: 'facebook-reels-ads-on-reels-monetization-bangladesh-guide',
+    coverImage: 'https://images.pexels.com/photos/3183150/pexels-photo-3183150.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'ইউটিউব চ্যানেল সিপিএম ও অ্যাডসেন্স আয় বাড়ানোর উপায়',
+    topicTitle: 'বাংলাদেশি ইউটিউব চ্যানেলে High CPM ও Google AdSense রেভিনিউ দ্বিগুণ করার প্র্যাকটিক্যাল কৌশল',
+    category: 'YouTube',
+    slugBase: 'youtube-high-cpm-adsense-revenue-increase-bangladesh-guide',
+    coverImage: 'https://images.pexels.com/photos/1591060/pexels-photo-1591060.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'ফেসবুক গ্রুপ মার্কেটিং ও অ্যাক্টিভ মেম্বার বাড়ানোর নিয়ম',
+    topicTitle: 'ফেসবুক গ্রুপে লাখো অ্যাক্টিভ মেম্বার বাড়িয়ে অর্গানিক ব্র্যান্ড কমিউনিটি ও সেলস তৈরির গাইড',
+    category: 'Facebook',
+    slugBase: 'facebook-group-active-members-marketing-sales-bangladesh',
+    coverImage: 'https://images.pexels.com/photos/267350/pexels-photo-267350.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'টিকটক শপ ও অ্যাফিলিয়েট মার্কেটিং বাংলাদেশ',
+    topicTitle: 'টিকটক ভিডিওর মাধ্যমে প্রোডাক্ট প্রমোশন, স্পন্সরশিপ ও অ্যাফিলিয়েট মার্কেটিং করে আয়ের উপায়',
+    category: 'TikTok',
+    slugBase: 'tiktok-affiliate-marketing-brand-sponsorship-income-bd',
+    coverImage: 'https://images.pexels.com/photos/5081918/pexels-photo-5081918.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'ইনস্টাগ্রাম ইনফ্লুয়েন্সার ব্র্যান্ড ডিল ও গ্রোথ গাইড',
+    topicTitle: 'বাংলাদেশে সফল ইনস্টাগ্রাম ইনফ্লুয়েন্সার হয়ে পেইড ব্র্যান্ড স্পন্সরশিপ পাওয়ার সম্পূর্ণ রোডম্যাপ',
+    category: 'Instagram',
+    slugBase: 'instagram-influencer-brand-sponsorship-growth-roadmap-bd',
+    coverImage: 'https://images.pexels.com/photos/147413/twitter-facebook-together-exchange-of-information-147413.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'SMM Panel API v2 ওয়েবসাইট অটোমেশন গাইড',
+    topicTitle: 'ডেভেলপার ও এজেন্সি ওনারদের জন্য SMM Panel REST API v2 ইন্টিগ্রেশন এবং অটো অর্ডার গাইডলাইন',
+    category: 'SMM Guide',
+    slugBase: 'smm-panel-rest-api-v2-integration-automation-guide-bd',
+    coverImage: 'https://images.pexels.com/photos/669615/pexels-photo-669615.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'ফেসবুক লাইভ শপিং ও ই-কমার্স অর্ডার বাড়ানোর কৌশল',
+    topicTitle: 'ফেসবুক লাইভ (Facebook Live) ভিউয়ার বাড়িয়ে অনলাইন বুটিক ও ফ্যাশন পেজের সেলস ৫ গুণ করার নিয়ম',
+    category: 'Facebook',
+    slugBase: 'facebook-live-stream-viewers-fcommerce-sales-boost-bd',
+    coverImage: 'https://images.pexels.com/photos/6476587/pexels-photo-6476587.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'ইউটিউব ভিডিও থাম্বনেইল ও সিটিআর বাড়ানোর কৌশল',
+    topicTitle: 'ইউটিউব ভিডিওর Click-Through Rate (CTR) ও ওয়াচটাইম বাড়াতে হাই-কনভার্টিং থাম্বনেইল গাইড',
+    category: 'YouTube',
+    slugBase: 'youtube-thumbnail-ctr-watchtime-optimization-guide-bd',
+    coverImage: 'https://images.pexels.com/photos/2510428/pexels-photo-2510428.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'ফেসবুক কন্টেন্ট মনিটাইজেশন বিটা প্রোগ্রাম ২০২৬',
+    topicTitle: 'ফেসবুকের নতুন Content Monetization Beta প্রোগ্রামে এক ছাতার নিচে রিলস, ভিডিও ও ফটো থেকে আয়',
+    category: 'Facebook',
+    slugBase: 'facebook-content-monetization-beta-program-2026-bangladesh',
+    coverImage: 'https://images.pexels.com/photos/3183150/pexels-photo-3183150.jpeg?auto=compress&cs=tinysrgb&w=1200'
+  },
+  {
+    keyword: 'ডিজিটাল মার্কেটিং ফ্রিল্যান্সিং ও ক্লায়েন্ট হান্টিং গাইড',
+    topicTitle: 'বাংলাদেশে বসে স্থানীয় ও বিদেশি ক্লায়েন্টদের সোশ্যাল মিডিয়া গ্রোথ সার্ভিস দিয়ে ফ্রিল্যান্সিং আয়ের নিয়ম',
+    category: 'SMM Guide',
+    slugBase: 'digital-marketing-freelancing-smm-client-hunting-bangladesh',
+    coverImage: 'https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=1200'
   }
 ];
 
@@ -3166,6 +3262,7 @@ function normalizeBlogKey(str: string): string {
   return String(str || '')
     .toLowerCase()
     .replace(/\([^)]*\)/g, ' ')
+    .replace(/#\d+/g, ' ')
     .replace(/[^\p{L}\p{M}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -3186,17 +3283,26 @@ export function diversifyDuplicateBlogsList(blogs: SMMBlogPost[]): {
   const modifiedPosts: SMMBlogPost[] = [];
   const byId = new Map<string, SMMBlogPost>();
 
-  // Pre-register all unique titles/keywords from the pool that are already used
   let poolCursor = 0;
 
   for (const post of chronological) {
-    const normTitle = normalizeBlogKey(post.title);
-    const normKw = normalizeBlogKey(post.focusKeyword);
+    const rawTitle = String(post.title || '').trim();
+    const rawKw = String(post.focusKeyword || '').trim();
+    const rawSlug = String(post.slug || '').trim().toLowerCase();
+
+    const normTitle = normalizeBlogKey(rawTitle);
+    const normKw = normalizeBlogKey(rawKw);
 
     const isDuplicateTitle = normTitle.length > 0 && seenTitles.has(normTitle);
     const isDuplicateKw = normKw.length > 0 && seenKeywords.has(normKw);
+    const hasUglyNumberedArtifact =
+      /#\d+|সংস্করণ\s*#/i.test(rawTitle) ||
+      /#\d+|সংস্করণ\s*#/i.test(rawKw) ||
+      /^2026-|^foryou-foryou|^sm-smm-/i.test(rawSlug) ||
+      rawKw.endsWith(' SM') ||
+      rawKw === 'ফেসবুক রিলস';
 
-    if (!isDuplicateTitle && !isDuplicateKw) {
+    if (!isDuplicateTitle && !isDuplicateKw && !hasUglyNumberedArtifact) {
       seenTitles.add(normTitle);
       if (normKw) seenKeywords.add(normKw);
       byId.set(post.id, post);

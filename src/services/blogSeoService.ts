@@ -34,10 +34,15 @@ export function syncBlogsToServerSitemap(blogs: SMMBlogPost[]): void {
   const publishedPayload = blogs
     .filter((b) => b.status === 'published' && b.slug)
     .map((b) => ({
+      id: b.id,
       slug: b.slug,
       updatedAt: b.updatedAt || b.publishedAt || Date.now(),
+      publishedAt: b.publishedAt || b.createdAt || Date.now(),
       status: b.status,
-      title: b.title
+      title: b.title,
+      focusKeyword: b.focusKeyword,
+      category: b.category,
+      coverImage: b.coverImage
     }));
 
   fetch('/api/seo/sync-blogs', {

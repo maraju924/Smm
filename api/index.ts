@@ -2546,43 +2546,56 @@ const handleSitemapXml = async (req: Request, res: Response) => {
         coverImage: s.coverImage
       });
     }
-    for (const b of serverBlogsCache.values()) {
-      if (b.status === 'published' && b.slug) {
-        blogSlugMap.set(b.slug, {
-          slug: b.slug,
-          updatedAt: b.updatedAt || Date.now(),
-          title: b.title,
-          coverImage: b.coverImage
-        });
-      }
-    }
+
+    let loadedFromFirestore = false;
     try {
       const blogsSnap = await getDocs(collection(serverDb, 'blogs'));
-      blogsSnap.docs.forEach((d) => {
-        const data = d.data() || {};
-        if (data.status === 'published' && data.slug) {
-          const cleanSlug = String(data.slug).trim();
-          blogSlugMap.set(cleanSlug, {
-            slug: cleanSlug,
-            updatedAt: Number(data.updatedAt || data.publishedAt || Date.now()),
-            title: String(data.title || ''),
-            coverImage: data.coverImage ? String(data.coverImage) : undefined
-          });
-          serverBlogsCache.set(cleanSlug, data);
-        }
-      });
+      if (!blogsSnap.empty) {
+        loadedFromFirestore = true;
+        serverBlogsCache.clear();
+        blogsSnap.docs.forEach((d) => {
+          const data = d.data() || {};
+          if (data.status === 'published' && data.slug) {
+            const cleanSlug = String(data.slug).trim();
+            blogSlugMap.set(cleanSlug, {
+              slug: cleanSlug,
+              updatedAt: Number(data.updatedAt || data.publishedAt || Date.now()),
+              title: String(data.title || ''),
+              coverImage: data.coverImage ? String(data.coverImage) : undefined
+            });
+            serverBlogsCache.set(cleanSlug, { ...data, id: d.id });
+          }
+        });
+      }
     } catch {
-      // use serverBlogsCache + seed slugs
+      // fallback to serverBlogsCache below
     }
 
-    const blogEntries = Array.from(blogSlugMap.values()).map((b) => {
+    if (!loadedFromFirestore) {
+      for (const b of serverBlogsCache.values()) {
+        if (b.status === 'published' && b.slug) {
+          blogSlugMap.set(b.slug, {
+            slug: b.slug,
+            updatedAt: b.updatedAt || Date.now(),
+            title: b.title,
+            coverImage: b.coverImage
+          });
+        }
+      }
+    }
+
+    const sortedBlogs = Array.from(blogSlugMap.values()).sort(
+      (a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)
+    );
+
+    const blogEntries = sortedBlogs.map((b) => {
       const postDate = b.updatedAt
         ? new Date(b.updatedAt).toISOString().split('T')[0]
         : todayIso;
       return {
         loc: `${baseOrigin}/?tab=blog&slug=${encodeURIComponent(b.slug)}`,
         priority: '0.90',
-        changefreq: 'weekly',
+        changefreq: 'daily',
         lastmod: postDate,
         imageUrl: b.coverImage,
         imageTitle: b.title || b.slug
@@ -2598,10 +2611,10 @@ const handleSitemapXml = async (req: Request, res: Response) => {
       imageTitle?: string;
     }[] = [
       ...staticEntries,
+      ...blogEntries,
       ...categoryEntries,
       ...programmaticEntries,
-      ...divisionalEntries,
-      ...blogEntries
+      ...divisionalEntries
     ];
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -2628,7 +2641,12 @@ ${allUrls
 </urlset>`;
 
     res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache, max-age=0');
+    res.setHeader(
+      'Cache-Control',
+      'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0'
+    );
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.status(200).send(xml);
   } catch (err: any) {
     res.status(500).send(`<!-- Sitemap Error: ${err?.message || 'Failed'} -->`);
