@@ -171,6 +171,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         ? 'অতিরিক্ত ভুল চেষ্টার কারণে সাময়িকভাবে লক করা হয়েছে। কিছুক্ষণ পর চেষ্টা করুন বা পাসওয়ার্ড রিসেট করুন।'
         : 'Too many failed attempts. Please wait a moment or reset your password.';
     }
+    if (
+      code === 'auth/operation-not-allowed' ||
+      rawMsg.includes('auth/operation-not-allowed')
+    ) {
+      return language === 'bn'
+        ? 'সার্ভার অথেনটিকেশন সিঙ্ক হচ্ছে, অনুগ্রহ করে পেজটি রিফ্রেশ করে আবার চেষ্টা করুন অথবা Google দিয়ে ১-ক্লিকে সাইন ইন করুন।'
+        : 'Authentication service is syncing. Please refresh and try again, or use Quick Sign Up with Google.';
+    }
     return (
       rawMsg ||
       (language === 'bn'

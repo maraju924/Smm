@@ -132,6 +132,7 @@ function normalizeTabId(raw: string): string {
 function hasStoredAuthSession(): boolean {
   try {
     if (localStorage.getItem('amartrend_auth_active') === '1') return true;
+    if (localStorage.getItem('boostlagbe_email_session')) return true;
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (k && k.startsWith('firebase:authUser:')) return true;
