@@ -1,109 +1,285 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+@import "./tokens.css";
+@import "./base.css" layer(base);
 
 @layer base {
   :root {
+    color-scheme: light;
     --safe-bottom: env(safe-area-inset-bottom, 16px);
     --safe-top: env(safe-area-inset-top, 0px);
-
-    /* Human-Crafted Native Mobile App Design Tokens */
-    --bg-deep: #090D16;
-    --bg-secondary: #111726;
-    --surface-elevated: #171F32;
-    --surface-solid: #1E2940;
-    --accent-violet: #6366F1;
-    --accent-deep-violet: #4F46E5;
-    --accent-cyan: #10B981;
-    --text-primary: #F8FAFC;
-    --text-muted: #94A3B8;
-    --status-success: #10B981;
-    --status-warning: #F59E0B;
-    --status-error: #EF4444;
+    --up-bg: #f8fafc;
+    --up-surface: #ffffff;
+    --up-surface-2: #f1f5f9;
+    --up-surface-3: #e2e8f0;
+    --up-border: #cbd5e1;
+    --up-text: #0f172a;
+    --up-text-2: #1e293b;
+    --up-muted: #475569;
+    --up-accent: #4f46e5;
+    --up-accent-hover: #4338ca;
+    --up-emerald: #059669;
+    --color-paper: #f8fafc;
+    --color-paper-2: #ffffff;
+    --color-paper-3: #f1f5f9;
+    --color-ink: #0f172a;
+    --color-ink-2: #1e293b;
+    --color-muted: #475569;
   }
 
-  *, *::before, *::after {
-    box-sizing: border-box;
-  }
-
-  html {
-    overflow-x: hidden !important;
-    max-width: 100vw !important;
-    width: 100% !important;
-    touch-action: pan-y;
-    -webkit-overflow-scrolling: touch;
-    background-color: #090D16;
+  html.dark {
     color-scheme: dark;
-  }
-
-  body {
-    font-family: 'Plus Jakarta Sans', 'Noto Sans Bengali', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    -webkit-tap-highlight-color: transparent;
-    user-select: none;
-    -webkit-user-select: none;
-    background-color: #090D16;
-    color: #F8FAFC;
-    overflow-x: hidden !important;
-    max-width: 100vw !important;
-    width: 100% !important;
-    position: relative;
-    touch-action: pan-y;
-    line-height: 1.5;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    --up-bg: #020617;
+    --up-surface: #0f172a;
+    --up-surface-2: #1e293b;
+    --up-surface-3: #334155;
+    --up-border: #1e293b;
+    --up-text: #f8fafc;
+    --up-text-2: #cbd5e1;
+    --up-muted: #94a3b8;
+    --up-accent: #6366f1;
+    --up-accent-hover: #4f46e5;
+    --up-emerald: #10b981;
+    --color-paper: oklch(17.5% 0.014 268);
+    --color-paper-2: oklch(21% 0.016 268);
+    --color-paper-3: oklch(25% 0.017 268);
+    --color-ink: oklch(96% 0.006 75);
+    --color-ink-2: oklch(85% 0.010 262);
+    --color-muted: oklch(70% 0.016 262);
   }
 
   #root {
-    overflow-x: hidden !important;
-    max-width: 100vw !important;
-    width: 100% !important;
+    overflow-x: clip;
+    width: 100%;
     min-height: 100vh;
-  }
-
-  input, textarea, select {
-    font-family: inherit;
-    user-select: text;
-    -webkit-user-select: text;
+    font-family: "Plus Jakarta Sans", "Noto Sans Bengali", system-ui, -apple-system, sans-serif;
   }
 
   code, pre, .font-mono {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
     font-variant-numeric: tabular-nums;
+  }
+
+  button:disabled,
+  input:disabled,
+  select:disabled,
+  textarea:disabled,
+  [aria-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
   }
 }
 
-/* Native Mobile App Surfaces */
+/* User & Admin Panel Surface Architecture (Crisp High-Contrast Light Studio + Deep Dark Mode) */
+.user-workspace-shell {
+  background-color: var(--up-bg);
+  color: var(--up-text);
+  font-family: "Plus Jakarta Sans", "Noto Sans Bengali", system-ui, -apple-system, sans-serif;
+}
+
 .glass-panel {
-  background-color: #111726;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 10px 28px -8px rgba(0, 0, 0, 0.55);
+  background-color: var(--up-surface);
+  color: var(--up-text);
+  border: 1px solid var(--up-border);
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.06);
 }
 
 .glass-hero {
-  background: linear-gradient(155deg, #161F35 0%, #111726 100%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 14px 34px -10px rgba(0, 0, 0, 0.65);
+  background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.25);
 }
 
-.solid-panel {
-  background-color: #111726;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: 0 6px 18px -6px rgba(0, 0, 0, 0.45);
+.solid-panel,
+.hybrid-glass-elevated {
+  background-color: var(--up-surface);
+  color: var(--up-text);
+  border: 1px solid var(--up-border);
+  box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
 }
 
 .elevated-panel {
-  background-color: #171F32;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  background-color: var(--up-surface-2);
+  color: var(--up-text);
+  border: 1px solid var(--up-border);
 }
 
 .input-surface {
-  background-color: #090D16;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #F8FAFC;
-  transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+  background-color: var(--up-surface);
+  border: 1px solid var(--up-border);
+  color: var(--up-text);
+  transition: border-color 150ms ease, background-color 150ms ease;
 }
 
 .input-surface:focus {
-  outline: none;
-  border-color: #6366F1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+  outline: 2px solid var(--up-accent);
+  outline-offset: 1px;
+  border-color: var(--up-accent);
+}
+
+/* ============================================================================
+   HIGH-CONTRAST LIGHT MODE TYPOGRAPHY & SURFACE CLARITY
+   Ensures all text, labels, inputs, and sub-modules are 100% crisp in Light Mode
+   ============================================================================ */
+html:not(.dark) input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html:not(.dark) select,
+html:not(.dark) textarea {
+  color: #0f172a !important;
+}
+
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder {
+  color: #64748b !important;
+  opacity: 1;
+}
+
+html:not(.dark) option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* 1. Convert Dark-Theme Card Surfaces to Crisp White (#ffffff) in Light Mode */
+.user-workspace-shell[data-theme="light"] .bg-\[\#0D1220\],
+.user-workspace-shell[data-theme="light"] .bg-\[\#0E1320\],
+.user-workspace-shell[data-theme="light"] .bg-\[\#111726\],
+.user-workspace-shell[data-theme="light"] .bg-\[\#131A2B\],
+.user-workspace-shell[data-theme="light"] .bg-\[\#141B2B\],
+.user-workspace-shell[data-theme="light"] .bg-\[\#141B2B\]\/90,
+.user-workspace-shell[data-theme="light"] .bg-\[\#141B2B\]\/80,
+.user-workspace-shell[data-theme="light"] .bg-\[\#141B2B\]\/60,
+.user-workspace-shell[data-theme="light"] .bg-slate-900:not(.admin-dark-sidebar):not(.admin-dark-sidebar *):not(.dark-hero-card):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .bg-slate-900\/95:not(.admin-dark-sidebar *):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .bg-slate-900\/90:not(.admin-dark-sidebar *):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .bg-slate-900\/80:not(.admin-dark-sidebar *):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .bg-slate-900\/70:not(.admin-dark-sidebar *):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .bg-slate-900\/60:not(.admin-dark-sidebar *):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .bg-slate-900\/50:not(.admin-dark-sidebar *):not(.dark-hero-card *) {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* 2. Convert Dark-Theme Wells, Stat Boxes & Inner Chips to Soft Slate (#f1f5f9) in Light Mode */
+.user-workspace-shell[data-theme="light"] .bg-\[\#080B14\],
+.user-workspace-shell[data-theme="light"] .bg-\[\#080B14\]\/90,
+.user-workspace-shell[data-theme="light"] .bg-\[\#080B14\]\/80,
+.user-workspace-shell[data-theme="light"] .bg-\[\#090D16\],
+.user-workspace-shell[data-theme="light"] .bg-\[\#0B101E\],
+.user-workspace-shell[data-theme="light"] .bg-\[\#0A0E19\],
+.user-workspace-shell[data-theme="light"] .bg-\[\#171F32\],
+.user-workspace-shell[data-theme="light"] .bg-\[\#192337\],
+.user-workspace-shell[data-theme="light"] .bg-\[\#1E2940\],
+.user-workspace-shell[data-theme="light"] .bg-slate-950:not(.admin-dark-sidebar):not(.admin-dark-sidebar *):not(.dark-hero-card):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .bg-slate-950\/95:not(.admin-dark-sidebar *):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .bg-slate-950\/80:not(.admin-dark-sidebar *):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .bg-slate-950\/70:not(.admin-dark-sidebar *):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .bg-slate-950\/60:not(.admin-dark-sidebar *):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .bg-slate-950\/50:not(.admin-dark-sidebar *):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .bg-slate-800:not(.admin-dark-sidebar *):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .bg-slate-800\/90:not(.admin-dark-sidebar *):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .bg-slate-800\/80:not(.admin-dark-sidebar *):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .bg-slate-800\/70:not(.admin-dark-sidebar *):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .bg-slate-800\/60:not(.admin-dark-sidebar *):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .bg-slate-800\/50:not(.admin-dark-sidebar *):not(.dark-hero-card *) {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Sticky filter/search container in Light Mode */
+.user-workspace-shell[data-theme="light"] .bg-slate-950\/90:not(.admin-dark-sidebar *):not(.dark-hero-card *) {
+  background-color: rgba(248, 250, 252, 0.95) !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* 3. Convert Light-on-Dark Text Classes to Deep High-Contrast Slate in Light Mode */
+.user-workspace-shell[data-theme="light"] .text-\[\#F1F5F9\]:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+.user-workspace-shell[data-theme="light"] .text-\[\#F8FAFC\]:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+.user-workspace-shell[data-theme="light"] .text-\[\#E2E8F0\]:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+.user-workspace-shell[data-theme="light"] .text-\[\#CBD5E1\]:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+.user-workspace-shell[data-theme="light"] .text-slate-100:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *):not(.bg-indigo-600 *),
+.user-workspace-shell[data-theme="light"] .text-slate-200:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *):not(.bg-indigo-600 *) {
+  color: #0f172a !important;
+}
+
+.user-workspace-shell[data-theme="light"] .text-slate-300:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *):not(.bg-indigo-600 *) {
+  color: #1e293b !important;
+}
+
+.user-workspace-shell[data-theme="light"] .text-\[\#94A3B8\]:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+.user-workspace-shell[data-theme="light"] .text-\[\#64748B\]:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+html:not(.dark) .text-slate-400:not(.admin-dark-sidebar *):not(.admin-mobile-dock *):not(.dark-hero-card *):not(.glass-hero *):not(.bg-indigo-600 *) {
+  color: #475569 !important;
+}
+
+html:not(.dark) .text-slate-500:not(.admin-dark-sidebar *):not(.admin-mobile-dock *):not(.dark-hero-card *):not(.glass-hero *):not(.bg-indigo-600 *) {
+  color: #334155 !important;
+}
+
+html:not(.dark) .text-slate-600:not(.admin-dark-sidebar *):not(.admin-mobile-dock *):not(.dark-hero-card *):not(.glass-hero *):not(.bg-indigo-600 *) {
+  color: #1e293b !important;
+}
+
+/* Convert .text-white on non-accent surfaces (cards, headings, inputs, stat numbers) to #0f172a in Light Mode */
+.user-workspace-shell[data-theme="light"] .text-white:not(.admin-dark-sidebar):not(.admin-dark-sidebar *):not(.dark-hero-card):not(.dark-hero-card *):not(.glass-hero):not(.glass-hero *):not(.bg-indigo-600):not(.bg-indigo-600 *):not(.bg-indigo-500):not(.bg-indigo-500 *):not(.bg-indigo-700):not(.bg-indigo-700 *):not(.bg-indigo-700\/80):not(.bg-indigo-700\/80 *):not(.bg-rose-600):not(.bg-rose-600 *):not(.bg-rose-500):not(.bg-rose-500 *):not(.bg-emerald-600):not(.bg-emerald-600 *):not(.bg-emerald-500):not(.bg-emerald-500 *):not(.bg-amber-600):not(.bg-amber-600 *):not(.bg-amber-500):not(.bg-amber-500 *):not(.bg-sky-600):not(.bg-sky-600 *):not(.bg-sky-500):not(.bg-sky-500 *):not(.bg-purple-600):not(.bg-purple-600 *):not(.bg-purple-500):not(.bg-purple-500 *):not(.bg-violet-600):not(.bg-violet-600 *):not(.bg-violet-500):not(.bg-violet-500 *):not(.bg-blue-600):not(.bg-blue-600 *):not(.bg-blue-500):not(.bg-blue-500 *):not(.bg-pink-600):not(.bg-pink-600 *):not(.bg-pink-500):not(.bg-pink-500 *):not(.bg-red-600):not(.bg-red-600 *):not(.bg-red-500):not(.bg-red-500 *):not(.bg-\[\#8B5CF6\]):not(.bg-\[\#8B5CF6\] *):not(.bg-gradient-to-r):not(.bg-gradient-to-r *):not(.bg-gradient-to-br):not(.bg-gradient-to-br *):not(.bg-black\/25):not(.bg-black\/30) {
+  color: #0f172a !important;
+}
+
+/* 4. Boost Pastel Accent Colors in Light Mode so Badges & Numbers are Sharp */
+.user-workspace-shell[data-theme="light"] .text-emerald-400:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+.user-workspace-shell[data-theme="light"] .text-emerald-300:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+.user-workspace-shell[data-theme="light"] .text-emerald-300\/70:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+.user-workspace-shell[data-theme="light"] .text-\[\#22C55E\]:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *) {
+  color: #047857 !important;
+}
+
+.user-workspace-shell[data-theme="light"] .text-amber-400:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+.user-workspace-shell[data-theme="light"] .text-amber-300:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+.user-workspace-shell[data-theme="light"] .text-amber-300\/90:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+.user-workspace-shell[data-theme="light"] .text-\[\#F59E0B\]:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *) {
+  color: #b45309 !important;
+}
+
+.user-workspace-shell[data-theme="light"] .text-sky-400:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+.user-workspace-shell[data-theme="light"] .text-sky-300:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+.user-workspace-shell[data-theme="light"] .text-\[\#22D3EE\]:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *) {
+  color: #0369a1 !important;
+}
+
+.user-workspace-shell[data-theme="light"] .text-rose-400:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+.user-workspace-shell[data-theme="light"] .text-rose-300:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+.user-workspace-shell[data-theme="light"] .text-\[\#F87171\]:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *) {
+  color: #be123c !important;
+}
+
+.user-workspace-shell[data-theme="light"] .text-indigo-400:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+.user-workspace-shell[data-theme="light"] .text-indigo-300:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+.user-workspace-shell[data-theme="light"] .text-violet-300:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+.user-workspace-shell[data-theme="light"] .text-violet-200:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+.user-workspace-shell[data-theme="light"] .text-purple-400:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *),
+.user-workspace-shell[data-theme="light"] .text-purple-300:not(.admin-dark-sidebar *):not(.dark-hero-card *):not(.glass-hero *) {
+  color: #4338ca !important;
+}
+
+/* 5. Convert Dark Borders to Clean Slate Borders in Light Mode */
+.user-workspace-shell[data-theme="light"] .border-white\/\[0\.05\],
+.user-workspace-shell[data-theme="light"] .border-white\/\[0\.06\],
+.user-workspace-shell[data-theme="light"] .border-white\/\[0\.07\],
+.user-workspace-shell[data-theme="light"] .border-white\/\[0\.08\],
+.user-workspace-shell[data-theme="light"] .border-white\/\[0\.1\],
+.user-workspace-shell[data-theme="light"] .border-white\/\[0\.12\],
+.user-workspace-shell[data-theme="light"] .border-white\/10,
+.user-workspace-shell[data-theme="light"] .border-white\/15,
+.user-workspace-shell[data-theme="light"] .border-slate-800:not(.admin-dark-sidebar *):not(.admin-mobile-dock *):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .border-slate-800\/60:not(.admin-dark-sidebar *):not(.admin-mobile-dock *):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .border-slate-800\/70:not(.admin-dark-sidebar *):not(.admin-mobile-dock *):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .border-slate-800\/80:not(.admin-dark-sidebar *):not(.admin-mobile-dock *):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .border-slate-800\/90:not(.admin-dark-sidebar *):not(.admin-mobile-dock *):not(.dark-hero-card *),
+.user-workspace-shell[data-theme="light"] .border-slate-700:not(.admin-dark-sidebar *):not(.admin-mobile-dock *):not(.dark-hero-card *) {
+  border-color: #cbd5e1 !important;
 }
 
 /* Hide scrollbar for horizontal scroll bars */
@@ -115,30 +291,4 @@
   scrollbar-width: none;
 }
 
-/* Subtle custom scrollbar for desktop tables & drawers */
-@media (min-width: 1024px) {
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    background: #090D16;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: #1E2940;
-    border-radius: 9999px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: #6366F1;
-  }
-}
 
-/* Reduced Motion Accessibility Support */
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}

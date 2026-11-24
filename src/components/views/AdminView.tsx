@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ShieldCheck, 
   Package, 
@@ -41,9 +41,24 @@ import {
   TrendingUp,
   Globe,
   BookOpen,
-  Sparkles
+  Sparkles,
+  Filter,
+  Check,
+  Clock,
+  ChevronDown,
+  ChevronUp,
+  Sun,
+  Moon,
+  ArrowUpRight,
+  ArrowDownRight,
+  Phone,
+  Mail,
+  HelpCircle,
+  AlertCircle,
+  FileText,
+  Database,
+  ShieldAlert
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
 import { 
   SMMOrder, 
@@ -93,7 +108,9 @@ import {
   removeAnnouncement,
   saveSiteSettings,
   purgeAllDemoDataFromServer,
-  fetchServerHealthStatus
+  fetchServerHealthStatus,
+  reconcileAndPurgeInactiveServices,
+  autoSyncAllProvidersEverything
 } from '../../services/db';
 import { testGeminiConnectionOnServer } from '../../services/blogSeoService';
 import {
@@ -166,7 +183,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   onExitAdmin,
   onPreviewBlogSlug
 }) => {
-  const { formatPrice, profile, language, setLanguage } = useAuth();
+  const { formatPrice, profile, language, setLanguage, darkMode, setDarkMode } = useAuth();
   const [activeSection, setActiveSection] = useState<AdminSection>('overview');
 
   // Server Telemetry
@@ -181,47 +198,56 @@ export const AdminView: React.FC<AdminViewProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  // Metrics & Badges
-  const totalRevenue = orders.reduce((acc, o) => acc + (o.status !== 'canceled' && o.status !== 'refunded' ? o.charge : 0), 0);
-  const totalEstimatedNetProfit = orders.reduce((acc, o) => {
-    if (o.status === 'canceled' || o.status === 'refunded') return acc;
-    const srv = services.find(s => s.id === o.serviceId);
-    const prv = providers.find(p => p.id === (o.providerId || srv?.providerId));
-    const usdRate = prv?.customExchangeRate || siteSettings.usdToBdtRate || 122;
-    let cost = 0;
-    if (o.providerCost !== undefined && o.providerCost > 0) {
-      cost = o.providerCost;
-    } else if (srv?.originalRate !== undefined && srv.originalRate > 0) {
-      const isUsd = !prv || prv.currency?.toUpperCase() === 'USD';
-      cost = ((isUsd ? srv.originalRate * usdRate : srv.originalRate) * o.quantity) / 1000;
-    } else if (prv?.profitMargin) {
-      cost = o.charge / (1 + prv.profitMargin / 100);
-    } else if (o.providerId || srv?.providerId) {
-      cost = o.charge / 1.25;
-    }
-    return acc + (o.charge - cost);
-  }, 0);
-  const pendingDeposits = payments.filter(p => p.status === 'pending');
-  const pendingOrders = orders.filter(o => ['pending', 'processing', 'in_progress'].includes(o.status));
-  const openTickets = tickets.filter(t => t.status === 'open');
-  const pendingRefills = refills.filter(r => r.status === 'pending');
+  // Metrics & Badges Calculation
+  const totalRevenue = useMemo(() => {
+    return orders.reduce((acc, o) => acc + (o.status !== 'canceled' && o.status !== 'refunded' ? o.charge : 0), 0);
+  }, [orders]);
+
+  const totalEstimatedNetProfit = useMemo(() => {
+    return orders.reduce((acc, o) => {
+      if (o.status === 'canceled' || o.status === 'refunded') return acc;
+      const srv = services.find(s => s.id === o.serviceId);
+      const prv = providers.find(p => p.id === (o.providerId || srv?.providerId));
+      const usdRate = prv?.customExchangeRate || siteSettings.usdToBdtRate || 122;
+      let cost = 0;
+      if (o.providerCost !== undefined && o.providerCost > 0) {
+        cost = o.providerCost;
+      } else if (srv?.originalRate !== undefined && srv.originalRate > 0) {
+        const isUsd = !prv || prv.currency?.toUpperCase() === 'USD';
+        cost = ((isUsd ? srv.originalRate * usdRate : srv.originalRate) * o.quantity) / 1000;
+      } else if (prv?.profitMargin) {
+        cost = o.charge / (1 + prv.profitMargin / 100);
+      } else if (o.providerId || srv?.providerId) {
+        cost = o.charge / 1.25;
+      }
+      return acc + (o.charge - cost);
+    }, 0);
+  }, [orders, services, providers, siteSettings.usdToBdtRate]);
+
+  const pendingDeposits = useMemo(() => payments.filter(p => p.status === 'pending'), [payments]);
+  const pendingOrders = useMemo(() => orders.filter(o => ['pending', 'processing', 'in_progress'].includes(o.status)), [orders]);
+  const openTickets = useMemo(() => tickets.filter(t => t.status === 'open'), [tickets]);
+  const pendingRefills = useMemo(() => refills.filter(r => r.status === 'pending'), [refills]);
 
   // Orders Filter & Search State
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>('all');
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
   const [syncingOrders, setSyncingOrders] = useState(false);
-  const [editingCountsId, setEditingCountsId] = useState<string | null>(null);
-  const [tempStartCount, setTempStartCount] = useState<number>(0);
-  const [tempRemains, setTempRemains] = useState<number>(0);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [activeOrderDetail, setActiveOrderDetail] = useState<SMMOrder | null>(null);
 
   // Payments Filter & Processing State
   const [paymentFilter, setPaymentFilter] = useState<'pending' | 'all'>('pending');
+  const [paymentTab, setPaymentTab] = useState<'manual' | 'zinipay'>('manual');
   const [paymentProcessing, setPaymentProcessing] = useState<string | null>(null);
+  const [ziniQueryInvoiceId, setZiniQueryInvoiceId] = useState('');
 
   // Services Catalog State
   const [serviceSearch, setServiceSearch] = useState('');
+  const [selectedServiceCategory, setSelectedServiceCategory] = useState<string>('All');
   const [isAddingService, setIsAddingService] = useState(false);
+  const [editingService, setEditingService] = useState<SMMService | null>(null);
   const [newService, setNewService] = useState<Partial<SMMService>>({
     id: 'srv-' + Math.floor(100 + Math.random() * 900),
     category: 'Facebook',
@@ -237,9 +263,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     status: 'active'
   });
 
-  // ============================================================================
-  // ADVANCED ADMIN API PANEL STATE (5 SUB-MODULES)
-  // ============================================================================
+  // API Providers Studio State
   const [apiSubTab, setApiSubTab] = useState<AdminApiSubTab>('providers');
   const [isAddingProvider, setIsAddingProvider] = useState(false);
   const [showProviderSecret, setShowProviderSecret] = useState(false);
@@ -271,7 +295,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     status: 'active'
   });
 
-  // Sub-Tab 2: Remote Catalog Browser & Selective Importer State
+  // Sub-Tab 2: Remote Catalog Selective Importer
   const [selectedCatalogProviderId, setSelectedCatalogProviderId] = useState<string>('');
   const [loadingRemoteCatalog, setLoadingRemoteCatalog] = useState(false);
   const [remoteCatalogServices, setRemoteCatalogServices] = useState<RemoteProviderService[]>([]);
@@ -282,11 +306,11 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [customLocalCategoryName, setCustomLocalCategoryName] = useState<string>('');
   const [importingSelected, setImportingSelected] = useState(false);
 
-  // Sub-Tab 3: API Order Router & Refill Dispatcher State
+  // Sub-Tab 3: Order Router & Dispatcher State
   const [dispatchingOrderId, setDispatchingOrderId] = useState<string | null>(null);
   const [forwardingRefillId, setForwardingRefillId] = useState<string | null>(null);
 
-  // Sub-Tab 4: Bulk Price & Profit Optimizer State
+  // Sub-Tab 4: Bulk Pricing Rule State
   const [bulkRuleProviderId, setBulkRuleProviderId] = useState<string>('');
   const [bulkMarginPercent, setBulkMarginPercent] = useState<number>(25);
   const [bulkFixedMarkup, setBulkFixedMarkup] = useState<number>(0);
@@ -294,7 +318,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [bulkRounding, setBulkRounding] = useState<'none' | 'nearest_int' | 'ceil'>('none');
   const [applyingBulkPrice, setApplyingBulkPrice] = useState(false);
 
-  // Sub-Tab 5: Live API Traffic Logs & Raw Debugger State
+  // Sub-Tab 5: Traffic Logs & Raw Terminal State
   const [apiLogsData, setApiLogsData] = useState<{
     totalCalls: number;
     successRate: number;
@@ -359,7 +383,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [adminReplyText, setAdminReplyText] = useState('');
 
-  // Site Settings & ZiniPay Gateway State
+  // Site Settings & Gateway State
   const [settingsForm, setSettingsForm] = useState<SiteSettings>(siteSettings);
   const [savingSettings, setSavingSettings] = useState(false);
   const [showZiniApiKey, setShowZiniApiKey] = useState(false);
@@ -392,6 +416,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     }
   }, [activeSection]);
 
+  // Actions
   const handleTestZiniPayConnection = async () => {
     setTestingZiniPay(true);
     try {
@@ -399,7 +424,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
       setZiniPingResult(res);
       await refreshZiniPayLogs();
       onShowToast(
-        `ZiniPay Gateway Online: ${res.reachableNodes}/${res.totalNodes} API nodes reachable (${res.primaryLatencyMs}ms)`,
+        `ZiniPay Online: ${res.reachableNodes}/${res.totalNodes} API nodes reachable (${res.primaryLatencyMs}ms)`,
         'success'
       );
     } catch (err: any) {
@@ -464,19 +489,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Determine which of the 5 Bottom Nav tabs is highlighted
-  const getActiveBottomTab = (): 'overview' | 'orders' | 'payments' | 'api' | 'hub' => {
-    if (activeSection === 'overview') return 'overview';
-    if (activeSection === 'orders' || activeSection === 'refills') return 'orders';
-    if (activeSection === 'payments') return 'payments';
-    if (activeSection === 'providers' || activeSection === 'services') return 'api';
-    return 'hub';
-  };
-
-  const activeBottomTab = getActiveBottomTab();
-
-  // Handlers
   const handlePurgeDemoData = async () => {
+    if (!window.confirm(language === 'bn' ? 'আপনি কি নিশ্চিত যে সমস্ত টেস্ট/ডেমো রেকর্ড মুছে ফেলতে চান?' : 'Are you sure you want to purge all demo data?')) {
+      return;
+    }
     setPurgingDemo(true);
     try {
       await purgeAllDemoDataFromServer();
@@ -499,17 +515,37 @@ export const AdminView: React.FC<AdminViewProps> = ({
   ) => {
     setStatusUpdating(ord.id);
     try {
-      await updateOrderStatus(
-        ord.id,
-        newStatus,
-        ord,
-        customStart,
-        customRemains
-      );
+      await updateOrderStatus(ord.id, newStatus, ord, customStart, customRemains);
       onShowToast(`Order #${ord.id} → ${newStatus.toUpperCase()}`, 'success');
-      setEditingCountsId(null);
+      if (activeOrderDetail?.id === ord.id) {
+        setActiveOrderDetail({ ...ord, status: newStatus });
+      }
     } catch (err: any) {
       onShowToast(err?.message || 'Failed to update order status', 'error');
+    } finally {
+      setStatusUpdating(null);
+    }
+  };
+
+  const handleBatchUpdateOrders = async (targetStatus: SMMOrder['status']) => {
+    if (selectedOrderIds.length === 0) return;
+    const confirmMsg = language === 'bn' 
+      ? `নির্বাচিত ${selectedOrderIds.length}টি অর্ডারের স্ট্যাটাস '${targetStatus}' এ পরিবর্তন করবেন?`
+      : `Change status of ${selectedOrderIds.length} selected orders to '${targetStatus}'?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setStatusUpdating('batch');
+    try {
+      for (const id of selectedOrderIds) {
+        const ord = orders.find(o => o.id === id);
+        if (ord) {
+          await updateOrderStatus(id, targetStatus, ord);
+        }
+      }
+      onShowToast(`Batch updated ${selectedOrderIds.length} orders to ${targetStatus}!`, 'success');
+      setSelectedOrderIds([]);
+    } catch (err: any) {
+      onShowToast(err?.message || 'Batch update encountered an issue', 'error');
     } finally {
       setStatusUpdating(null);
     }
@@ -536,7 +572,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     setPaymentProcessing(p.id);
     try {
       await approvePaymentDeposit(p, siteSettings.referralCommissionPercent || 5);
-      onShowToast(`Payment #${p.id} Approved! ৳${p.amount + (p.bonus || 0)} added.`, 'success');
+      onShowToast(`Payment #${p.id} Approved! ৳${p.amount + (p.bonus || 0)} credited.`, 'success');
     } catch (err: any) {
       onShowToast(err?.message || 'Failed to approve payment', 'error');
     } finally {
@@ -574,6 +610,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
       await saveService(serviceToSave);
       onShowToast(`Service ${serviceToSave.id} saved to server!`, 'success');
       setIsAddingService(false);
+      setEditingService(null);
       setNewService({
         id: 'srv-' + Math.floor(100 + Math.random() * 900),
         category: 'Facebook',
@@ -594,17 +631,14 @@ export const AdminView: React.FC<AdminViewProps> = ({
   };
 
   const handleDeleteService = async (id: string) => {
+    if (!window.confirm(language === 'bn' ? 'সার্ভিসটি মুছে ফেলতে চান?' : 'Delete this service permanently?')) return;
     try {
       await removeService(id);
-      onShowToast(`Service ${id} deleted from server.`, 'info');
+      onShowToast(`Service ${id} deleted from catalog.`, 'info');
     } catch (err: any) {
       onShowToast(err?.message || 'Failed to delete service', 'error');
     }
   };
-
-  // ============================================================================
-  // ADVANCED API PROVIDER HANDLERS
-  // ============================================================================
 
   const handleTestNewProviderConnection = async () => {
     if (!newProvider.apiUrl?.trim() || !newProvider.apiKey?.trim()) {
@@ -629,7 +663,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
       try {
         data = rawText ? JSON.parse(rawText) : {};
       } catch {
-        throw new Error('Server API route not reachable. Please redeploy with /api serverless function.');
+        throw new Error('Server API route not reachable. Please check backend.');
       }
       if (!resp.ok || data.error) {
         throw new Error(data.error || 'Connection test failed');
@@ -658,21 +692,39 @@ export const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
+  const [confirmDeleteProviderId, setConfirmDeleteProviderId] = useState<string | null>(null);
+  const [autoCleaningCatalog, setAutoCleaningCatalog] = useState<boolean>(false);
+
   const handleSaveProvider = async () => {
-    if (!newProvider.name?.trim() || !newProvider.apiUrl?.trim() || !newProvider.apiKey?.trim()) {
-      onShowToast('Provider Name, API v2 URL, and API Key are required', 'error');
+    if (!newProvider.apiUrl?.trim() || !newProvider.apiKey?.trim()) {
+      onShowToast('API v2 URL এবং API Key আবশ্যক (API URL and Key are required)', 'error');
       return;
     }
+
+    let derivedName = (newProvider.name || '').trim();
+    if (!derivedName) {
+      try {
+        const u = new URL(
+          newProvider.apiUrl.trim().startsWith('http')
+            ? newProvider.apiUrl.trim()
+            : `https://${newProvider.apiUrl.trim()}`
+        );
+        derivedName = u.hostname.replace(/^www\./i, '');
+      } catch {
+        derivedName = 'SMM Provider';
+      }
+    }
+
     try {
       const idToSave = newProvider.id || 'prv-' + Math.floor(100 + Math.random() * 900);
-      await saveProvider({
+      const providerObj: SMMProvider = {
         id: idToSave,
-        name: newProvider.name.trim(),
+        name: derivedName,
         apiUrl: newProvider.apiUrl.trim(),
         apiKey: newProvider.apiKey.trim(),
         balance: Number(newProvider.balance) || 0,
         currency: newProvider.currency || 'USD',
-        profitMargin: Number(newProvider.profitMargin ?? 20),
+        profitMargin: Number(newProvider.profitMargin ?? 25),
         fixedMarkup: Number(newProvider.fixedMarkup ?? 0),
         priceRounding: newProvider.priceRounding || 'none',
         customExchangeRate: Number(newProvider.customExchangeRate || siteSettings.usdToBdtRate || 122),
@@ -683,13 +735,107 @@ export const AdminView: React.FC<AdminViewProps> = ({
         totalRemoteServices: newProvider.totalRemoteServices,
         status: newProvider.status || 'active',
         lastSyncAt: Date.now()
-      });
-      onShowToast('SMM API v2 Provider saved to Cloud Server!', 'success');
+      };
+
+      await saveProvider(providerObj);
       setIsAddingProvider(false);
       setNewProviderPingResult(null);
       setSelectedCatalogProviderId(idToSave);
+
+      const updatedProvidersList = [
+        ...providers.filter(p => p.id !== idToSave),
+        providerObj
+      ];
+
+      if (providerObj.status === 'active') {
+        onShowToast(
+          `${providerObj.name} সংযুক্ত হয়েছে! স্বয়ংক্রিয়ভাবে সব অ্যাক্টিভ সার্ভিস সিঙ্ক হচ্ছে...`,
+          'info'
+        );
+        setSyncingProviderId(idToSave);
+        try {
+          const syncRes = await fullSyncProviderServicesAndStatuses(
+            providerObj,
+            orders,
+            services,
+            providerObj.customExchangeRate || siteSettings.usdToBdtRate || 122
+          );
+          await reconcileAndPurgeInactiveServices(updatedProvidersList);
+          onShowToast(
+            `${providerObj.name}: ${syncRes.importedServices}টি অ্যাক্টিভ সার্ভিস স্বয়ংক্রিয়ভাবে সিঙ্ক সম্পন্ন!`,
+            'success'
+          );
+        } catch (syncErr: any) {
+          onShowToast(syncErr?.message || 'Provider saved, auto-sync will retry in background', 'info');
+        } finally {
+          setSyncingProviderId(null);
+        }
+      } else {
+        const { purgedCount } = await reconcileAndPurgeInactiveServices(updatedProvidersList);
+        onShowToast(
+          `${providerObj.name} নিষ্ক্রিয় (Inactive) করা হয়েছে এবং ${purgedCount}টি সার্ভিস সরানো হয়েছে।`,
+          'info'
+        );
+      }
     } catch (err: any) {
       onShowToast(err?.message || 'Failed to save provider', 'error');
+    }
+  };
+
+  const handleToggleProviderStatus = async (prv: SMMProvider) => {
+    const nextStatus: 'active' | 'inactive' = prv.status === 'active' ? 'inactive' : 'active';
+    const updatedPrv: SMMProvider = {
+      ...prv,
+      status: nextStatus,
+      lastSyncAt: Date.now()
+    };
+    const updatedList = providers.map(p => (p.id === prv.id ? updatedPrv : p));
+    setSyncingProviderId(prv.id);
+    try {
+      await saveProvider(updatedPrv);
+      if (nextStatus === 'inactive') {
+        const { purgedCount } = await reconcileAndPurgeInactiveServices(updatedList);
+        onShowToast(
+          `${prv.name} ডিঅ্যাক্টিভেট করা হয়েছে এবং এর ${purgedCount}টি সার্ভিস অটো-রিমুভ হয়েছে।`,
+          'info'
+        );
+      } else {
+        const result = await fullSyncProviderServicesAndStatuses(
+          updatedPrv,
+          orders,
+          services,
+          updatedPrv.customExchangeRate || siteSettings.usdToBdtRate || 122
+        );
+        await reconcileAndPurgeInactiveServices(updatedList);
+        onShowToast(
+          `${prv.name} অ্যাক্টিভ করা হয়েছে এবং ${result.importedServices}টি সচল সার্ভিস অটো-সিঙ্ক হয়েছে!`,
+          'success'
+        );
+      }
+    } catch (err: any) {
+      onShowToast(err?.message || 'Failed to toggle provider status', 'error');
+    } finally {
+      setSyncingProviderId(null);
+    }
+  };
+
+  const handleAutoCleanAndSyncAll = async () => {
+    setAutoCleaningCatalog(true);
+    try {
+      const res = await autoSyncAllProvidersEverything(
+        providers,
+        orders,
+        services,
+        siteSettings.usdToBdtRate || 122
+      );
+      onShowToast(
+        `অটো-সিঙ্ক সম্পন্ন! ${res.providersSynced}টি অ্যাক্টিভ প্রোভাইডার থেকে ${res.totalServicesSynced}টি সচল সার্ভিস আপডেট ও ${res.purgedInactiveServices}টি ইনঅ্যাক্টিভ সার্ভিস ক্লিন করা হয়েছে।`,
+        'success'
+      );
+    } catch (err: any) {
+      onShowToast(err?.message || 'Auto-sync failed', 'error');
+    } finally {
+      setAutoCleaningCatalog(false);
     }
   };
 
@@ -698,7 +844,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     try {
       const res = await pingProviderOnServer(prv);
       onShowToast(
-        `${prv.name}: ${res.balance} ${res.currency} · ${res.latencyMs}ms${res.totalRemoteServices ? ` · ${res.totalRemoteServices} services` : ''}`,
+        `${prv.name}: ${res.balance} ${res.currency} · ${res.latencyMs}ms${res.totalRemoteServices ? ` · ${res.totalRemoteServices} active services` : ''}`,
         'success'
       );
     } catch (err: any) {
@@ -717,8 +863,11 @@ export const AdminView: React.FC<AdminViewProps> = ({
         services,
         prv.customExchangeRate || siteSettings.usdToBdtRate || 122
       );
+      await reconcileAndPurgeInactiveServices(
+        providers.map(p => (p.id === prv.id ? { ...prv, status: 'active' } : p))
+      );
       onShowToast(
-        `${prv.name}: ${result.importedServices}টি সার্ভিস ইমপোর্ট/আপডেট ও ${result.updatedOrders + result.dispatchedOrders}টি অর্ডারের স্ট্যাটাস সিঙ্ক হয়েছে (ব্যালেন্স: ${result.balance} ${result.currency})!`,
+        `${prv.name}: ${result.importedServices}টি অ্যাক্টিভ সার্ভিস ও ${result.updatedOrders + result.dispatchedOrders}টি অর্ডার সিঙ্ক সম্পন্ন!`,
         'success'
       );
     } catch (err: any) {
@@ -728,33 +877,21 @@ export const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
-  const handleRecalculateProviderPrices = async (prv: SMMProvider) => {
-    setRepricingProviderId(prv.id);
-    try {
-      const count = await recalculateProviderServicesPrices(
-        prv,
-        services,
-        prv.customExchangeRate || siteSettings.usdToBdtRate || 122
-      );
-      onShowToast(`Recalculated BDT prices for ${count} services linked to ${prv.name}!`, 'success');
-    } catch (err: any) {
-      onShowToast(err?.message || 'Failed to recalculate prices', 'error');
-    } finally {
-      setRepricingProviderId(null);
-    }
-  };
-
-  const handleDeleteProviderWithServices = async (prv: SMMProvider, alsoDeleteServices: boolean) => {
+  const handleDeleteProviderWithServices = async (prv: SMMProvider, alsoDeleteServices: boolean = true) => {
+    setSyncingProviderId(prv.id);
     try {
       const deletedServices = await removeProviderAndLinkedServices(prv.id, services, alsoDeleteServices);
+      const remainingProviders = providers.filter(p => p.id !== prv.id);
+      await reconcileAndPurgeInactiveServices(remainingProviders);
+      setConfirmDeleteProviderId(null);
       onShowToast(
-        alsoDeleteServices
-          ? `Removed ${prv.name} and ${deletedServices} linked services.`
-          : `Removed provider ${prv.name}.`,
+        `${prv.name} এবং এর সাথে যুক্ত ${deletedServices}টি সার্ভিস সম্পূর্ণ মুছে ফেলা হয়েছে।`,
         'info'
       );
     } catch (err: any) {
       onShowToast(err?.message || 'Failed to remove provider', 'error');
+    } finally {
+      setSyncingProviderId(null);
     }
   };
 
@@ -994,7 +1131,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     try {
       await addTicketMessage(t.id, t.messages, {
         senderId: profile.uid,
-        senderName: 'Boostlagbe.com Admin',
+        senderName: 'AmarTrend Admin',
         senderRole: 'admin',
         message: adminReplyText.trim(),
         timestamp: Date.now()
@@ -1006,489 +1143,709 @@ export const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
+  // Filtered Orders
+  const filteredOrders = useMemo(() => {
+    return orders.filter(o => {
+      const matchesStatus =
+        orderStatusFilter === 'all'
+          ? true
+          : orderStatusFilter === 'active'
+            ? ['pending', 'processing', 'in_progress'].includes(o.status)
+            : o.status === orderStatusFilter;
+      const matchesSearch =
+        !orderSearch ||
+        o.id.toLowerCase().includes(orderSearch.toLowerCase()) ||
+        o.userEmail.toLowerCase().includes(orderSearch.toLowerCase()) ||
+        o.serviceName.toLowerCase().includes(orderSearch.toLowerCase()) ||
+        o.link.toLowerCase().includes(orderSearch.toLowerCase());
+      return matchesStatus && matchesSearch;
+    });
+  }, [orders, orderStatusFilter, orderSearch]);
+
+  // Filtered Payments
+  const filteredPayments = useMemo(() => {
+    return payments.filter(p => {
+      if (paymentFilter === 'pending') return p.status === 'pending';
+      return true;
+    });
+  }, [payments, paymentFilter]);
+
+  // Filtered Services
+  const serviceCategories = useMemo(() => {
+    const set = new Set<string>();
+    services.forEach(s => {
+      if (s.category) set.add(s.category);
+    });
+    return ['All', ...Array.from(set)];
+  }, [services]);
+
+  const filteredServices = useMemo(() => {
+    return services.filter(s => {
+      const matchCat = selectedServiceCategory === 'All' || s.category === selectedServiceCategory;
+      const matchSearch = !serviceSearch ||
+        s.name.toLowerCase().includes(serviceSearch.toLowerCase()) ||
+        s.category.toLowerCase().includes(serviceSearch.toLowerCase()) ||
+        s.id.toLowerCase().includes(serviceSearch.toLowerCase());
+      return matchCat && matchSearch;
+    });
+  }, [services, selectedServiceCategory, serviceSearch]);
+
+  // Navigation Items
+  const navSections: {
+    group: string;
+    items: { id: AdminSection; label: string; icon: React.ElementType; badge?: number; badgeColor?: string }[];
+  }[] = [
+    {
+      group: language === 'bn' ? 'কোর কন্ট্রোল' : 'Core Command',
+      items: [
+        { id: 'overview', label: language === 'bn' ? 'এক্সিকিউটিভ ওভারভিউ' : 'Executive Overview', icon: LayoutGrid },
+        { id: 'finance', label: language === 'bn' ? 'ফাইন্যান্সিয়াল ইন্টেলিজেন্স' : 'Financial Intelligence', icon: TrendingUp },
+      ]
+    },
+    {
+      group: language === 'bn' ? 'অপারেশনস' : 'Operations',
+      items: [
+        { 
+          id: 'orders', 
+          label: language === 'bn' ? 'অর্ডার কন্ট্রোল' : 'Orders Control', 
+          icon: Package, 
+          badge: pendingOrders.length || undefined,
+          badgeColor: 'bg-amber-500 text-white' 
+        },
+        { 
+          id: 'refills', 
+          label: language === 'bn' ? 'রিফিল কিউ' : 'Refill Queue', 
+          icon: RefreshCw, 
+          badge: pendingRefills.length || undefined,
+          badgeColor: 'bg-indigo-500 text-white' 
+        },
+        { 
+          id: 'payments', 
+          label: language === 'bn' ? 'ডিপোজিট ভেরিফিকেশন' : 'Deposit Verification', 
+          icon: Wallet, 
+          badge: pendingDeposits.length || undefined,
+          badgeColor: 'bg-emerald-500 text-white' 
+        },
+      ]
+    },
+    {
+      group: language === 'bn' ? 'ক্যাটালগ ও কন্টেন্ট' : 'Catalog & Content',
+      items: [
+        { id: 'services', label: language === 'bn' ? 'সার্ভিস ক্যাটালগ' : 'Services Catalog', icon: Layers, badge: services.length || undefined },
+        { id: 'blogs', label: language === 'bn' ? 'SEO ব্লগ ও Gemini AI' : 'SEO Blog & Gemini AI', icon: BookOpen, badge: blogs.length || undefined },
+      ]
+    },
+    {
+      group: language === 'bn' ? 'ইন্টিগ্রেশনস' : 'Integrations',
+      items: [
+        { id: 'providers', label: language === 'bn' ? 'API প্রোভাইডার স্টুডিও' : 'API Providers Studio', icon: Server, badge: providers.length || undefined },
+      ]
+    },
+    {
+      group: language === 'bn' ? 'অ্যাডমিনিস্ট্রেশন' : 'Administration',
+      items: [
+        { id: 'users', label: language === 'bn' ? 'ইউজার ও ব্যালেন্স' : 'Users & Balances', icon: Users, badge: users.length || undefined },
+        { 
+          id: 'tickets', 
+          label: language === 'bn' ? 'সাপোর্ট হেল্পডেস্ক' : 'Support Helpdesk', 
+          icon: MessageSquare, 
+          badge: openTickets.length || undefined,
+          badgeColor: 'bg-rose-500 text-white'
+        },
+        { id: 'coupons', label: language === 'bn' ? 'প্রোমো ভাউচার' : 'Promo Vouchers', icon: Gift },
+        { id: 'announcements', label: language === 'bn' ? 'নোটিশ বোর্ড' : 'Announcements', icon: Megaphone },
+        { id: 'settings', label: language === 'bn' ? 'সিস্টেম ও SEO সেটিংস' : 'System & SEO Settings', icon: Settings }
+      ]
+    }
+  ];
+
   const getSectionTitle = (): string => {
     switch (activeSection) {
-      case 'overview': return language === 'bn' ? 'অ্যাডমিন ড্যাশবোর্ড' : 'Admin Dashboard';
-      case 'finance': return language === 'bn' ? 'প্রফিট ও ফাইন্যান্সিয়াল ইন্টেলিজেন্স' : 'Financial & Profit Intelligence';
-      case 'orders': return language === 'bn' ? 'অর্ডার কন্ট্রোল' : 'Orders Control';
-      case 'refills': return language === 'bn' ? 'রিফিল রিকোয়েস্ট' : 'Refill Queue';
-      case 'payments': return language === 'bn' ? 'পেমেন্ট ভেরিফিকেশন' : 'Deposit Requests';
+      case 'overview': return language === 'bn' ? 'এক্সিকিউটিভ ওভারভিউ' : 'Executive Overview';
+      case 'finance': return language === 'bn' ? 'প্রফিট ও ফাইন্যান্সিয়াল ইন্টেলিজেন্স' : 'Financial Intelligence';
+      case 'orders': return language === 'bn' ? 'অর্ডার কন্ট্রোল ও ডিসপ্যাচ' : 'Orders Control & Dispatch';
+      case 'refills': return language === 'bn' ? 'রিফিল কিউ' : 'Refill Queue';
+      case 'payments': return language === 'bn' ? 'ডিপোজিট ভেরিফিকেশন' : 'Deposit Verification';
       case 'services': return language === 'bn' ? 'সার্ভিস ক্যাটালগ' : 'Services Catalog';
-      case 'providers': return language === 'bn' ? 'অ্যাডভান্সড API কন্ট্রোল স্টুডিও' : 'Advanced API Studio';
-      case 'blogs': return language === 'bn' ? '১০০% SEO ব্লগ ও Gemini AI রাইটার' : '100% SEO Blog & Gemini AI CMS';
+      case 'providers': return language === 'bn' ? 'API প্রোভাইডার স্টুডিও' : 'API Providers Studio';
+      case 'blogs': return language === 'bn' ? '১০০% SEO ব্লগ ও Gemini AI' : '100% SEO Blog & Gemini AI';
       case 'hub': return language === 'bn' ? 'অ্যাডমিন কন্ট্রোল হাব' : 'Admin Control Hub';
       case 'users': return language === 'bn' ? 'ইউজার ম্যানেজমেন্ট' : 'Users Management';
-      case 'tickets': return language === 'bn' ? 'সাপোর্ট টিকেট' : 'Support Tickets';
+      case 'tickets': return language === 'bn' ? 'সাপোর্ট হেল্পডেস্ক' : 'Support Helpdesk';
       case 'coupons': return language === 'bn' ? 'প্রোমো কোড' : 'Promo Codes';
       case 'announcements': return language === 'bn' ? 'নোটিশ বোর্ড' : 'Announcements';
-      case 'settings': return language === 'bn' ? 'সাইট, Gemini AI ও পেমেন্ট সেটিংস' : 'Site, Gemini AI & SEO Settings';
+      case 'settings': return language === 'bn' ? 'সাইট ও সিস্টেম সেটিংস' : 'Site & System Settings';
     }
   };
 
-  const isSubHubScreen = ['finance', 'blogs', 'users', 'tickets', 'coupons', 'announcements', 'settings'].includes(activeSection);
-
-  // Filtered Orders
-  const filteredOrders = orders.filter(o => {
-    const matchesStatus =
-      orderStatusFilter === 'all'
-        ? true
-        : orderStatusFilter === 'active'
-          ? ['pending', 'processing', 'in_progress'].includes(o.status)
-          : o.status === orderStatusFilter;
-    const matchesSearch =
-      !orderSearch ||
-      o.id.toLowerCase().includes(orderSearch.toLowerCase()) ||
-      o.userEmail.toLowerCase().includes(orderSearch.toLowerCase()) ||
-      o.serviceName.toLowerCase().includes(orderSearch.toLowerCase()) ||
-      o.link.toLowerCase().includes(orderSearch.toLowerCase());
-    return matchesStatus && matchesSearch;
-  });
-
-  // Filtered Payments
-  const filteredPayments = payments.filter(p =>
-    paymentFilter === 'pending' ? p.status === 'pending' : true
-  );
-
-  // Filtered Services
-  const filteredServices = services.filter(s =>
-    !serviceSearch ||
-    s.name.toLowerCase().includes(serviceSearch.toLowerCase()) ||
-    s.category.toLowerCase().includes(serviceSearch.toLowerCase()) ||
-    s.id.toLowerCase().includes(serviceSearch.toLowerCase())
-  );
-
-  // Filtered Remote Catalog Services (for API Importer Sub-Tab)
-  const filteredRemoteCatalog = remoteCatalogServices.filter(item => {
-    const matchCat = selectedRemoteCategory === 'All' || item.category === selectedRemoteCategory;
-    const matchQuery =
-      !remoteSearchQuery ||
-      item.name.toLowerCase().includes(remoteSearchQuery.toLowerCase()) ||
-      item.service.toLowerCase().includes(remoteSearchQuery.toLowerCase()) ||
-      item.category.toLowerCase().includes(remoteSearchQuery.toLowerCase());
-    return matchCat && matchQuery;
-  });
-
-  // API Orders & Economics Analytics
-  const apiLinkedServices = services.filter(s => Boolean(s.providerId));
-  const apiRoutedOrders = orders.filter(o => {
-    if (o.providerId || o.providerOrderId) return true;
-    const srv = services.find(s => s.id === o.serviceId);
-    return Boolean(srv?.providerId);
-  });
-  const apiOrdersRevenue = apiRoutedOrders
-    .filter(o => o.status !== 'canceled')
-    .reduce((acc, o) => acc + o.charge, 0);
-
-  const totalProviderOperationalCost = Math.max(0, totalRevenue - totalEstimatedNetProfit);
-  const overallNetMarginPercent = totalRevenue > 0 ? (totalEstimatedNetProfit / totalRevenue) * 100 : 0;
-
-  const adminSidebarLinks: { id: AdminSection; label: string; icon: React.ElementType; badge?: number }[] = [
-    { id: 'overview', label: language === 'bn' ? 'অ্যাডমিন ওভারভিউ' : 'Executive Overview', icon: LayoutGrid },
-    { id: 'finance', label: language === 'bn' ? 'ফাইন্যান্সিয়াল ইন্টেলিজেন্স' : 'Financial Intelligence', icon: TrendingUp },
-    { id: 'orders', label: language === 'bn' ? 'অর্ডার কন্ট্রোল' : 'Orders Control', icon: Package, badge: pendingOrders.length || undefined },
-    { id: 'refills', label: language === 'bn' ? 'রিফিল কিউ' : 'Refill Queue', icon: RefreshCw, badge: pendingRefills.length || undefined },
-    { id: 'payments', label: language === 'bn' ? 'ডিপোজিট ভেরিফিকেশন' : 'Deposit Verification', icon: Wallet, badge: pendingDeposits.length || undefined },
-    { id: 'services', label: language === 'bn' ? 'সার্ভিস ক্যাটালগ' : 'Services Catalog', icon: Layers, badge: services.length || undefined },
-    { id: 'blogs', label: language === 'bn' ? 'SEO ব্লগ ও Gemini AI' : 'SEO Blog & Gemini AI', icon: BookOpen, badge: blogs.length || undefined },
-    { id: 'providers', label: language === 'bn' ? 'API কন্ট্রোল স্টুডিও' : 'API Providers Studio', icon: Server, badge: providers.length || undefined },
-    { id: 'users', label: language === 'bn' ? 'ইউজার ম্যানেজমেন্ট' : 'Users & Balances', icon: Users, badge: users.length || undefined },
-    { id: 'tickets', label: language === 'bn' ? 'সাপোর্ট হেল্পডেস্ক' : 'Support Helpdesk', icon: MessageSquare, badge: openTickets.length || undefined },
-    { id: 'coupons', label: language === 'bn' ? 'প্রোমো ভাউচার' : 'Promo Vouchers', icon: Gift },
-    { id: 'announcements', label: language === 'bn' ? 'নোটিশ বোর্ড' : 'Announcements', icon: Megaphone },
-    { id: 'settings', label: language === 'bn' ? 'সাইট, Gemini ও SEO সেটিংস' : 'System & Gemini Settings', icon: Settings }
-  ];
+  // Surface classes based on current theme
+  const surfaceCard = darkMode 
+    ? 'bg-slate-900 border-slate-800 text-slate-100 shadow-md' 
+    : 'bg-white border-slate-300/90 text-slate-950 shadow-sm';
+  const surfaceSubtle = darkMode 
+    ? 'bg-slate-950/60 border-slate-800 text-slate-300' 
+    : 'bg-slate-100 border-slate-300/80 text-slate-900';
+  const tableHeader = darkMode 
+    ? 'bg-slate-950 text-slate-400 border-slate-800' 
+    : 'bg-slate-100 text-slate-800 border-slate-300';
+  const tableRowHover = darkMode 
+    ? 'hover:bg-slate-800/50' 
+    : 'hover:bg-slate-100/70';
 
   return (
-    <div className="min-h-screen w-full bg-[#080B14] text-[#F1F5F9] flex font-sans selection:bg-[#8B5CF6] selection:text-white overflow-x-hidden">
-      {/* DESKTOP PERSISTENT ADMIN SIDEBAR (lg+) */}
-      <aside className="hidden lg:flex flex-col w-64 shrink-0 fixed inset-y-0 left-0 z-50 bg-[#0D1220] border-r border-white/[0.07]">
-        <div className="h-16 px-5 flex items-center justify-between border-b border-white/[0.07]">
+    <div
+      data-theme={darkMode ? 'dark' : 'light'}
+      className={`user-workspace-shell min-h-screen w-full flex font-sans transition-colors duration-200 ${
+        darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-950'
+      }`}
+    >
+      {/* =========================================================================
+          DESKTOP SIDEBAR (Sleek Obsidian Navy + Modern Minimal Structure)
+         ========================================================================= */}
+      <aside className="admin-dark-sidebar hidden lg:flex flex-col w-68 shrink-0 fixed inset-y-0 left-0 z-40 bg-slate-900 border-r border-slate-800 text-slate-200 select-none">
+        {/* Brand Header */}
+        <div className="h-16 px-5 flex items-center justify-between border-b border-slate-800/80">
           <div
             onClick={() => navigateSection('overview')}
-            className="flex items-center gap-3 cursor-pointer"
+            className="flex items-center gap-3 cursor-pointer group"
           >
             <img
               src={BRAND_LOGO_URL}
-              alt="Boostlagbe.com Admin"
-              width={36}
-              height={36}
-              className="w-9 h-9 rounded-xl object-contain bg-[#080B14] border border-white/10 p-0.5 shadow-lg shadow-[#8B5CF6]/20"
+              alt="Boostlagbe Admin"
+              width={34}
+              height={34}
+              className="w-8.5 h-8.5 rounded-xl object-contain bg-slate-950 border border-slate-700/60 p-0.5 shadow-sm group-hover:border-indigo-500 transition-colors"
             />
-            <div>
-              <h2 className="text-sm font-bold text-[#F1F5F9] tracking-tight leading-none">
+            <div className="min-w-0">
+              <h2 className="text-sm font-bold text-white tracking-tight leading-none group-hover:text-indigo-400 transition-colors">
                 Boostlagbe Admin
               </h2>
-              <p className="text-[10px] font-mono text-[#22D3EE] mt-1">
-                {serverHealth ? `Node ${serverHealth.nodeVersion}` : 'Cloud Server Live'}
-              </p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
+                  {serverHealth ? `Node ${serverHealth.nodeVersion}` : 'Live Engine'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-          {adminSidebarLinks.map((item) => {
-            const Icon = item.icon;
-            const active = activeSection === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => navigateSection(item.id)}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                  active
-                    ? 'bg-[#8B5CF6]/15 text-[#F1F5F9] border border-[#8B5CF6]/35 shadow-sm'
-                    : 'text-[#94A3B8] hover:text-[#F1F5F9] hover:bg-white/[0.04] border border-transparent'
-                }`}
-              >
-                <span className="flex items-center gap-2.5 truncate">
-                  <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-[#22D3EE]' : 'text-[#64748B]'}`} />
-                  <span className="truncate">{item.label}</span>
-                </span>
-                {item.badge !== undefined && (
-                  <span
-                    className={`font-mono text-[10px] px-1.5 py-0.5 rounded-md ${
-                      active ? 'bg-[#8B5CF6] text-white' : 'bg-[#141B2B] text-[#94A3B8]'
-                    }`}
-                  >
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        {/* Navigation Sections */}
+        <div className="flex-1 overflow-y-auto px-3.5 py-4 space-y-5 no-scrollbar">
+          {navSections.map((group) => (
+            <div key={group.group} className="space-y-1">
+              <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">
+                {group.group}
+              </p>
+              <div className="space-y-0.5 mt-1">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const active = activeSection === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => navigateSection(item.id)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                        active
+                          ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30'
+                          : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2.5 truncate">
+                        <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-white' : 'text-slate-400'}`} />
+                        <span className="truncate">{item.label}</span>
+                      </span>
+                      {item.badge !== undefined && item.badge > 0 && (
+                        <span
+                          className={`font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                            active ? 'bg-white/20 text-white' : item.badgeColor || 'bg-slate-800 text-slate-300'
+                          }`}
+                        >
+                          {item.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
 
-        {onExitAdmin && (
-          <div className="p-3 border-t border-white/[0.07]">
+        {/* Footer / Exit Control */}
+        <div className="p-3 border-t border-slate-800/80 space-y-2">
+          {onExitAdmin && (
             <button
               type="button"
               onClick={onExitAdmin}
-              className="w-full py-2.5 px-3 rounded-xl bg-[#141B2B] hover:bg-[#192337] border border-white/[0.08] text-[#F1F5F9] text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+              className="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700/80 text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 transition-colors border border-slate-700/50"
             >
-              <LogOut className="w-3.5 h-3.5 text-[#22D3EE]" />
-              <span>{language === 'bn' ? 'ইউজার প্যানেলে ফিরে যান' : 'Return to User Workspace'}</span>
+              <LogOut className="w-3.5 h-3.5 text-indigo-400" />
+              <span>{language === 'bn' ? 'ইউজার প্যানেলে ফিরুন' : 'Return to User Panel'}</span>
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </aside>
 
-      {/* MAIN ADMIN COLUMN */}
-      <div className="flex-1 flex flex-col min-w-0 lg:pl-64">
-        {/* STANDALONE ADMIN TOP BAR */}
-        <header className="sticky top-0 z-40 w-full bg-[#080B14]/90 backdrop-blur-2xl border-b border-white/[0.07]">
-          <div className="w-full max-w-7xl mx-auto px-4 lg:px-8 h-15 flex items-center justify-between gap-2">
-            {/* Left: Back Button (if inside Hub sub-page on mobile) OR Admin App Identity */}
+      {/* =========================================================================
+          MAIN COLUMN
+         ========================================================================= */}
+      <div className="flex-1 flex flex-col min-w-0 lg:pl-68">
+        {/* Sticky Floating Header */}
+        <header className={`sticky top-0 z-30 w-full backdrop-blur-xl border-b transition-colors duration-200 ${
+          darkMode 
+            ? 'bg-slate-950/85 border-slate-800/80 text-slate-100' 
+            : 'bg-white/85 border-slate-200 text-slate-900'
+        }`}>
+          <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-15 flex items-center justify-between gap-3">
+            {/* Left: Mobile Title or Identity + Back Navigation */}
             <div className="flex items-center gap-2.5 min-w-0">
-              {isSubHubScreen ? (
+              {/* Native Mobile Back button if inside submodules */}
+              {activeSection !== 'overview' && activeSection !== 'hub' ? (
                 <button
                   type="button"
-                  onClick={() => navigateSection('hub')}
-                  className="lg:hidden w-9 h-9 rounded-2xl bg-[#141B2B] border border-white/[0.08] flex items-center justify-center text-slate-200 active:scale-95 transition-transform shrink-0"
+                  onClick={() => navigateSection(
+                    ['finance', 'blogs', 'providers', 'users', 'tickets', 'refills', 'coupons', 'announcements', 'settings'].includes(activeSection)
+                      ? 'hub'
+                      : 'overview'
+                  )}
+                  className="lg:hidden w-8.5 h-8.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 flex items-center justify-center text-slate-700 dark:text-slate-200 shadow-xs active:scale-90 transition-transform shrink-0"
+                  aria-label="Back"
                 >
                   <ArrowLeft className="w-4 h-4" />
                 </button>
               ) : (
                 <div
                   onClick={() => navigateSection('overview')}
-                  className="lg:hidden w-9 h-9 rounded-2xl bg-gradient-to-tr from-[#8B5CF6] to-[#22D3EE] flex items-center justify-center text-white shadow-lg shadow-[#8B5CF6]/20 cursor-pointer shrink-0"
+                  className="lg:hidden w-8.5 h-8.5 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm cursor-pointer shrink-0"
                 >
-                  <ShieldCheck className="w-5 h-5 stroke-[2.5]" />
+                  <ShieldCheck className="w-4.5 h-4.5" />
                 </div>
               )}
-
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <h1 className="text-sm sm:text-base font-extrabold text-[#F1F5F9] tracking-tight truncate">
+                  <h1 className="text-sm sm:text-base font-extrabold tracking-tight truncate">
                     {getSectionTitle()}
                   </h1>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse hidden xs:inline-block" />
                 </div>
-                <p className="text-[10px] text-[#94A3B8] font-mono truncate">
-                  AmarTrend Admin Control · {serverHealth ? `Node ${serverHealth.nodeVersion}` : 'Cloud Live'}
+                <p className="text-[10px] font-mono text-slate-400 truncate hidden sm:block">
+                  AmarTrend Command · {serverHealth ? `Uptime ${Math.floor(serverHealth.uptimeSeconds / 60)}m` : 'Live Connected'}
                 </p>
               </div>
             </div>
 
-            {/* Right: Action Bar */}
+            {/* Right: Operational Tooling */}
             <div className="flex items-center gap-2 shrink-0">
-              {/* 1-Tap API Order Sync */}
+              {/* Live Order Sync Button */}
               <button
                 type="button"
                 onClick={handleSyncAllOrders}
                 disabled={syncingOrders}
-                title="Sync Active Orders with API Providers"
-                className="h-9 px-3 rounded-xl bg-[#8B5CF6]/15 border border-[#8B5CF6]/35 text-[#F1F5F9] font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all"
+                title="Sync orders with upstream provider APIs"
+                className="h-9 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs flex items-center gap-1.5 transition-all shadow-sm active:scale-95 disabled:opacity-50"
               >
-                <RefreshCw className={`w-3.5 h-3.5 text-[#22D3EE] ${syncingOrders ? 'animate-spin' : ''}`} />
-                <span className="hidden xs:inline">{language === 'bn' ? 'অর্ডার সিঙ্ক' : 'Sync Orders'}</span>
+                <RefreshCw className={`w-3.5 h-3.5 ${syncingOrders ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">{language === 'bn' ? 'অর্ডার সিঙ্ক' : 'Sync Orders'}</span>
+              </button>
+
+              {/* Theme Toggle Button */}
+              <button
+                type="button"
+                onClick={() => setDarkMode(!darkMode)}
+                title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-colors active:scale-95 ${
+                  darkMode 
+                    ? 'bg-slate-900 border-slate-800 text-amber-400 hover:bg-slate-800' 
+                    : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>
 
               {/* Language Switch */}
               <button
                 type="button"
                 onClick={() => setLanguage(language === 'bn' ? 'en' : 'bn')}
-                className="w-9 h-9 rounded-xl bg-[#141B2B] border border-white/[0.08] text-[#F1F5F9] text-xs font-bold flex items-center justify-center active:scale-95"
+                className={`w-9 h-9 rounded-xl border font-bold text-xs flex items-center justify-center transition-colors active:scale-95 ${
+                  darkMode 
+                    ? 'bg-slate-900 border-slate-800 text-slate-200 hover:bg-slate-800' 
+                    : 'bg-slate-100 border-slate-200 text-slate-800 hover:bg-slate-200'
+                }`}
               >
                 {language === 'bn' ? 'বাং' : 'EN'}
               </button>
 
-              {/* Exit Admin App -> Go to User Panel */}
+              {/* Exit to User Panel */}
               {onExitAdmin && (
                 <button
                   type="button"
                   onClick={onExitAdmin}
-                  className="h-9 px-3 rounded-xl bg-[#141B2B] hover:bg-[#192337] border border-white/[0.08] text-[#F1F5F9] font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all"
+                  className={`h-9 px-3 rounded-xl border font-semibold text-xs flex items-center gap-1.5 transition-colors active:scale-95 ${
+                    darkMode 
+                      ? 'bg-slate-900 border-slate-800 text-slate-200 hover:bg-slate-800' 
+                      : 'bg-slate-100 border-slate-200 text-slate-800 hover:bg-slate-200'
+                  }`}
                   title={language === 'bn' ? 'ইউজার প্যানেলে যান' : 'Switch to User App'}
                 >
-                  <LogOut className="w-3.5 h-3.5 text-[#22D3EE]" />
-                  <span>{language === 'bn' ? 'ইউজার অ্যাপ' : 'User App'}</span>
+                  <LogOut className="w-3.5 h-3.5 text-indigo-500" />
+                  <span className="hidden sm:inline">{language === 'bn' ? 'ইউজার অ্যাপ' : 'User App'}</span>
                 </button>
               )}
             </div>
           </div>
         </header>
 
-        {/* SCROLLABLE WORKSPACE VIEWPORT */}
-        <main className="flex-1 w-full max-w-7xl mx-auto px-3.5 lg:px-8 pt-4 pb-28 lg:pb-12 overflow-x-hidden">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeSection}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.16, ease: 'easeOut' }}
-              className="space-y-4"
-            >
-              {/* =========================================================
-                  SECTION 1: ADMIN OVERVIEW (HOME SCREEN)
-                 ========================================================= */}
-              {activeSection === 'overview' && (
-                <div className="space-y-4">
-                  {/* Executive Hero Wallet Card */}
-                  <div className="p-5 rounded-3xl bg-[#0D1220] border border-[#8B5CF6]/30 shadow-2xl space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-amber-400">
-                        {language === 'bn' ? 'মোট অর্ডার ভলিউম (রেভিনিউ)' : 'Total Revenue'}
-                      </p>
-                      <h2 className="text-2xl sm:text-3xl font-black text-white font-mono tabular-nums mt-0.5">
-                        {formatPrice(totalRevenue)}
-                      </h2>
-                      <p className="text-[11px] text-[#94A3B8] font-mono mt-1">
-                        {language === 'bn' ? 'প্রোভাইডার অপারেশনাল খরচ:' : 'Operational Costs (Providers):'}{' '}
-                        <strong className="text-amber-400">{formatPrice(totalProviderOperationalCost)}</strong>
-                      </p>
-                    </div>
-
-                    <div
-                      onClick={() => navigateSection('finance')}
-                      className="p-3 rounded-2xl bg-[#141B2B] border border-[#22C55E]/35 flex items-center justify-between sm:justify-end gap-3 cursor-pointer hover:border-[#22C55E] transition-all"
-                    >
-                      <div>
-                        <span className="text-[10px] font-mono uppercase text-[#22C55E] font-bold block">
-                          {language === 'bn'
-                            ? `নিট প্রফিট (${overallNetMarginPercent.toFixed(1)}% মার্জিন)`
-                            : `Net Profit (${overallNetMarginPercent.toFixed(1)}% Margin)`}
-                        </span>
-                        <span className="text-lg font-black text-[#22C55E] font-mono tabular-nums">
-                          +{formatPrice(totalEstimatedNetProfit)}
-                        </span>
-                      </div>
-                      <span className="px-2.5 py-1.5 rounded-xl bg-[#22C55E]/15 text-[#22C55E] text-[11px] font-extrabold flex items-center gap-1">
-                        <TrendingUp className="w-3.5 h-3.5" />
-                        <span>{language === 'bn' ? 'ফাইন্যান্সিয়াল ইন্টেলিজেন্স' : 'Financial Intelligence'}</span>
-                      </span>
-                    </div>
+        {/* =====================================================================
+            VIEWPORT BODY CONTAINER
+           ===================================================================== */}
+        <main className="flex-1 w-full max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 py-4 sm:py-5 pb-[max(110px,calc(env(safe-area-inset-bottom)+96px))] lg:pb-12 overflow-x-hidden">
+          {/* ===================================================================
+              SECTION 1: OVERVIEW (EXECUTIVE COMMAND CENTER)
+             =================================================================== */}
+          {activeSection === 'overview' && (
+            <div className="space-y-5 animate-in fade-in-0 duration-200">
+              {/* Executive Top KPI Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                {/* KPI 1: Gross Revenue */}
+                <div className={`p-4.5 rounded-2xl border transition-all ${surfaceCard}`}>
+                  <div className="flex items-center justify-between text-slate-400 mb-2">
+                    <span className="text-xs font-semibold">{language === 'bn' ? 'মোট সংগৃহীত রেভিনিউ' : 'Total Revenue'}</span>
+                    <DollarSign className="w-4 h-4 text-emerald-500" />
                   </div>
-
-                  {/* 4 Mini Metrics inside Hero */}
-                  <div className="grid grid-cols-4 gap-2 pt-2 border-t border-slate-800/90 text-center">
-                    <div
-                      onClick={() => navigateSection('orders')}
-                      className="p-2 rounded-2xl bg-slate-950/70 border border-slate-800/80 cursor-pointer active:scale-95 transition-transform"
-                    >
-                      <p className="text-[10px] text-slate-400 font-semibold">{language === 'bn' ? 'মোট অর্ডার' : 'Orders'}</p>
-                      <p className="text-sm font-extrabold text-white font-mono tabular-nums mt-0.5">{orders.length}</p>
-                    </div>
-                    <div
-                      onClick={() => navigateSection('users')}
-                      className="p-2 rounded-2xl bg-slate-950/70 border border-slate-800/80 cursor-pointer active:scale-95 transition-transform"
-                    >
-                      <p className="text-[10px] text-slate-400 font-semibold">{language === 'bn' ? 'ইউজার' : 'Users'}</p>
-                      <p className="text-sm font-extrabold text-sky-400 font-mono tabular-nums mt-0.5">{users.length}</p>
-                    </div>
-                    <div
-                      onClick={() => navigateSection('services')}
-                      className="p-2 rounded-2xl bg-slate-950/70 border border-slate-800/80 cursor-pointer active:scale-95 transition-transform"
-                    >
-                      <p className="text-[10px] text-slate-400 font-semibold">{language === 'bn' ? 'সার্ভিস' : 'Services'}</p>
-                      <p className="text-sm font-extrabold text-amber-400 font-mono tabular-nums mt-0.5">{services.length}</p>
-                    </div>
-                    <div
-                      onClick={() => navigateSection('providers')}
-                      className="p-2 rounded-2xl bg-slate-950/70 border border-slate-800/80 cursor-pointer active:scale-95 transition-transform"
-                    >
-                      <p className="text-[10px] text-slate-400 font-semibold">{language === 'bn' ? 'API প্যানেল' : 'APIs'}</p>
-                      <p className="text-sm font-extrabold text-emerald-400 font-mono tabular-nums mt-0.5">{providers.length}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Action Required Alerts (Live Queues) */}
-                <div className="grid grid-cols-3 gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPaymentFilter('pending');
-                      navigateSection('payments');
-                    }}
-                    className="p-3.5 rounded-2xl bg-[#0B1120] border border-amber-500/30 text-left space-y-1 active:scale-95 transition-transform"
-                  >
-                    <div className="flex items-center justify-between">
-                      <Wallet className="w-4 h-4 text-amber-400" />
-                      <span className="text-base font-black text-amber-400 font-mono tabular-nums">
-                        {pendingDeposits.length}
-                      </span>
-                    </div>
-                    <p className="text-[11px] font-bold text-slate-200 leading-tight">
-                      {language === 'bn' ? 'পেন্ডিং পেমেন্ট' : 'Pending Deposits'}
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOrderStatusFilter('active');
-                      navigateSection('orders');
-                    }}
-                    className="p-3.5 rounded-2xl bg-[#0B1120] border border-sky-500/30 text-left space-y-1 active:scale-95 transition-transform"
-                  >
-                    <div className="flex items-center justify-between">
-                      <Package className="w-4 h-4 text-sky-400" />
-                      <span className="text-base font-black text-sky-400 font-mono tabular-nums">
-                        {pendingOrders.length}
-                      </span>
-                    </div>
-                    <p className="text-[11px] font-bold text-slate-200 leading-tight">
-                      {language === 'bn' ? 'রানিং অর্ডার' : 'Active Orders'}
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => navigateSection('tickets')}
-                    className="p-3.5 rounded-2xl bg-[#0B1120] border border-rose-500/30 text-left space-y-1 active:scale-95 transition-transform"
-                  >
-                    <div className="flex items-center justify-between">
-                      <MessageSquare className="w-4 h-4 text-rose-400" />
-                      <span className="text-base font-black text-rose-400 font-mono tabular-nums">
-                        {openTickets.length}
-                      </span>
-                    </div>
-                    <p className="text-[11px] font-bold text-slate-200 leading-tight">
-                      {language === 'bn' ? 'ওপেন টিকেট' : 'Open Tickets'}
-                    </p>
-                  </button>
-                </div>
-
-                {/* Native Mobile OS App Launcher Grid */}
-                <div className="p-4 rounded-3xl bg-[#0B1120] border border-slate-800/90 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-extrabold text-slate-300 uppercase tracking-wider">
-                      {language === 'bn' ? 'অ্যাডমিন অ্যাপ মডিউলসমূহ' : 'Admin App Modules'}
-                    </h3>
-                    <span className="text-[10px] text-slate-500 font-mono">1-Tap Launch</span>
-                  </div>
-
-                  <div className="grid grid-cols-4 gap-2.5">
-                    {[
-                      { id: 'finance', label: language === 'bn' ? 'প্রফিট ল্যাব' : 'Profit P&L', icon: TrendingUp, color: 'text-[#22C55E] bg-[#22C55E]/15 border-[#22C55E]/30' },
-                      { id: 'providers', label: language === 'bn' ? 'API স্টুডিও' : 'API Studio', icon: Server, color: 'text-indigo-400 bg-indigo-500/15 border-indigo-500/30' },
-                      { id: 'orders', label: language === 'bn' ? 'অর্ডারস' : 'Orders', icon: Package, color: 'text-sky-400 bg-sky-500/15 border-sky-500/30' },
-                      { id: 'payments', label: language === 'bn' ? 'ডিপোজিট' : 'Deposits', icon: Wallet, color: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30' },
-                      { id: 'services', label: language === 'bn' ? 'সার্ভিস' : 'Services', icon: Layers, color: 'text-amber-400 bg-amber-500/15 border-amber-500/30' },
-                      { id: 'blogs', label: language === 'bn' ? 'SEO ব্লগ' : 'SEO Blog', icon: BookOpen, color: 'text-fuchsia-400 bg-fuchsia-500/15 border-fuchsia-500/30' },
-                      { id: 'users', label: language === 'bn' ? 'ইউজার' : 'Users', icon: Users, color: 'text-purple-400 bg-purple-500/15 border-purple-500/30' },
-                      { id: 'settings', label: language === 'bn' ? 'সেটিংস' : 'Settings', icon: Settings, color: 'text-teal-400 bg-teal-500/15 border-teal-500/30' },
-                    ].map((item) => {
-                      const Icon = item.icon;
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => navigateSection(item.id as AdminSection)}
-                          className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-slate-950/70 border border-slate-800/80 active:scale-90 transition-transform"
-                        >
-                          <div className={`w-10 h-10 rounded-2xl border flex items-center justify-center mb-1.5 ${item.color}`}>
-                            <Icon className="w-5 h-5" />
-                          </div>
-                          <span className="text-[11px] font-bold text-slate-200 truncate max-w-full">
-                            {item.label}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Live Server Diagnostics & Quick Tools Card */}
-                <div className="p-4 rounded-3xl bg-[#0B1120] border border-slate-800/90 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Activity className="w-4 h-4 text-emerald-400" />
-                      <h3 className="text-xs font-extrabold text-white">
-                        {language === 'bn' ? 'ক্লাউড সার্ভার ও API স্ট্যাটাস' : 'Cloud Server & API Diagnostics'}
-                      </h3>
-                    </div>
-                    <span className="text-[10px] font-mono text-emerald-400">
-                      /api/v2 ONLINE
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-2xl font-black tracking-tight font-mono">
+                      ৳{totalRevenue.toLocaleString()}
+                    </span>
+                    <span className="text-xs font-mono font-medium text-emerald-600 dark:text-emerald-400">
+                      {orders.filter(o => o.status === 'completed').length} {language === 'bn' ? 'সম্পন্ন' : 'done'}
                     </span>
                   </div>
+                  <p className="text-[11px] text-slate-400 mt-1 font-mono">
+                    {orders.length} {language === 'bn' ? 'টি মোট অর্ডার প্রসেসড' : 'total orders processed'}
+                  </p>
+                </div>
 
-                  {serverHealth && (
-                    <div className="grid grid-cols-3 gap-2 text-center font-mono text-[11px]">
-                      <div className="p-2.5 rounded-2xl bg-slate-950 border border-slate-800">
-                        <span className="text-[10px] text-slate-400 block">RAM Usage</span>
-                        <strong className="text-white">{serverHealth.memoryMB} MB</strong>
+                {/* KPI 2: Estimated Net Profit */}
+                <div className={`p-4.5 rounded-2xl border transition-all ${surfaceCard}`}>
+                  <div className="flex items-center justify-between text-slate-400 mb-2">
+                    <span className="text-xs font-semibold">{language === 'bn' ? 'আনুমানিক নেট প্রফিট' : 'Estimated Net Profit'}</span>
+                    <TrendingUp className="w-4 h-4 text-indigo-500" />
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-2xl font-black tracking-tight font-mono text-indigo-600 dark:text-indigo-400">
+                      ৳{Math.round(totalEstimatedNetProfit).toLocaleString()}
+                    </span>
+                    <span className="text-xs font-mono font-medium text-indigo-500">
+                      {totalRevenue > 0 ? `${Math.round((totalEstimatedNetProfit / totalRevenue) * 100)}%` : '0%'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1 font-mono">
+                    {language === 'bn' ? 'প্রোভাইডার খরচ বাদ দিয়ে' : 'After provider operational costs'}
+                  </p>
+                </div>
+
+                {/* KPI 3: Active Orders Queue */}
+                <div 
+                  onClick={() => { setOrderStatusFilter('active'); navigateSection('orders'); }}
+                  className={`p-4.5 rounded-2xl border cursor-pointer hover:border-amber-500/50 transition-all ${surfaceCard}`}
+                >
+                  <div className="flex items-center justify-between text-slate-400 mb-2">
+                    <span className="text-xs font-semibold">{language === 'bn' ? 'অ্যাক্টিভ অর্ডার কিউ' : 'Active Orders Queue'}</span>
+                    <Package className="w-4 h-4 text-amber-500" />
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-2xl font-black tracking-tight font-mono text-amber-600 dark:text-amber-400">
+                      {pendingOrders.length}
+                    </span>
+                    <span className="text-[11px] font-bold text-amber-500 flex items-center gap-0.5">
+                      {language === 'bn' ? 'পর্যালোচনা' : 'Review'} <ChevronRight className="w-3 h-3" />
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1 font-mono">
+                    {orders.filter(o => o.status === 'pending').length} pending · {orders.filter(o => o.status === 'in_progress').length} in progress
+                  </p>
+                </div>
+
+                {/* KPI 4: Pending Deposits Verification */}
+                <div 
+                  onClick={() => navigateSection('payments')}
+                  className={`p-4.5 rounded-2xl border cursor-pointer hover:border-emerald-500/50 transition-all ${surfaceCard}`}
+                >
+                  <div className="flex items-center justify-between text-slate-400 mb-2">
+                    <span className="text-xs font-semibold">{language === 'bn' ? 'ডিপোজিট রিকোয়েস্ট' : 'Pending Deposits'}</span>
+                    <Wallet className="w-4 h-4 text-emerald-500" />
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-2xl font-black tracking-tight font-mono text-emerald-600 dark:text-emerald-400">
+                      {pendingDeposits.length}
+                    </span>
+                    <span className="text-[11px] font-bold text-emerald-500 flex items-center gap-0.5">
+                      {language === 'bn' ? 'ভেরিফাই' : 'Verify'} <ChevronRight className="w-3 h-3" />
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1 font-mono">
+                    ৳{pendingDeposits.reduce((acc, p) => acc + p.amount, 0).toLocaleString()} {language === 'bn' ? 'অপেক্ষমান' : 'awaiting approval'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Urgent Action Banners (If any item needs attention) */}
+              {(pendingDeposits.length > 0 || openTickets.length > 0 || pendingRefills.length > 0) && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {pendingDeposits.length > 0 && (
+                    <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between gap-3 text-emerald-900 dark:text-emerald-200">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Wallet className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span className="text-xs font-bold truncate">
+                          {pendingDeposits.length} {language === 'bn' ? 'টি নতুন ডিপোজিট ভেরিফিকেশন বাকি' : 'deposits awaiting review'}
+                        </span>
                       </div>
-                      <div className="p-2.5 rounded-2xl bg-slate-950 border border-slate-800">
-                        <span className="text-[10px] text-slate-400 block">API Calls</span>
-                        <strong className="text-emerald-400">{serverHealth.totalApiCalls ?? 0}</strong>
-                      </div>
-                      <div className="p-2.5 rounded-2xl bg-slate-950 border border-slate-800">
-                        <span className="text-[10px] text-slate-400 block">Runtime</span>
-                        <strong className="text-sky-400">{serverHealth.nodeVersion}</strong>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => navigateSection('payments')}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shrink-0 shadow-xs"
+                      >
+                        {language === 'bn' ? 'অনুমোদন করুন' : 'Review'}
+                      </button>
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 gap-2 pt-1">
+                  {openTickets.length > 0 && (
+                    <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 flex items-center justify-between gap-3 text-rose-900 dark:text-rose-200">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <MessageSquare className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                        <span className="text-xs font-bold truncate">
+                          {openTickets.length} {language === 'bn' ? 'টি ওপেন সাপোর্ট টিকেট' : 'open support tickets'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => navigateSection('tickets')}
+                        className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold shrink-0 shadow-xs"
+                      >
+                        {language === 'bn' ? 'রিপ্লাই দিন' : 'Reply'}
+                      </button>
+                    </div>
+                  )}
+
+                  {pendingRefills.length > 0 && (
+                    <div className="p-3.5 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 flex items-center justify-between gap-3 text-indigo-900 dark:text-indigo-200">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <RefreshCw className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                        <span className="text-xs font-bold truncate">
+                          {pendingRefills.length} {language === 'bn' ? 'টি রিফিল রিকোয়েস্ট' : 'refill requests in queue'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => navigateSection('refills')}
+                        className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold shrink-0 shadow-xs"
+                      >
+                        {language === 'bn' ? 'প্রসেস করুন' : 'Process'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Quick Operation Command Hub */}
+              <div className={`p-5 rounded-2xl border ${surfaceCard} space-y-4`}>
+                <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <Activity className="w-4.5 h-4.5 text-indigo-600 dark:text-indigo-400" />
+                    <h3 className="text-sm font-bold tracking-tight">
+                      {language === 'bn' ? 'কুইক অ্যাকশন কন্ট্রোল ও সার্ভিস ইঞ্জিন' : 'Quick Actions & Platform Engine'}
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span>{providers.length} {language === 'bn' ? 'টি কানেক্টেড API' : 'Active Providers'}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => { setIsAddingService(true); navigateSection('services'); }}
+                    className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center gap-1.5 transition-all hover:border-indigo-500 ${surfaceSubtle}`}
+                  >
+                    <Plus className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    <span className="text-xs font-semibold">{language === 'bn' ? 'নতুন সার্ভিস' : 'Add Service'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setIsAddingProvider(true); navigateSection('providers'); }}
+                    className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center gap-1.5 transition-all hover:border-indigo-500 ${surfaceSubtle}`}
+                  >
+                    <Server className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                    <span className="text-xs font-semibold">{language === 'bn' ? 'API কানেক্ট' : 'Add Provider'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setApiSubTab('importer'); navigateSection('providers'); }}
+                    className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center gap-1.5 transition-all hover:border-indigo-500 ${surfaceSubtle}`}
+                  >
+                    <Database className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-xs font-semibold">{language === 'bn' ? 'ক্যাটালগ ইমপোর্ট' : 'API Importer'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { handleSyncAllOrders(); }}
+                    className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center gap-1.5 transition-all hover:border-indigo-500 ${surfaceSubtle}`}
+                  >
+                    <RefreshCw className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                    <span className="text-xs font-semibold">{language === 'bn' ? 'লাইভ সিঙ্ক' : 'Sync All'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => navigateSection('blogs')}
+                    className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center gap-1.5 transition-all hover:border-indigo-500 ${surfaceSubtle}`}
+                  >
+                    <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                    <span className="text-xs font-semibold">{language === 'bn' ? 'AI SEO ব্লগ' : 'AI Blog CMS'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => navigateSection('settings')}
+                    className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center gap-1.5 transition-all hover:border-indigo-500 ${surfaceSubtle}`}
+                  >
+                    <Settings className="w-4 h-4 text-slate-500" />
+                    <span className="text-xs font-semibold">{language === 'bn' ? 'সেটিংস' : 'Settings'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Dual Column: Recent Orders + Recent Deposits */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Recent Orders Stream */}
+                <div className={`p-4.5 rounded-2xl border ${surfaceCard} space-y-3`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Package className="w-4 h-4 text-indigo-500" />
+                      <h4 className="text-xs font-bold uppercase tracking-wider">{language === 'bn' ? 'সাম্প্রতিক অর্ডার' : 'Recent Orders'}</h4>
+                    </div>
                     <button
                       type="button"
-                      onClick={handleSyncAllOrders}
-                      disabled={syncingOrders}
-                      className="py-2.5 px-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                      onClick={() => navigateSection('orders')}
+                      className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5"
                     >
-                      <RefreshCw className={`w-3.5 h-3.5 ${syncingOrders ? 'animate-spin' : ''}`} />
-                      <span>{syncingOrders ? 'Syncing...' : language === 'bn' ? 'অর্ডার API সিঙ্ক' : 'Sync API Orders'}</span>
+                      {language === 'bn' ? 'সব দেখুন' : 'View All'} ({orders.length}) <ChevronRight className="w-3 h-3" />
                     </button>
+                  </div>
+
+                  <div className="divide-y divide-slate-200 dark:divide-slate-800">
+                    {orders.slice(0, 5).map(o => (
+                      <div key={o.id} className="py-2.5 flex items-center justify-between gap-3 text-xs">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-slate-500">#{o.id}</span>
+                            <span className="truncate font-semibold text-slate-800 dark:text-slate-200">{o.serviceName}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 truncate mt-0.5 font-mono">
+                            {o.userEmail} · Qty: {o.quantity.toLocaleString()} · ৳{o.charge}
+                          </p>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold uppercase ${
+                          o.status === 'completed' 
+                            ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                            : o.status === 'pending'
+                            ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
+                            : o.status === 'in_progress' || o.status === 'processing'
+                            ? 'bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}>
+                          {o.status.replace('_', ' ')}
+                        </span>
+                      </div>
+                    ))}
+                    {orders.length === 0 && (
+                      <p className="py-6 text-center text-xs text-slate-400">{language === 'bn' ? 'কোনো অর্ডার নেই' : 'No orders yet'}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Recent Deposit Requests Stream */}
+                <div className={`p-4.5 rounded-2xl border ${surfaceCard} space-y-3`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Wallet className="w-4 h-4 text-emerald-500" />
+                      <h4 className="text-xs font-bold uppercase tracking-wider">{language === 'bn' ? 'সাম্প্রতিক ডিপোজিট স্লিপ' : 'Recent Deposits'}</h4>
+                    </div>
                     <button
                       type="button"
-                      onClick={handlePurgeDemoData}
-                      disabled={purgingDemo}
-                      className="py-2.5 px-3 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-300 font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                      onClick={() => navigateSection('payments')}
+                      className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-0.5"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>{purgingDemo ? 'Purging...' : language === 'bn' ? 'ডেমো ডাটা ক্লিয়ার' : 'Purge Demo Data'}</span>
+                      {language === 'bn' ? 'সব দেখুন' : 'View All'} ({payments.length}) <ChevronRight className="w-3 h-3" />
                     </button>
+                  </div>
+
+                  <div className="divide-y divide-slate-200 dark:divide-slate-800">
+                    {payments.slice(0, 5).map(p => (
+                      <div key={p.id} className="py-2.5 flex items-center justify-between gap-3 text-xs">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-800 dark:text-slate-200">৳{p.amount.toLocaleString()}</span>
+                            <span className="px-1.5 py-0.2 rounded text-[10px] font-bold uppercase bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                              {p.gateway || p.zinipayMethod || 'Deposit'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 truncate mt-0.5 font-mono">
+                            {p.senderNumber || p.userEmail} · Trx: {p.transactionId || 'N/A'}
+                          </p>
+                        </div>
+
+                        {p.status === 'pending' ? (
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleApprovePayment(p)}
+                              disabled={paymentProcessing === p.id}
+                              className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] shadow-xs disabled:opacity-50"
+                            >
+                              {language === 'bn' ? 'অনুমোদন' : 'Approve'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRejectPayment(p)}
+                              disabled={paymentProcessing === p.id}
+                              className="px-2 py-1 rounded bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] shadow-xs disabled:opacity-50"
+                            >
+                              {language === 'bn' ? 'বাতিল' : 'Reject'}
+                            </button>
+                          </div>
+                        ) : (
+                          <span className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold uppercase ${
+                            p.status === 'approved' 
+                              ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                              : 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300'
+                          }`}>
+                            {p.status}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                    {payments.length === 0 && (
+                      <p className="py-6 text-center text-xs text-slate-400">{language === 'bn' ? 'কোনো পেমেন্ট স্লিপ নেই' : 'No deposits yet'}</p>
+                    )}
                   </div>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* =========================================================
-                SECTION 1.5: CFO FINANCIAL & PROFIT INTELLIGENCE SUITE
-               ========================================================= */}
-            {activeSection === 'finance' && (
+          {/* ===================================================================
+              SECTION 2: FINANCIAL INTELLIGENCE VIEW
+             =================================================================== */}
+          {activeSection === 'finance' && (
+            <div className="animate-in fade-in-0 duration-200">
               <AdminFinanceView
                 orders={orders}
                 payments={payments}
@@ -1500,3097 +1857,3050 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 onShowToast={onShowToast}
                 onNavigateSection={navigateSection}
               />
-            )}
+            </div>
+          )}
 
-            {/* =========================================================
-                SECTION 1.8: 100% ADVANCED SEO BLOG CMS & GOOGLE GEMINI AI WRITER
-               ========================================================= */}
-            {activeSection === 'blogs' && (
-              <AdminBlogManager
-                blogs={blogs}
-                siteSettings={settingsForm}
-                onUpdateSiteSettings={(updated) => setSettingsForm(updated)}
-                onOpenGeminiSettings={() => navigateSection('settings')}
-                onPreviewBlogSlug={onPreviewBlogSlug}
-              />
-            )}
-
-            {/* =========================================================
-                SECTION 2: ORDERS & REFILLS MANAGEMENT (MOBILE CARDS)
-               ========================================================= */}
-            {(activeSection === 'orders' || activeSection === 'refills') && (
-              <div className="space-y-3.5">
-                {/* Sub-Navigation Toggle: Orders vs Refills */}
-                <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-[#0B1120] border border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => setActiveSection('orders')}
-                    className={`py-2 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 ${
-                      activeSection === 'orders'
-                        ? 'bg-amber-500 text-slate-950 shadow'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <Package className="w-3.5 h-3.5" />
-                    <span>{language === 'bn' ? 'সকল অর্ডার' : 'Orders'} ({orders.length})</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveSection('refills')}
-                    className={`py-2 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 ${
-                      activeSection === 'refills'
-                        ? 'bg-amber-500 text-slate-950 shadow'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>{language === 'bn' ? 'রিফিল কিউ' : 'Refills'} ({pendingRefills.length})</span>
-                  </button>
+          {/* ===================================================================
+              SECTION 3: ORDERS CONTROL & DISPATCH
+             =================================================================== */}
+          {activeSection === 'orders' && (
+            <div className="space-y-4 animate-in fade-in-0 duration-200">
+              {/* Filter Tabs Bar */}
+              <div className={`p-2.5 rounded-2xl border ${surfaceCard} flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3`}>
+                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pb-1 md:pb-0">
+                  {[
+                    { id: 'all', label: language === 'bn' ? 'সকল' : 'All', count: orders.length },
+                    { id: 'active', label: language === 'bn' ? 'অ্যাক্টিভ' : 'Active', count: pendingOrders.length },
+                    { id: 'pending', label: language === 'bn' ? 'পেন্ডিং' : 'Pending', count: orders.filter(o => o.status === 'pending').length },
+                    { id: 'processing', label: language === 'bn' ? 'প্রসেসিং' : 'Processing', count: orders.filter(o => o.status === 'processing').length },
+                    { id: 'in_progress', label: language === 'bn' ? 'চলমান' : 'In Progress', count: orders.filter(o => o.status === 'in_progress').length },
+                    { id: 'completed', label: language === 'bn' ? 'সম্পন্ন' : 'Completed', count: orders.filter(o => o.status === 'completed').length },
+                    { id: 'partial', label: language === 'bn' ? 'আংশিক' : 'Partial', count: orders.filter(o => o.status === 'partial').length },
+                    { id: 'canceled', label: language === 'bn' ? 'বাতিল' : 'Canceled', count: orders.filter(o => o.status === 'canceled').length },
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setOrderStatusFilter(tab.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                        orderStatusFilter === tab.id
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      <span>{tab.label}</span>
+                      <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${
+                        orderStatusFilter === tab.id ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
+                      }`}>
+                        {tab.count}
+                      </span>
+                    </button>
+                  ))}
                 </div>
 
-                {activeSection === 'orders' ? (
-                  <>
-                    {/* Search Input */}
-                    <div className="relative">
-                      <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="text"
-                        value={orderSearch}
-                        onChange={(e) => setOrderSearch(e.target.value)}
-                        placeholder={language === 'bn' ? 'অর্ডার আইডি, ইমেইল বা লিংক খুঁজুন...' : 'Search Order ID, Email, or Link...'}
-                        className="w-full bg-[#0B1120] border border-slate-800 rounded-2xl pl-10 pr-4 py-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
-                      />
-                    </div>
+                <div className="relative min-w-[240px]">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={orderSearch}
+                    onChange={e => setOrderSearch(e.target.value)}
+                    placeholder={language === 'bn' ? 'অর্ডার ID, ইমেইল বা লিংক খুঁজুন...' : 'Search by ID, email, link...'}
+                    className={`w-full h-9 pl-9 pr-3 rounded-xl text-xs font-medium border focus:outline-none focus:border-indigo-600 transition-colors ${
+                      darkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-slate-50 border-slate-200 text-slate-900'
+                    }`}
+                  />
+                  {orderSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setOrderSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
 
-                    {/* Horizontal Status Filter Bar */}
-                    <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
-                      {[
-                        { id: 'all', label: 'All' },
-                        { id: 'active', label: 'Active' },
-                        { id: 'pending', label: 'Pending' },
-                        { id: 'in_progress', label: 'In Progress' },
-                        { id: 'completed', label: 'Completed' },
-                        { id: 'partial', label: 'Partial' },
-                        { id: 'canceled', label: 'Canceled' },
-                      ].map(st => (
-                        <button
-                          key={st.id}
-                          type="button"
-                          onClick={() => setOrderStatusFilter(st.id)}
-                          className={`py-1.5 px-3 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all ${
-                            orderStatusFilter === st.id
-                              ? 'bg-slate-100 text-slate-950'
-                              : 'bg-[#0B1120] text-slate-400 border border-slate-800'
+              {/* Batch Actions Bar (when checkboxes selected) */}
+              {selectedOrderIds.length > 0 && (
+                <div className="p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 flex items-center justify-between gap-3 text-xs text-indigo-900 dark:text-indigo-200">
+                  <div className="flex items-center gap-2 font-bold">
+                    <span>{selectedOrderIds.length} {language === 'bn' ? 'টি অর্ডার নির্বাচিত' : 'orders selected'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleBatchUpdateOrders('completed')}
+                      disabled={statusUpdating === 'batch'}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                    >
+                      {language === 'bn' ? 'Mark Completed' : 'Mark Completed'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBatchUpdateOrders('canceled')}
+                      disabled={statusUpdating === 'batch'}
+                      className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold"
+                    >
+                      {language === 'bn' ? 'Cancel & Refund' : 'Cancel & Refund'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOrderIds([])}
+                      className="px-2 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium"
+                    >
+                      {language === 'bn' ? 'ক্লিয়ার' : 'Deselect'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Mobile Native Card Feed (< md) */}
+              <div className="block md:hidden space-y-3">
+                {filteredOrders.map(o => {
+                  const isSelected = selectedOrderIds.includes(o.id);
+                  const srv = services.find(s => s.id === o.serviceId);
+                  const prv = providers.find(p => p.id === (o.providerId || srv?.providerId));
+
+                  return (
+                    <div 
+                      key={o.id}
+                      className={`p-4 rounded-2xl border transition-all ${surfaceCard} ${
+                        isSelected ? 'ring-2 ring-indigo-500/80 bg-indigo-50/20' : ''
+                      }`}
+                    >
+                      {/* Top bar: ID, checkbox, date & status */}
+                      <div className="flex items-center justify-between gap-2 border-b pb-2.5 border-slate-100 dark:border-slate-800">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedOrderIds(prev => [...prev, o.id]);
+                              else setSelectedOrderIds(prev => prev.filter(id => id !== o.id));
+                            }}
+                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className="font-mono font-bold text-xs text-indigo-600 dark:text-indigo-400">
+                            #{o.id}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {new Date(o.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+
+                        <select
+                          value={o.status}
+                          onChange={(e) => handleUpdateOrderStatus(o, e.target.value as SMMOrder['status'])}
+                          disabled={statusUpdating === o.id}
+                          className={`text-[11px] font-bold rounded-lg border px-2 py-0.5 focus:outline-none ${
+                            o.status === 'completed'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                              : o.status === 'pending'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+                              : o.status === 'in_progress' || o.status === 'processing'
+                              ? 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800'
+                              : 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
                           }`}
                         >
-                          {st.label}
-                        </button>
-                      ))}
-                    </div>
+                          <option value="pending">Pending</option>
+                          <option value="processing">Processing</option>
+                          <option value="in_progress">In Progress</option>
+                          <option value="completed">Completed</option>
+                          <option value="partial">Partial</option>
+                          <option value="canceled">Canceled</option>
+                        </select>
+                      </div>
 
-                    {/* Mobile Order Cards */}
-                    <div className="space-y-2.5">
-                      {filteredOrders.length === 0 ? (
-                        <div className="p-8 text-center bg-[#0B1120] border border-slate-800 rounded-3xl text-xs text-slate-400">
-                          {language === 'bn' ? 'কোনো অর্ডার পাওয়া যায়নি।' : 'No matching orders found.'}
+                      {/* Service Details & User */}
+                      <div className="py-2.5 space-y-1">
+                        <div className="font-bold text-xs text-slate-900 dark:text-slate-100 leading-snug">
+                          {o.serviceName}
                         </div>
-                      ) : (
-                        filteredOrders.map(ord => (
-                          <div
-                            key={ord.id}
-                            className="p-4 rounded-3xl bg-[#0B1120] border border-slate-800/90 space-y-3 text-xs"
+                        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                          <span className="truncate max-w-[200px]" title={o.userEmail}>{o.userEmail}</span>
+                          <span className="font-mono font-bold text-slate-800 dark:text-slate-200">Qty: {o.quantity.toLocaleString()}</span>
+                        </div>
+                      </div>
+
+                      {/* Target Link */}
+                      <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2 text-xs">
+                        <a
+                          href={o.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline truncate max-w-[220px]"
+                        >
+                          {o.link}
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(o.link);
+                            onShowToast('Link copied to clipboard!', 'info');
+                          }}
+                          className="p-1 rounded text-slate-400 hover:text-indigo-600"
+                          title="Copy Link"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Bottom Bar: Amount, Provider Routing & Action */}
+                      <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">{language === 'bn' ? 'চার্জ' : 'Charge'}</span>
+                          <span className="font-mono font-black text-sm text-emerald-600 dark:text-emerald-400">
+                            ৳{o.charge}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          {o.providerOrderId ? (
+                            <span className="text-[10px] font-mono px-2 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold">
+                              {prv?.name || 'Upstream'} #{o.providerOrderId}
+                            </span>
+                          ) : srv?.providerId ? (
+                            <button
+                              type="button"
+                              onClick={() => handleManualOrderDispatch(o)}
+                              disabled={dispatchingOrderId === o.id}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold shadow-xs flex items-center gap-1"
+                            >
+                              <Send className="w-2.5 h-2.5" />
+                              <span>{dispatchingOrderId === o.id ? 'Dispatching...' : 'Dispatch API'}</span>
+                            </button>
+                          ) : null}
+
+                          <button
+                            type="button"
+                            onClick={() => setActiveOrderDetail(o)}
+                            className="px-2.5 py-1 rounded-lg border text-[11px] font-semibold hover:border-indigo-500"
                           >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-mono font-black text-white text-xs">
-                                    #{ord.id}
-                                  </span>
-                                  <span className="text-[11px] text-slate-400 truncate">
-                                    · {ord.userEmail}
+                            Details
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {filteredOrders.length === 0 && (
+                  <div className={`p-8 text-center rounded-2xl border ${surfaceCard} text-slate-400 text-xs`}>
+                    {language === 'bn' ? 'কোনো অর্ডার পাওয়া যায়নি' : 'No orders matched your filters'}
+                  </div>
+                )}
+              </div>
+
+              {/* Desktop Orders Data Table */}
+              <div className={`hidden md:block rounded-2xl border overflow-hidden ${surfaceCard}`}>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className={`border-b font-mono font-bold uppercase text-[11px] ${tableHeader}`}>
+                        <th className="py-3 px-3.5 w-10 text-center">
+                          <input
+                            type="checkbox"
+                            checked={filteredOrders.length > 0 && selectedOrderIds.length === filteredOrders.length}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedOrderIds(filteredOrders.map(o => o.id));
+                              } else {
+                                setSelectedOrderIds([]);
+                              }
+                            }}
+                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                        </th>
+                        <th className="py-3 px-3">Order ID</th>
+                        <th className="py-3 px-3">User</th>
+                        <th className="py-3 px-3">Service & Link</th>
+                        <th className="py-3 px-3 text-right">Quantity</th>
+                        <th className="py-3 px-3 text-right">Charge</th>
+                        <th className="py-3 px-3">API Routing</th>
+                        <th className="py-3 px-3">Status</th>
+                        <th className="py-3 px-3 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                      {filteredOrders.map(o => {
+                        const isSelected = selectedOrderIds.includes(o.id);
+                        const srv = services.find(s => s.id === o.serviceId);
+                        const prv = providers.find(p => p.id === (o.providerId || srv?.providerId));
+
+                        return (
+                          <tr key={o.id} className={`transition-colors ${isSelected ? 'bg-indigo-50/50 dark:bg-indigo-950/20' : tableRowHover}`}>
+                            <td className="py-3 px-3.5 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedOrderIds(prev => [...prev, o.id]);
+                                  } else {
+                                    setSelectedOrderIds(prev => prev.filter(id => id !== o.id));
+                                  }
+                                }}
+                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                              />
+                            </td>
+                            <td className="py-3 px-3 font-mono font-bold text-slate-500">
+                              #{o.id}
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className="font-semibold text-slate-800 dark:text-slate-200 block truncate max-w-[140px]" title={o.userEmail}>
+                                {o.userEmail}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                {new Date(o.createdAt).toLocaleDateString()}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className="font-bold text-slate-800 dark:text-slate-200 block truncate max-w-[200px]" title={o.serviceName}>
+                                {o.serviceName}
+                              </span>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <a
+                                  href={o.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline truncate max-w-[180px] font-mono flex items-center gap-1"
+                                >
+                                  {o.link} <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+                                </a>
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono font-bold">
+                              {o.quantity.toLocaleString()}
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono font-bold text-slate-800 dark:text-slate-200">
+                              ৳{o.charge}
+                            </td>
+                            <td className="py-3 px-3">
+                              {o.providerOrderId ? (
+                                <div className="space-y-0.5">
+                                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold block w-fit">
+                                    {prv?.name || 'Upstream'} #{o.providerOrderId}
                                   </span>
                                 </div>
-                                {ord.providerOrderId && (
-                                  <p className="text-[10px] font-mono text-amber-400 mt-0.5">
-                                    Upstream API Order #{ord.providerOrderId}
-                                  </p>
-                                )}
-                              </div>
-                              <span className="font-mono font-extrabold text-emerald-400 text-sm shrink-0">
-                                {formatPrice(ord.charge)}
-                              </span>
-                            </div>
-
-                            <div>
-                              <p className="font-bold text-slate-100 leading-snug">{ord.serviceName}</p>
-                              <a
-                                href={ord.link}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="font-mono text-[11px] text-sky-400 hover:underline flex items-center gap-1 truncate mt-1"
-                              >
-                                <span className="truncate">{ord.link}</span>
-                                <ExternalLink className="w-3 h-3 shrink-0" />
-                              </a>
-                            </div>
-
-                            {/* Counters Grid */}
-                            <div className="grid grid-cols-3 gap-2 p-2.5 rounded-2xl bg-slate-950 border border-slate-800/80 text-center font-mono text-[11px]">
-                              <div>
-                                <span className="text-[10px] text-slate-500 block">Quantity</span>
-                                <strong className="text-white">{ord.quantity}</strong>
-                              </div>
-                              <div>
-                                <span className="text-[10px] text-slate-500 block">Start Count</span>
-                                <strong className="text-slate-200">{ord.startCount ?? 0}</strong>
-                              </div>
-                              <div>
-                                <span className="text-[10px] text-slate-500 block">Remains</span>
-                                <strong className="text-amber-400">{ord.remains ?? 0}</strong>
-                              </div>
-                            </div>
-
-                            {/* Mobile Action Row */}
-                            <div className="flex items-center gap-2 pt-1">
+                              ) : srv?.providerId ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleManualOrderDispatch(o)}
+                                  disabled={dispatchingOrderId === o.id}
+                                  className="px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold shadow-xs flex items-center gap-1"
+                                >
+                                  <Send className="w-2.5 h-2.5" />
+                                  <span>{dispatchingOrderId === o.id ? 'Dispatching...' : 'Dispatch API'}</span>
+                                </button>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 font-mono">{language === 'bn' ? 'ম্যানুয়াল' : 'Manual'}</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-3">
                               <select
-                                value={ord.status}
-                                disabled={statusUpdating === ord.id}
-                                onChange={(e) => handleUpdateOrderStatus(ord, e.target.value as any)}
-                                className="flex-1 bg-slate-950 border border-slate-700 rounded-2xl px-3 py-2.5 text-xs text-white font-bold focus:outline-none"
+                                value={o.status}
+                                onChange={(e) => handleUpdateOrderStatus(o, e.target.value as SMMOrder['status'])}
+                                disabled={statusUpdating === o.id}
+                                className={`text-[11px] font-bold rounded-lg border px-2 py-1 focus:outline-none focus:ring-1 ${
+                                  o.status === 'completed'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                                    : o.status === 'pending'
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+                                    : o.status === 'in_progress' || o.status === 'processing'
+                                    ? 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800'
+                                    : 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+                                }`}
                               >
                                 <option value="pending">Pending</option>
                                 <option value="processing">Processing</option>
                                 <option value="in_progress">In Progress</option>
                                 <option value="completed">Completed</option>
-                                <option value="partial">Partial (Auto Refund Remains)</option>
-                                <option value="canceled">Canceled (Full Refund)</option>
+                                <option value="partial">Partial</option>
+                                <option value="canceled">Canceled</option>
                               </select>
-
+                            </td>
+                            <td className="py-3 px-3 text-right">
                               <button
                                 type="button"
-                                onClick={() => {
-                                  if (editingCountsId === ord.id) {
-                                    setEditingCountsId(null);
-                                  } else {
-                                    setEditingCountsId(ord.id);
-                                    setTempStartCount(ord.startCount ?? 0);
-                                    setTempRemains(ord.remains ?? 0);
-                                  }
-                                }}
-                                className="py-2.5 px-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5 shrink-0 active:scale-95"
+                                onClick={() => setActiveOrderDetail(o)}
+                                className="px-2.5 py-1 rounded-lg border text-[11px] font-semibold hover:border-indigo-500 transition-colors"
                               >
-                                <Edit3 className="w-3.5 h-3.5" />
-                                <span>Counts</span>
+                                {language === 'bn' ? 'বিস্তারিত' : 'Details'}
                               </button>
-                            </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {filteredOrders.length === 0 && (
+                        <tr>
+                          <td colSpan={9} className="py-12 text-center text-slate-400">
+                            {language === 'bn' ? 'কোনো অর্ডার পাওয়া যায়নি' : 'No orders matched your filters'}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
 
-                            {/* Expandable Start Count & Remains Drawer */}
-                            {editingCountsId === ord.id && (
-                              <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 space-y-2.5">
-                                <div className="grid grid-cols-2 gap-2">
-                                  <div>
-                                    <label className="text-[10px] text-slate-400 font-bold block mb-1">Start Count</label>
-                                    <input
-                                      type="number"
-                                      value={tempStartCount}
-                                      onChange={(e) => setTempStartCount(parseInt(e.target.value) || 0)}
-                                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="text-[10px] text-slate-400 font-bold block mb-1">Remains</label>
-                                    <input
-                                      type="number"
-                                      value={tempRemains}
-                                      onChange={(e) => setTempRemains(parseInt(e.target.value) || 0)}
-                                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white"
-                                    />
-                                  </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleUpdateOrderStatus(ord, ord.status, tempStartCount, tempRemains)}
-                                    className="py-2 px-3 rounded-xl bg-emerald-500 text-slate-950 font-extrabold text-xs"
-                                  >
-                                    Save Counts
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleUpdateOrderStatus(ord, 'partial', tempStartCount, tempRemains)}
-                                    className="py-2 px-3 rounded-xl bg-amber-500 text-slate-950 font-extrabold text-xs"
-                                  >
-                                    Partial + Refund
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ))
+          {/* ===================================================================
+              SECTION 4: REFILLS QUEUE
+             =================================================================== */}
+          {activeSection === 'refills' && (
+            <div className="space-y-4 animate-in fade-in-0 duration-200">
+              <div className={`p-4 rounded-2xl border ${surfaceCard} flex items-center justify-between`}>
+                <div>
+                  <h3 className="text-sm font-bold tracking-tight">{language === 'bn' ? 'রিফিল রিকোয়েস্ট কিউ' : 'Refill Queue Manager'}</h3>
+                  <p className="text-xs text-slate-400">{refills.length} {language === 'bn' ? 'টি রিফিল হিস্ট্রি' : 'refill requests logged'}</p>
+                </div>
+                <span className="font-mono text-xs px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold">
+                  {pendingRefills.length} {language === 'bn' ? 'পেন্ডিং' : 'Pending'}
+                </span>
+              </div>
+
+              {/* Mobile Native Card Feed (< md) */}
+              <div className="block md:hidden space-y-3">
+                {refills.map(r => {
+                  const ord = orders.find(o => o.id === r.orderId);
+                  return (
+                    <div key={r.id} className={`p-4 rounded-2xl border ${surfaceCard} space-y-2.5`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-xs text-indigo-600 dark:text-indigo-400">Refill #{r.id}</span>
+                          <span className="font-mono text-xs text-slate-400">Order #{r.orderId}</span>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold uppercase ${
+                          r.status === 'completed' 
+                            ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                            : r.status === 'pending'
+                            ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}>
+                          {r.status}
+                        </span>
+                      </div>
+
+                      <div className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                        {ord?.serviceName || 'SMM Service'}
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                        <span className="truncate max-w-[200px]">{r.userEmail}</span>
+                        <span className="font-mono">{new Date(r.createdAt).toLocaleDateString()}</span>
+                      </div>
+
+                      {r.status === 'pending' && (
+                        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleForwardRefillToApi(r)}
+                            disabled={forwardingRefillId === r.id}
+                            className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs"
+                          >
+                            {forwardingRefillId === r.id ? 'Forwarding...' : 'Forward API'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRefillStatus(r.id, 'completed')}
+                            className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
+                          >
+                            Done
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRefillStatus(r.id, 'rejected')}
+                            className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs"
+                          >
+                            Reject
+                          </button>
+                        </div>
                       )}
                     </div>
-                  </>
-                ) : (
-                  /* REFILLS QUEUE SUB-VIEW */
-                  <div className="space-y-2.5">
-                    {refills.length === 0 ? (
-                      <div className="p-8 text-center bg-[#0B1120] border border-slate-800 rounded-3xl text-xs text-slate-400">
-                        {language === 'bn' ? 'কোনো রিফিল রিকোয়েস্ট নেই।' : 'No refill requests found.'}
-                      </div>
-                    ) : (
-                      refills.map(r => (
-                        <div
-                          key={r.id}
-                          className="p-4 rounded-3xl bg-[#0B1120] border border-slate-800 space-y-3 text-xs"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-mono font-bold text-white">#{r.id}</span>
-                            <span className="font-mono text-sky-400 font-bold">Order #{r.orderId}</span>
-                          </div>
-                          <p className="text-slate-200 font-bold">{r.serviceName}</p>
-                          <p className="text-[11px] text-slate-400">{r.userEmail}</p>
-                          <select
-                            value={r.status}
-                            onChange={(e) => handleRefillStatus(r.id, e.target.value as any)}
-                            className="w-full bg-slate-950 border border-slate-700 rounded-2xl px-3 py-2.5 text-xs text-white font-bold capitalize"
-                          >
-                            <option value="pending">Pending</option>
-                            <option value="completed">Completed</option>
-                            <option value="rejected">Rejected</option>
-                          </select>
-                        </div>
-                      ))
-                    )}
+                  );
+                })}
+                {refills.length === 0 && (
+                  <div className={`p-8 text-center rounded-2xl border ${surfaceCard} text-slate-400 text-xs`}>
+                    {language === 'bn' ? 'কোনো রিফিল রিকোয়েস্ট নেই' : 'No refill requests logged'}
                   </div>
                 )}
               </div>
-            )}
 
-            {/* =========================================================
-                SECTION 3: PAYMENTS / DEPOSITS VERIFICATION + ZINIPAY GATEWAY
-               ========================================================= */}
-            {activeSection === 'payments' && (
-              <div className="space-y-3.5">
-                {/* ZiniPay Automated Payment Gateway Status Bar */}
-                <div className="p-4 rounded-3xl bg-gradient-to-br from-[#0B1120] via-[#11192E] to-[#0B1120] border border-[#22D3EE]/30 space-y-3 text-xs">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-2xl bg-[#22D3EE]/15 border border-[#22D3EE]/30 flex items-center justify-center text-[#22D3EE] shrink-0">
-                        <Zap className="w-4.5 h-4.5" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className="font-extrabold text-white text-sm">ZiniPay Payment Gateway</h4>
-                          <span
-                            className={`px-2 py-0.5 rounded-lg font-mono text-[10px] font-bold uppercase ${
-                              siteSettings.zinipayEnabled !== false
-                                ? siteSettings.zinipayMode === 'live'
-                                  ? 'bg-emerald-500/20 text-emerald-300'
-                                  : 'bg-[#22D3EE]/20 text-[#22D3EE]'
-                                : 'bg-rose-500/20 text-rose-300'
-                            }`}
-                          >
-                            {siteSettings.zinipayEnabled !== false
-                              ? siteSettings.zinipayMode === 'live'
-                                ? 'LIVE PRODUCTION'
-                                : 'SANDBOX READY'
-                              : 'DISABLED'}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-400">
-                          Hosted Checkout (/v1/payment/create) + 2-Step Trx API (/v1/trx/verify)
-                        </p>
-                      </div>
-                    </div>
+              {/* Desktop Refills Table */}
+              <div className={`hidden md:block rounded-2xl border overflow-hidden ${surfaceCard}`}>
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className={`border-b font-mono font-bold uppercase text-[11px] ${tableHeader}`}>
+                      <th className="py-3 px-4">Refill ID</th>
+                      <th className="py-3 px-3">Order ID</th>
+                      <th className="py-3 px-3">User</th>
+                      <th className="py-3 px-3">Service</th>
+                      <th className="py-3 px-3">Requested Date</th>
+                      <th className="py-3 px-3">Status</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                    {refills.map(r => {
+                      const ord = orders.find(o => o.id === r.orderId);
+                      return (
+                        <tr key={r.id} className={tableRowHover}>
+                          <td className="py-3 px-4 font-mono font-bold text-slate-500">#{r.id}</td>
+                          <td className="py-3 px-3 font-mono font-semibold">#{r.orderId}</td>
+                          <td className="py-3 px-3 font-medium">{r.userEmail}</td>
+                          <td className="py-3 px-3 font-semibold truncate max-w-[200px]">{ord?.serviceName || 'SMM Service'}</td>
+                          <td className="py-3 px-3 text-slate-400 font-mono">{new Date(r.createdAt).toLocaleDateString()}</td>
+                          <td className="py-3 px-3">
+                            <span className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold uppercase ${
+                              r.status === 'completed' 
+                                ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                                : r.status === 'pending'
+                                ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                            }`}>
+                              {r.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right space-x-1.5">
+                            {r.status === 'pending' && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleForwardRefillToApi(r)}
+                                  disabled={forwardingRefillId === r.id}
+                                  className="px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px]"
+                                >
+                                  {forwardingRefillId === r.id ? 'Forwarding...' : 'Forward API'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRefillStatus(r.id, 'completed')}
+                                  className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px]"
+                                >
+                                  Mark Done
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRefillStatus(r.id, 'rejected')}
+                                  className="px-2 py-1 rounded bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px]"
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {refills.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center text-slate-400">
+                          {language === 'bn' ? 'কোনো রিফিল রিকোয়েস্ট নেই' : 'No refill requests logged'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ===================================================================
+              SECTION 5: PAYMENTS & DEPOSITS VERIFICATION
+             =================================================================== */}
+          {activeSection === 'payments' && (
+            <div className="space-y-4 animate-in fade-in-0 duration-200">
+              {/* Payment Sub-Navigation */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentTab('manual')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      paymentTab === 'manual' 
+                        ? 'bg-indigo-600 text-white shadow-xs' 
+                        : `${surfaceSubtle} hover:border-indigo-500`
+                    }`}
+                  >
+                    {language === 'bn' ? 'ম্যানুয়াল bKash / Nagad / Rocket' : 'Manual bKash / Nagad / Rocket'} ({payments.filter(p => (p.gateway || p.zinipayMethod) !== 'ZiniPay').length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentTab('zinipay')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      paymentTab === 'zinipay' 
+                        ? 'bg-indigo-600 text-white shadow-xs' 
+                        : `${surfaceSubtle} hover:border-indigo-500`
+                    }`}
+                  >
+                    {language === 'bn' ? 'স্বয়ংক্রিয় ZiniPay গেটওয়ে লগ' : 'Automated ZiniPay Webhooks'} ({ziniLogs.length})
+                  </button>
+                </div>
+
+                {paymentTab === 'manual' && (
+                  <div className="flex items-center gap-1.5 text-xs font-semibold">
                     <button
                       type="button"
-                      onClick={() => navigateSection('settings')}
-                      className="py-2 px-3 rounded-xl bg-slate-900 border border-[#22D3EE]/30 text-[#22D3EE] font-bold text-[11px] shrink-0 active:scale-95"
+                      onClick={() => setPaymentFilter('pending')}
+                      className={`px-2.5 py-1 rounded-lg border text-xs ${
+                        paymentFilter === 'pending' ? 'bg-amber-500 text-white border-amber-500' : 'border-slate-300 text-slate-500'
+                      }`}
                     >
-                      Configure ZiniPay
+                      {language === 'bn' ? 'পেন্ডিং' : 'Pending Only'} ({pendingDeposits.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentFilter('all')}
+                      className={`px-2.5 py-1 rounded-lg border text-xs ${
+                        paymentFilter === 'all' ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-300 text-slate-500'
+                      }`}
+                    >
+                      {language === 'bn' ? 'সকল' : 'All'} ({payments.length})
                     </button>
                   </div>
+                )}
+              </div>
 
-                  <div className="grid grid-cols-3 gap-2 p-2.5 rounded-2xl bg-slate-950/90 border border-slate-800/80 text-center font-mono text-[11px]">
-                    <div>
-                      <span className="text-[10px] text-slate-400 block">Auto-Verified</span>
-                      <strong className="text-emerald-400">
-                        {payments.filter(p => p.status === 'approved' && (p.verificationMode === 'auto_zinipay' || p.gateway === 'ZiniPay')).length} Tx
-                      </strong>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-slate-400 block">ZiniPay Bonus</span>
-                      <strong className="text-amber-400">+{siteSettings.zinipayBonusPercent ?? 3}%</strong>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-slate-400 block">2-Step Trx</span>
-                      <strong className="text-[#22D3EE]">
-                        {siteSettings.zinipayAutoVerifyTrx !== false ? 'ENABLED' : 'MANUAL'}
-                      </strong>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Filter Toggle: Pending vs All */}
-                <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-[#0B1120] border border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentFilter('pending')}
-                    className={`py-2 rounded-xl text-xs font-extrabold transition-all ${
-                      paymentFilter === 'pending'
-                        ? 'bg-emerald-500 text-slate-950 shadow'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {language === 'bn' ? 'পেন্ডিং রিকোয়েস্ট' : 'Pending Queue'} ({pendingDeposits.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPaymentFilter('all')}
-                    className={`py-2 rounded-xl text-xs font-extrabold transition-all ${
-                      paymentFilter === 'all'
-                        ? 'bg-emerald-500 text-slate-950 shadow'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {language === 'bn' ? 'সকল পেমেন্ট হিস্ট্রি' : 'All History'} ({payments.length})
-                  </button>
-                </div>
-
-                {filteredPayments.length === 0 ? (
-                  <div className="p-8 text-center bg-[#0B1120] border border-slate-800 rounded-3xl text-xs text-slate-400">
-                    {language === 'bn' ? 'কোনো পেমেন্ট রিকোয়েস্ট নেই।' : 'No deposit requests in this view.'}
-                  </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {filteredPayments.map(p => (
-                      <div
-                        key={p.id}
-                        className="p-4 rounded-3xl bg-[#0B1120] border border-slate-800 space-y-3 text-xs"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-extrabold text-white">{p.gateway}</span>
-                              {p.verificationMode === 'auto_zinipay' && (
-                                <span className="px-2 py-0.5 rounded-lg bg-[#22D3EE]/15 text-[#22D3EE] font-mono text-[10px] font-bold">
-                                  ZINIPAY AUTO
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[11px] text-slate-400 mt-0.5">{p.userEmail}</p>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-base font-black text-emerald-400 font-mono tabular-nums">
-                              ৳{p.amount.toLocaleString()}
-                            </span>
-                            {(p.bonus || 0) > 0 && (
-                              <span className="block text-[10px] text-amber-300 font-mono">
-                                +৳{p.bonus} Bonus
+              {/* TAB 1: MANUAL DEPOSITS VIEW */}
+              {paymentTab === 'manual' && (
+                <>
+                  {/* Mobile Native Card Feed (< md) */}
+                  <div className="block md:hidden space-y-3">
+                    {filteredPayments.map(p => {
+                      const gw = (p.gateway || p.zinipayMethod || 'bKash').toLowerCase();
+                      return (
+                        <div key={p.id} className={`p-4 rounded-2xl border ${surfaceCard} space-y-3`}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                                gw.includes('bkash') ? 'bg-pink-100 text-pink-700 dark:bg-pink-950/60 dark:text-pink-300' :
+                                gw.includes('nagad') ? 'bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300' :
+                                'bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300'
+                              }`}>
+                                {p.gateway || p.zinipayMethod || 'Manual'}
                               </span>
-                            )}
+                              <span className="font-mono font-bold text-xs text-slate-400">#{p.id}</span>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold uppercase ${
+                              p.status === 'approved' 
+                                ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                                : p.status === 'pending'
+                                ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 animate-pulse'
+                                : 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300'
+                            }`}>
+                              {p.status}
+                            </span>
                           </div>
-                        </div>
 
-                        <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800/80 flex items-center justify-between gap-2 font-mono text-[11px]">
-                          <div className="min-w-0">
-                            <p className="text-sky-400 font-bold truncate">
-                              TrxID / Invoice: {p.transactionId}
-                            </p>
-                            <p className="text-slate-400 text-[10px] mt-0.5">
-                              Sender: {p.senderNumber || 'N/A'} · {new Date(p.createdAt).toLocaleTimeString()}
-                            </p>
+                          <div className="flex items-baseline justify-between">
+                            <div>
+                              <span className="text-[10px] text-slate-400 block">{language === 'bn' ? 'ডিপোজিট পরিমাণ' : 'Deposit Amount'}</span>
+                              <span className="font-mono font-black text-xl text-slate-900 dark:text-slate-100">
+                                ৳{p.amount.toLocaleString()}
+                              </span>
+                              {p.bonus ? <span className="text-[10px] text-emerald-500 font-semibold block">+৳{p.bonus} bonus</span> : null}
+                            </div>
+                            <div className="text-right text-[11px] text-slate-400 font-mono">
+                              <div>{new Date(p.createdAt).toLocaleDateString()}</div>
+                              <div className="text-[10px]">{new Date(p.createdAt).toLocaleTimeString()}</div>
+                            </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              navigator.clipboard.writeText(p.transactionId);
-                              onShowToast('Transaction ID copied!', 'info');
-                            }}
-                            className="p-2 rounded-xl bg-slate-900 text-slate-300 active:scale-95 shrink-0"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
 
-                        {p.status === 'pending' ? (
-                          <div className="space-y-2 pt-1">
-                            {(p.gateway === 'ZiniPay' || p.zinipayInvoiceId) && (
+                          {/* TrxID box with 1-tap copy */}
+                          <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <span className="text-[9px] font-mono uppercase tracking-wider text-slate-400 block">Transaction ID (TrxID)</span>
+                              <span className="font-mono font-bold text-xs text-indigo-600 dark:text-indigo-400 truncate block">
+                                {p.transactionId || 'N/A'}
+                              </span>
+                            </div>
+                            {p.transactionId && (
                               <button
                                 type="button"
-                                onClick={() => handleAdminVerifyZiniPayment(p)}
-                                disabled={paymentProcessing === p.id}
-                                className="w-full py-2.5 px-4 rounded-2xl bg-[#22D3EE]/15 border border-[#22D3EE]/40 text-[#22D3EE] font-extrabold text-xs flex items-center justify-center gap-1.5 active:scale-95"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(p.transactionId);
+                                  onShowToast('TrxID copied!', 'info');
+                                }}
+                                className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100"
                               >
-                                <RefreshCw className={`w-3.5 h-3.5 ${paymentProcessing === p.id ? 'animate-spin' : ''}`} />
-                                <span>Verify with ZiniPay API (/v1/payment/verify)</span>
+                                <Copy className="w-3.5 h-3.5" />
                               </button>
                             )}
-                            <div className="grid grid-cols-2 gap-2">
+                          </div>
+
+                          <div className="text-xs text-slate-500 dark:text-slate-400 space-y-0.5">
+                            <div className="flex justify-between">
+                              <span>Sender Phone:</span>
+                              <span className="font-mono font-bold text-slate-700 dark:text-slate-200">{p.senderNumber || 'N/A'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Customer:</span>
+                              <span className="truncate max-w-[180px]">{p.userEmail}</span>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          {p.status === 'pending' && (
+                            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-2">
                               <button
                                 type="button"
                                 onClick={() => handleApprovePayment(p)}
                                 disabled={paymentProcessing === p.id}
-                                className="py-3 px-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                                className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1 shadow-sm active:scale-95 transition-transform"
                               >
-                                <CheckCircle2 className="w-4 h-4" />
-                                <span>{language === 'bn' ? 'অ্যাপ্রুভ করুন' : 'Approve & Credit'}</span>
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>{language === 'bn' ? 'অনুমোদন' : 'Approve'}</span>
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleRejectPayment(p)}
                                 disabled={paymentProcessing === p.id}
-                                className="py-3 px-4 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 font-extrabold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                                className="w-full py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center gap-1 shadow-sm active:scale-95 transition-transform"
                               >
-                                <XCircle className="w-4 h-4" />
-                                <span>{language === 'bn' ? 'রিজেক্ট' : 'Reject'}</span>
+                                <XCircle className="w-3.5 h-3.5" />
+                                <span>{language === 'bn' ? 'বাতিল' : 'Reject'}</span>
                               </button>
                             </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-between pt-1 text-[11px]">
-                            <span className="text-slate-500">{new Date(p.createdAt).toLocaleDateString()}</span>
-                            <span className={`font-extrabold uppercase ${
-                              p.status === 'approved' ? 'text-emerald-400' : 'text-rose-400'
-                            }`}>
-                              {p.status}
-                            </span>
-                          </div>
-                        )}
+                          )}
+                        </div>
+                      );
+                    })}
+                    {filteredPayments.length === 0 && (
+                      <div className={`p-8 text-center rounded-2xl border ${surfaceCard} text-slate-400 text-xs`}>
+                        {language === 'bn' ? 'কোনো ডিপোজিট রিকোয়েস্ট নেই' : 'No deposits found'}
                       </div>
-                    ))}
+                    )}
+                  </div>
+
+                  {/* Desktop Table */}
+                  <div className={`hidden md:block rounded-2xl border overflow-hidden ${surfaceCard}`}>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className={`border-b font-mono font-bold uppercase text-[11px] ${tableHeader}`}>
+                          <th className="py-3 px-4">Payment ID</th>
+                          <th className="py-3 px-3">Gateway</th>
+                          <th className="py-3 px-3">Sender Phone</th>
+                          <th className="py-3 px-3">Transaction ID (TrxID)</th>
+                          <th className="py-3 px-3">Customer Email</th>
+                          <th className="py-3 px-3 text-right">Amount</th>
+                          <th className="py-3 px-3">Time</th>
+                          <th className="py-3 px-3">Status</th>
+                          <th className="py-3 px-4 text-right">Verification Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                        {filteredPayments.map(p => {
+                          const gw = (p.gateway || p.zinipayMethod || 'bKash').toLowerCase();
+                          return (
+                          <tr key={p.id} className={tableRowHover}>
+                            <td className="py-3 px-4 font-mono font-bold text-slate-500">#{p.id}</td>
+                            <td className="py-3 px-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                                gw.includes('bkash') ? 'bg-pink-100 text-pink-700 dark:bg-pink-950/60 dark:text-pink-300' :
+                                gw.includes('nagad') ? 'bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300' :
+                                'bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300'
+                              }`}>
+                                {p.gateway || p.zinipayMethod || 'Manual'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 font-mono font-semibold text-slate-800 dark:text-slate-200">
+                              {p.senderNumber || 'N/A'}
+                            </td>
+                            <td className="py-3 px-3">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800">
+                                  {p.transactionId || 'N/A'}
+                                </span>
+                                {p.transactionId && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(p.transactionId);
+                                      onShowToast('TrxID copied to clipboard!', 'info');
+                                    }}
+                                    className="text-slate-400 hover:text-indigo-600"
+                                    title="Copy TrxID"
+                                  >
+                                    <Copy className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 text-slate-600 dark:text-slate-300 font-medium">{p.userEmail}</td>
+                            <td className="py-3 px-3 text-right font-mono font-black text-slate-900 dark:text-slate-100">
+                              ৳{p.amount.toLocaleString()}
+                              {p.bonus ? <span className="text-[10px] text-emerald-500 block">+৳{p.bonus} bonus</span> : null}
+                            </td>
+                            <td className="py-3 px-3 text-slate-400 font-mono text-[11px]">{new Date(p.createdAt).toLocaleDateString()}</td>
+                            <td className="py-3 px-3">
+                              <span className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold uppercase ${
+                                p.status === 'approved' 
+                                  ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                                  : p.status === 'pending'
+                                  ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
+                                  : 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300'
+                              }`}>
+                                {p.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              {p.status === 'pending' ? (
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApprovePayment(p)}
+                                    disabled={paymentProcessing === p.id}
+                                    className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs disabled:opacity-50"
+                                  >
+                                    {language === 'bn' ? 'অনুমোদন করুন' : 'Approve'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRejectPayment(p)}
+                                    disabled={paymentProcessing === p.id}
+                                    className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs disabled:opacity-50"
+                                  >
+                                    {language === 'bn' ? 'বাতিল' : 'Reject'}
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-slate-400 text-[11px]">{p.verifiedAt ? new Date(p.verifiedAt).toLocaleDateString() : 'Completed'}</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                        })}
+                        {filteredPayments.length === 0 && (
+                          <tr>
+                            <td colSpan={9} className="py-12 text-center text-slate-400">
+                              {language === 'bn' ? 'কোনো পেমেন্ট রেকর্ড নেই' : 'No deposit requests found'}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                </>
+              )}
+
+              {/* TAB 2: ZINIPAY AUTOMATED LOGS & QUERY */}
+              {paymentTab === 'zinipay' && (
+                <div className="space-y-4">
+                  <div className={`p-4.5 rounded-2xl border ${surfaceCard} flex flex-col md:flex-row items-center justify-between gap-4`}>
+                    <div className="space-y-1">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                        {language === 'bn' ? 'ZiniPay অটোমেটেড ভেরিফিকেশন ও ডায়াগনস্টিক' : 'ZiniPay Automated Diagnostics'}
+                      </h4>
+                      <p className="text-xs text-slate-400">
+                        {language === 'bn' ? 'ZiniPay গেটওয়ে নোড চেক এবং ম্যানুয়াল ইনভয়েস ভেরিফাই করুন' : 'Query automated invoice statuses and verify connectivity'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleTestZiniPayConnection}
+                        disabled={testingZiniPay}
+                        className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${testingZiniPay ? 'animate-spin' : ''}`} />
+                        <span>{testingZiniPay ? 'Pinging Nodes...' : 'Test Gateway Connection'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* ZiniPay Logs Table */}
+                  <div className={`rounded-2xl border overflow-hidden ${surfaceCard}`}>
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className={`border-b font-mono font-bold uppercase text-[11px] ${tableHeader}`}>
+                          <th className="py-3 px-4">Event Time</th>
+                          <th className="py-3 px-3">Invoice ID</th>
+                          <th className="py-3 px-3">TrxID / Summary</th>
+                          <th className="py-3 px-3 text-right">Amount</th>
+                          <th className="py-3 px-3">Status</th>
+                          <th className="py-3 px-4 text-right">Diagnostic Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono">
+                        {ziniLogs.map((lg, idx) => (
+                          <tr key={idx} className={tableRowHover}>
+                            <td className="py-3 px-4 text-slate-400">{new Date(lg.timestamp).toLocaleTimeString()}</td>
+                            <td className="py-3 px-3 font-bold text-slate-800 dark:text-slate-200">#{lg.invoiceId || 'N/A'}</td>
+                            <td className="py-3 px-3 text-slate-600 dark:text-slate-300 truncate max-w-[200px]">{lg.transactionId || lg.summary || 'Webhook Ping'}</td>
+                            <td className="py-3 px-3 text-right font-black">{lg.amount ? `৳${lg.amount}` : '-'}</td>
+                            <td className="py-3 px-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                lg.status === 'success' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                {lg.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right text-emerald-600 dark:text-emerald-400 font-semibold">
+                              Verified
+                            </td>
+                          </tr>
+                        ))}
+                        {ziniLogs.length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="py-10 text-center text-slate-400 font-sans">
+                              {language === 'bn' ? 'কোনো ZiniPay ট্রানজেকশন লগ নেই' : 'No ZiniPay webhook events logged yet'}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ===================================================================
+              SECTION 6: SERVICES CATALOG
+             =================================================================== */}
+          {activeSection === 'services' && (
+            <div className="space-y-4 animate-in fade-in-0 duration-200">
+              {/* 100% Autonomous Active-Only Sync Status Banner */}
+              <div className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${surfaceCard}`}>
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                  <div className="text-xs">
+                    <span className="font-bold text-slate-900 dark:text-slate-100">
+                      {language === 'bn'
+                        ? '১০০% অটোমেটেড অ্যাক্টিভ সার্ভিস ইঞ্জিন সচল'
+                        : '100% Automated Active Provider Service Engine'}
+                    </span>
+                    <span className="text-slate-500 dark:text-slate-400 block sm:inline sm:ml-2">
+                      {language === 'bn'
+                        ? `শুধুমাত্র সচল (${providers.filter(p => p.status === 'active').length}টি) API প্রোভাইডারের ${services.length}টি অ্যাক্টিভ সার্ভিস প্রদর্শিত হচ্ছে`
+                        : `Showing ${services.length} active services from ${providers.filter(p => p.status === 'active').length} active API providers`}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAutoCleanAndSyncAll}
+                  disabled={autoCleaningCatalog}
+                  className="h-8 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shrink-0 disabled:opacity-60"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${autoCleaningCatalog ? 'animate-spin' : ''}`} />
+                  <span>
+                    {autoCleaningCatalog
+                      ? language === 'bn' ? 'অটো-সিঙ্ক হচ্ছে...' : 'Syncing...'
+                      : language === 'bn' ? 'অটো-ক্লিন ও ফুল সিঙ্ক' : 'Auto-Clean & Sync All'}
+                  </span>
+                </button>
+              </div>
+
+              {/* Toolbar */}
+              <div className={`p-4 rounded-2xl border ${surfaceCard} flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3`}>
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 md:pb-0">
+                  {serviceCategories.map(cat => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setSelectedServiceCategory(cat)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                        selectedServiceCategory === cat
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : `${surfaceSubtle} hover:border-indigo-500`
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="relative min-w-[200px]">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={serviceSearch}
+                      onChange={e => setServiceSearch(e.target.value)}
+                      placeholder={language === 'bn' ? 'সার্ভিস খুঁজুন...' : 'Search services...'}
+                      className={`w-full h-9 pl-9 pr-3 rounded-xl text-xs font-medium border focus:outline-none focus:border-indigo-600 transition-colors ${
+                        darkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-slate-50 border-slate-200 text-slate-900'
+                      }`}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingService(true)}
+                    className="h-9 px-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>{language === 'bn' ? 'নতুন সার্ভিস' : 'Add Service'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Mobile Native Card Feed (< md) */}
+              <div className="block md:hidden space-y-3">
+                {filteredServices.map(s => {
+                  const prv = providers.find(p => p.id === s.providerId);
+                  return (
+                    <div key={s.id} className={`p-4 rounded-2xl border ${surfaceCard} space-y-2.5`}>
+                      <div className="flex items-center justify-between">
+                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                          {s.category}
+                        </span>
+                        <span className="font-mono text-xs font-bold text-slate-400">#{s.id}</span>
+                      </div>
+
+                      <div>
+                        <div className="font-bold text-xs text-slate-900 dark:text-slate-100 leading-snug">
+                          {s.name}
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                          Avg: {s.averageTime || '30 mins'} {s.refill ? '· Refill Active' : ''}
+                        </div>
+                      </div>
+
+                      <div className="flex items-baseline justify-between py-1.5 border-y border-slate-100 dark:border-slate-800">
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">{language === 'bn' ? 'রেট / ১,০০০' : 'Rate / 1k'}</span>
+                          <span className="font-mono font-black text-base text-indigo-600 dark:text-indigo-400">
+                            ৳{s.rate}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] text-slate-400 block">{language === 'bn' ? 'অর্ডার লিমিট' : 'Limits'}</span>
+                          <span className="font-mono text-xs font-semibold text-slate-600 dark:text-slate-300">
+                            {s.min.toLocaleString()} - {s.max.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs pt-1">
+                        <span className="text-[11px] text-slate-400 truncate max-w-[160px]">
+                          {prv ? `Linked: ${prv.name}` : 'Manual Fulfillment'}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => { setEditingService(s); setIsAddingService(false); }}
+                            className="p-1.5 rounded-lg border hover:border-indigo-500 text-slate-600 dark:text-slate-300"
+                            title="Edit Service"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteService(s.id)}
+                            className="p-1.5 rounded-lg border hover:border-rose-500 text-rose-500"
+                            title="Delete Service"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {filteredServices.length === 0 && (
+                  <div className={`p-8 text-center rounded-2xl border ${surfaceCard} text-slate-400 text-xs`}>
+                    {language === 'bn' ? 'কোনো সার্ভিস পাওয়া যায়নি' : 'No services found in this category'}
                   </div>
                 )}
               </div>
-            )}
 
-            {/* =========================================================
-                SECTION 4: ULTRA-ADVANCED API PANEL & SERVICES CATALOG
-               ========================================================= */}
-            {(activeSection === 'services' || activeSection === 'providers') && (
-              <div className="space-y-3.5">
-                {/* Primary Toggle: API Studio vs Local Services Catalog */}
-                <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-[#0B1120] border border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => setActiveSection('providers')}
-                    className={`py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 ${
-                      activeSection === 'providers'
-                        ? 'bg-amber-500 text-slate-950 shadow'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <Server className="w-3.5 h-3.5" />
-                    <span>{language === 'bn' ? 'অ্যাডভান্সড API প্যানেল' : 'API Studio'} ({providers.length})</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveSection('services')}
-                    className={`py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 ${
-                      activeSection === 'services'
-                        ? 'bg-amber-500 text-slate-950 shadow'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <Layers className="w-3.5 h-3.5" />
-                    <span>{language === 'bn' ? 'সার্ভিস লিস্ট' : 'Services'} ({services.length})</span>
-                  </button>
-                </div>
-
-                {activeSection === 'services' ? (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <div className="relative flex-1">
-                        <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                          type="text"
-                          value={serviceSearch}
-                          onChange={(e) => setServiceSearch(e.target.value)}
-                          placeholder={language === 'bn' ? 'সার্ভিস খুঁজুন...' : 'Search services...'}
-                          className="w-full bg-[#0B1120] border border-slate-800 rounded-2xl pl-10 pr-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setIsAddingService(true)}
-                        className="py-2.5 px-3.5 rounded-2xl bg-amber-500 text-slate-950 font-extrabold text-xs flex items-center gap-1 shrink-0 active:scale-95"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>{language === 'bn' ? 'নতুন সার্ভিস' : 'Add'}</span>
-                      </button>
-                    </div>
-
-                    {/* Add/Edit Service Sheet */}
-                    {isAddingService && (
-                      <div className="p-4 rounded-3xl bg-[#0B1120] border border-amber-500/40 space-y-3 text-xs">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-extrabold text-amber-400">
-                            {language === 'bn' ? 'সার্ভিস যুক্ত / এডিট করুন' : 'Add / Edit Service'}
-                          </h4>
-                          <button
-                            type="button"
-                            onClick={() => setIsAddingService(false)}
-                            className="p-1 text-slate-400"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <input
-                            type="text"
-                            placeholder="Service ID (e.g. fb-101)"
-                            value={newService.id}
-                            onChange={(e) => setNewService({ ...newService, id: e.target.value })}
-                            className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
-                          />
-                          <input
-                            type="text"
-                            placeholder="Category (Facebook)"
-                            value={newService.category}
-                            onChange={(e) => setNewService({ ...newService, category: e.target.value })}
-                            className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
-                          />
-                        </div>
-
-                        <input
-                          type="text"
-                          placeholder="Service Full Name"
-                          value={newService.name}
-                          onChange={(e) => setNewService({ ...newService, name: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
-                        />
-
-                        <div className="grid grid-cols-3 gap-2">
-                          <div>
-                            <label className="text-[10px] text-slate-400 block mb-1">Rate/1K (৳)</label>
-                            <input
-                              type="number"
-                              value={newService.rate}
-                              onChange={(e) => setNewService({ ...newService, rate: parseFloat(e.target.value) || 0 })}
-                              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] text-slate-400 block mb-1">Min</label>
-                            <input
-                              type="number"
-                              value={newService.min}
-                              onChange={(e) => setNewService({ ...newService, min: parseInt(e.target.value) || 10 })}
-                              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] text-slate-400 block mb-1">Max</label>
-                            <input
-                              type="number"
-                              value={newService.max}
-                              onChange={(e) => setNewService({ ...newService, max: parseInt(e.target.value) || 100000 })}
-                              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <input
-                            type="text"
-                            placeholder="Provider ID (Optional)"
-                            value={newService.providerId || ''}
-                            onChange={(e) => setNewService({ ...newService, providerId: e.target.value })}
-                            className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
-                          />
-                          <input
-                            type="text"
-                            placeholder="Upstream Service ID"
-                            value={newService.providerServiceId || ''}
-                            onChange={(e) => setNewService({ ...newService, providerServiceId: e.target.value })}
-                            className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
-                          />
-                        </div>
-
-                        <textarea
-                          rows={2}
-                          placeholder="Service description..."
-                          value={newService.description}
-                          onChange={(e) => setNewService({ ...newService, description: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
-                        />
-
-                        <button
-                          type="button"
-                          onClick={() => handleSaveService(newService as SMMService)}
-                          className="w-full py-3 bg-emerald-500 text-slate-950 font-extrabold rounded-2xl"
-                        >
-                          {language === 'bn' ? 'সার্ভারে সেভ করুন' : 'Save Service to Server'}
-                        </button>
-                      </div>
-                    )}
-
-                    <div className="space-y-2">
-                      {filteredServices.length === 0 ? (
-                        <div className="p-8 text-center bg-[#0B1120] border border-slate-800 rounded-3xl text-xs text-slate-400">
-                          {language === 'bn'
-                            ? 'কোনো সার্ভিস নেই। "নতুন সার্ভিস" বাটনে ক্লিক করুন অথবা API প্যানেল থেকে ইমপোর্ট করুন।'
-                            : 'No services in catalog. Tap Add or import from API Studio.'}
-                        </div>
-                      ) : (
-                        filteredServices.map(s => (
-                          <div
-                            key={s.id}
-                            className="p-3.5 rounded-3xl bg-[#0B1120] border border-slate-800 flex items-center justify-between gap-2.5 text-xs"
-                          >
-                            <div className="min-w-0 space-y-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-mono font-bold text-white">#{s.id}</span>
-                                <span className="text-amber-400 font-semibold">{s.category}</span>
-                                <span className="text-emerald-400 font-mono font-extrabold">৳{s.rate}/1k</span>
-                              </div>
-                              <p className="text-slate-200 font-semibold line-clamp-1">{s.name}</p>
-                              <p className="text-[10px] font-mono text-slate-500">
-                                Min: {s.min} · Max: {s.max}
-                                {s.providerId ? ` · API: ${s.providerId} (#${s.providerServiceId})` : ''}
-                              </p>
-                            </div>
-
-                            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Desktop Services Table */}
+              <div className={`hidden md:block rounded-2xl border overflow-hidden ${surfaceCard}`}>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className={`border-b font-mono font-bold uppercase text-[11px] ${tableHeader}`}>
+                        <th className="py-3 px-4">ID</th>
+                        <th className="py-3 px-3">Service Name</th>
+                        <th className="py-3 px-3">Category</th>
+                        <th className="py-3 px-3 text-right">Selling Rate / 1k</th>
+                        <th className="py-3 px-3 text-right">Min / Max</th>
+                        <th className="py-3 px-3">Linked Provider</th>
+                        <th className="py-3 px-3">Status</th>
+                        <th className="py-3 px-4 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                      {filteredServices.map(s => {
+                        const prv = providers.find(p => p.id === s.providerId);
+                        return (
+                          <tr key={s.id} className={tableRowHover}>
+                            <td className="py-3 px-4 font-mono font-bold text-slate-500">#{s.id}</td>
+                            <td className="py-3 px-3">
+                              <span className="font-bold text-slate-800 dark:text-slate-200 block truncate max-w-[280px]" title={s.name}>
+                                {s.name}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                Avg: {s.averageTime || '30 mins'} {s.refill ? '· Refill Active' : ''}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                                {s.category}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono font-black text-indigo-600 dark:text-indigo-400">
+                              ৳{s.rate}
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono text-slate-500">
+                              {s.min.toLocaleString()} - {s.max.toLocaleString()}
+                            </td>
+                            <td className="py-3 px-3 font-mono">
+                              {prv ? (
+                                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold">
+                                  {prv.name} (#{s.providerServiceId || 'Auto'})
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-slate-400">Direct / Manual</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                s.status === 'active' 
+                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300' 
+                                  : 'bg-slate-100 text-slate-500'
+                              }`}>
+                                {s.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right space-x-2">
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setNewService(s);
-                                  setIsAddingService(true);
-                                }}
-                                className="p-2.5 rounded-2xl bg-slate-900 text-sky-400 active:scale-95"
+                                onClick={() => setEditingService(s)}
+                                className="p-1.5 rounded-lg border hover:border-indigo-500 text-slate-500 hover:text-indigo-600 transition-colors"
+                                title="Edit Service"
                               >
-                                <Edit3 className="w-4 h-4" />
+                                <Edit3 className="w-3.5 h-3.5" />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleDeleteService(s.id)}
-                                className="p-2.5 rounded-2xl bg-rose-500/15 text-rose-400 active:scale-95"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  /* =========================================================
-                     5-MODULE ULTRA-ADVANCED ADMIN API CONTROL STUDIO
-                     ========================================================= */
-                  <div className="space-y-3.5">
-                    {/* 5-Tab Sub-Navigation Bar for API Studio */}
-                    <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
-                      {[
-                        { id: 'providers', label: language === 'bn' ? 'প্রোভাইডার হাব' : 'Providers', icon: Server },
-                        { id: 'importer', label: language === 'bn' ? 'লাইভ ক্যাটালগ ইমপোর্টার' : 'Catalog Importer', icon: Layers },
-                        { id: 'router', label: language === 'bn' ? 'অর্ডার ও রিফিল রাউটার' : 'Order Router', icon: Zap },
-                        { id: 'pricing', label: language === 'bn' ? 'বাল্ক প্রাইস ও প্রফিট' : 'Price Engine', icon: DollarSign },
-                        { id: 'console', label: language === 'bn' ? 'লাইভ লগ ও ডিবাগার' : 'Logs & Sandbox', icon: Terminal },
-                      ].map(sub => {
-                        const SubIcon = sub.icon;
-                        const active = apiSubTab === sub.id;
-                        return (
-                          <button
-                            key={sub.id}
-                            type="button"
-                            onClick={() => setApiSubTab(sub.id as AdminApiSubTab)}
-                            className={`py-2 px-3 rounded-2xl text-[11px] font-extrabold whitespace-nowrap flex items-center gap-1.5 transition-all border ${
-                              active
-                                ? 'bg-indigo-500 text-white border-indigo-400 shadow-lg shadow-indigo-500/20'
-                                : 'bg-[#0B1120] text-slate-400 border-slate-800 hover:text-white'
-                            }`}
-                          >
-                            <SubIcon className="w-3.5 h-3.5" />
-                            <span>{sub.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* -------------------------------------------------------
-                        API SUB-TAB 1: PROVIDERS HUB & PRESET CONNECTOR
-                       ------------------------------------------------------- */}
-                    {apiSubTab === 'providers' && (
-                      <div className="space-y-3">
-                        {/* Executive API Summary Strip */}
-                        <div className="grid grid-cols-3 gap-2 p-3 rounded-3xl bg-[#0B1120] border border-indigo-500/30 text-center font-mono text-xs">
-                          <div className="p-2 rounded-2xl bg-slate-950 border border-slate-800">
-                            <span className="text-[10px] text-slate-400 block">Connected APIs</span>
-                            <strong className="text-indigo-400 text-sm">{providers.length}</strong>
-                          </div>
-                          <div className="p-2 rounded-2xl bg-slate-950 border border-slate-800">
-                            <span className="text-[10px] text-slate-400 block">API Services</span>
-                            <strong className="text-amber-400 text-sm">{apiLinkedServices.length}</strong>
-                          </div>
-                          <div className="p-2 rounded-2xl bg-slate-950 border border-slate-800">
-                            <span className="text-[10px] text-slate-400 block">API Orders</span>
-                            <strong className="text-emerald-400 text-sm">{apiRoutedOrders.length}</strong>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNewProvider({
-                              id: 'prv-' + Math.floor(100 + Math.random() * 900),
-                              name: '',
-                              apiUrl: 'https://',
-                              apiKey: '',
-                              balance: 0,
-                              currency: 'USD',
-                              profitMargin: 25,
-                              fixedMarkup: 0,
-                              priceRounding: 'none',
-                              customExchangeRate: siteSettings.usdToBdtRate || 122,
-                              autoForwardOrders: true,
-                              autoSyncRefills: true,
-                              lowBalanceAlert: 5,
-                              status: 'active'
-                            });
-                            setNewProviderPingResult(null);
-                            setIsAddingProvider(true);
-                          }}
-                          className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg active:scale-95"
-                        >
-                          <Plus className="w-4 h-4 stroke-[2.5]" />
-                          <span>
-                            {language === 'bn'
-                              ? 'নতুন SMM API v2 প্রোভাইডার কানেক্ট করুন'
-                              : 'Connect New SMM API v2 Provider'}
-                          </span>
-                        </button>
-
-                        {/* Add / Edit Provider Modal Card with 1-Tap Presets */}
-                        {isAddingProvider && (
-                          <div className="p-4 rounded-3xl bg-[#0B1120] border border-amber-500/40 space-y-3.5 text-xs">
-                            <div className="flex items-center justify-between">
-                              <h4 className="font-extrabold text-amber-400 flex items-center gap-1.5">
-                                <Server className="w-4 h-4" />
-                                <span>Configure Upstream SMM API v2 Provider</span>
-                              </h4>
-                              <button type="button" onClick={() => setIsAddingProvider(false)}>
-                                <X className="w-4 h-4 text-slate-400" />
-                              </button>
-                            </div>
-
-                            {/* 1-Tap Popular SMM Panel Presets */}
-                            <div className="space-y-1.5">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase block">
-                                1-Tap Popular SMM Panel Templates:
-                              </span>
-                              <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
-                                {POPULAR_SMM_PROVIDER_PRESETS.map(preset => (
-                                  <button
-                                    key={preset.name}
-                                    type="button"
-                                    onClick={() =>
-                                      setNewProvider({
-                                        ...newProvider,
-                                        name: preset.name,
-                                        apiUrl: preset.apiUrl,
-                                        currency: preset.currency,
-                                        profitMargin: preset.margin
-                                      })
-                                    }
-                                    className="py-1.5 px-2.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-amber-500/50 text-[10px] font-bold text-sky-300 whitespace-nowrap active:scale-95"
-                                  >
-                                    + {preset.name}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-
-                            <div className="space-y-2.5">
-                              <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1">Provider Name</label>
-                                <input
-                                  type="text"
-                                  placeholder="e.g. JustAnotherPanel (JAP)"
-                                  value={newProvider.name}
-                                  onChange={(e) => setNewProvider({ ...newProvider, name: e.target.value })}
-                                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-semibold"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1">
-                                  API v2 Endpoint URL
-                                </label>
-                                <input
-                                  type="url"
-                                  placeholder="https://domain.com/api/v2"
-                                  value={newProvider.apiUrl}
-                                  onChange={(e) => setNewProvider({ ...newProvider, apiUrl: e.target.value })}
-                                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-sky-300 font-mono"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1">
-                                  Provider Secret API Key
-                                </label>
-                                <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl pr-2">
-                                  <input
-                                    type={showProviderSecret ? 'text' : 'password'}
-                                    placeholder="Paste upstream API key..."
-                                    value={newProvider.apiKey}
-                                    onChange={(e) => setNewProvider({ ...newProvider, apiKey: e.target.value })}
-                                    className="flex-1 bg-transparent p-2.5 text-emerald-300 font-mono focus:outline-none"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => setShowProviderSecret(!showProviderSecret)}
-                                    className="p-1.5 text-slate-400 hover:text-white"
-                                  >
-                                    {showProviderSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Pricing & Conversion Rules Grid */}
-                            <div className="grid grid-cols-2 gap-2.5 pt-1">
-                              <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1">
-                                  Profit Markup (%)
-                                </label>
-                                <input
-                                  type="number"
-                                  value={newProvider.profitMargin}
-                                  onChange={(e) =>
-                                    setNewProvider({ ...newProvider, profitMargin: parseFloat(e.target.value) || 0 })
-                                  }
-                                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1">
-                                  Fixed Fee Adder (+৳/1K)
-                                </label>
-                                <input
-                                  type="number"
-                                  value={newProvider.fixedMarkup ?? 0}
-                                  onChange={(e) =>
-                                    setNewProvider({ ...newProvider, fixedMarkup: parseFloat(e.target.value) || 0 })
-                                  }
-                                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1">
-                                  Provider Currency
-                                </label>
-                                <select
-                                  value={newProvider.currency || 'USD'}
-                                  onChange={(e) => setNewProvider({ ...newProvider, currency: e.target.value })}
-                                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-bold"
-                                >
-                                  <option value="USD">USD ($)</option>
-                                  <option value="BDT">BDT (৳)</option>
-                                </select>
-                              </div>
-                              <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1">
-                                  1 USD = BDT Rate
-                                </label>
-                                <input
-                                  type="number"
-                                  value={newProvider.customExchangeRate ?? 122}
-                                  onChange={(e) =>
-                                    setNewProvider({
-                                      ...newProvider,
-                                      customExchangeRate: parseFloat(e.target.value) || 122
-                                    })
-                                  }
-                                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
-                                />
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2.5">
-                              <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1">
-                                  Price Rounding Rule
-                                </label>
-                                <select
-                                  value={newProvider.priceRounding || 'none'}
-                                  onChange={(e) =>
-                                    setNewProvider({ ...newProvider, priceRounding: e.target.value as any })
-                                  }
-                                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-bold"
-                                >
-                                  <option value="none">Exact Decimal (৳12.45)</option>
-                                  <option value="nearest_int">Nearest ৳1 (৳12)</option>
-                                  <option value="ceil">Round Up ৳ (৳13)</option>
-                                </select>
-                              </div>
-                              <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1">
-                                  Low Balance Alert ($)
-                                </label>
-                                <input
-                                  type="number"
-                                  value={newProvider.lowBalanceAlert ?? 5}
-                                  onChange={(e) =>
-                                    setNewProvider({ ...newProvider, lowBalanceAlert: parseFloat(e.target.value) || 0 })
-                                  }
-                                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
-                                />
-                              </div>
-                            </div>
-
-                            {/* Live Ping Diagnostic Result Box */}
-                            {newProviderPingResult && (
-                              <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-[11px] font-mono">
-                                <span className="text-emerald-300 font-bold">
-                                  ONLINE · {newProviderPingResult.latencyMs}ms
-                                </span>
-                                <span className="text-white font-extrabold">
-                                  Bal: {newProviderPingResult.balance} {newProviderPingResult.currency}
-                                  {newProviderPingResult.totalRemoteServices
-                                    ? ` · ${newProviderPingResult.totalRemoteServices} Services`
-                                    : ''}
-                                </span>
-                              </div>
-                            )}
-
-                            <div className="grid grid-cols-2 gap-2 pt-1">
-                              <button
-                                type="button"
-                                onClick={handleTestNewProviderConnection}
-                                disabled={testingNewProvider}
-                                className="py-3 rounded-2xl bg-slate-900 border border-sky-500/40 text-sky-300 font-extrabold flex items-center justify-center gap-1.5 active:scale-95"
-                              >
-                                <Activity className={`w-3.5 h-3.5 ${testingNewProvider ? 'animate-spin' : ''}`} />
-                                <span>{testingNewProvider ? 'Pinging...' : 'Test Connection'}</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleSaveProvider}
-                                className="py-3 rounded-2xl bg-emerald-500 text-slate-950 font-black flex items-center justify-center gap-1.5 active:scale-95"
-                              >
-                                <Save className="w-3.5 h-3.5" />
-                                <span>Save Provider</span>
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Connected Providers List */}
-                        <div className="space-y-3">
-                          {providers.length === 0 ? (
-                            <div className="p-8 text-center bg-[#0B1120] border border-slate-800 rounded-3xl text-xs text-slate-400">
-                              {language === 'bn'
-                                ? 'কোনো API প্রোভাইডার যুক্ত করা হয়নি। উপরের বাটনে ক্লিক করে JAP/Peakerr বা যেকোনো SMM API প্যানেল কানেক্ট করুন।'
-                                : 'No external SMM API providers connected yet. Tap Connect above to add an upstream panel.'}
-                            </div>
-                          ) : (
-                            providers.map(prv => {
-                              const linkedCount = services.filter(s => s.providerId === prv.id).length;
-                              const isLowBalance = prv.balance < (prv.lowBalanceAlert ?? 5);
-
-                              return (
-                                <div
-                                  key={prv.id}
-                                  className="p-4 rounded-3xl bg-[#0B1120] border border-slate-800/90 space-y-3 text-xs"
-                                >
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div className="min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <h4 className="font-black text-white text-sm">{prv.name}</h4>
-                                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-400 font-bold">
-                                          {prv.lastLatencyMs ? `${prv.lastLatencyMs}ms` : 'ACTIVE'}
-                                        </span>
-                                        {isLowBalance && (
-                                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-lg bg-rose-500/20 text-rose-300 flex items-center gap-1">
-                                            <AlertTriangle className="w-3 h-3" />
-                                            Low Bal
-                                          </span>
-                                        )}
-                                      </div>
-                                      <p className="font-mono text-[11px] text-sky-400 truncate max-w-[240px] mt-0.5">
-                                        {prv.apiUrl}
-                                      </p>
-                                    </div>
-                                    <div className="text-right shrink-0">
-                                      <span className="font-mono font-black text-emerald-400 text-sm block">
-                                        {prv.balance.toFixed(2)} {prv.currency}
-                                      </span>
-                                      <span className="text-[10px] text-amber-400 font-mono">
-                                        +{prv.profitMargin}%
-                                        {prv.fixedMarkup ? ` +৳${prv.fixedMarkup}` : ''} Markup
-                                      </span>
-                                    </div>
-                                  </div>
-
-                                  {/* Provider Metrics Strip */}
-                                  <div className="grid grid-cols-3 gap-2 p-2.5 rounded-2xl bg-slate-950 border border-slate-800/80 text-center font-mono text-[11px]">
-                                    <div>
-                                      <span className="text-[10px] text-slate-500 block">Local Synced</span>
-                                      <strong className="text-white">{linkedCount} Services</strong>
-                                    </div>
-                                    <div>
-                                      <span className="text-[10px] text-slate-500 block">Remote Catalog</span>
-                                      <strong className="text-sky-400">
-                                        {prv.totalRemoteServices ?? '—'} Total
-                                      </strong>
-                                    </div>
-                                    <div>
-                                      <span className="text-[10px] text-slate-500 block">1 USD Rate</span>
-                                      <strong className="text-amber-400">
-                                        ৳{prv.customExchangeRate || siteSettings.usdToBdtRate || 122}
-                                      </strong>
-                                    </div>
-                                  </div>
-
-                                  {/* Primary Action Row: Ping, Browse Catalog, Quick Sync */}
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <button
-                                      type="button"
-                                      disabled={checkingBalanceId === prv.id}
-                                      onClick={() => handlePingAndCheckProvider(prv)}
-                                      className="py-2.5 px-3 rounded-2xl bg-slate-900 border border-slate-800 text-emerald-400 font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95"
-                                    >
-                                      <Activity className={`w-3.5 h-3.5 ${checkingBalanceId === prv.id ? 'animate-spin' : ''}`} />
-                                      <span>{checkingBalanceId === prv.id ? 'Pinging...' : 'Ping & Balance'}</span>
-                                    </button>
-
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setSelectedCatalogProviderId(prv.id);
-                                        setApiSubTab('importer');
-                                        handleLoadRemoteCatalogForBrowser(prv.id);
-                                      }}
-                                      className="py-2.5 px-3 rounded-2xl bg-indigo-500 hover:bg-indigo-400 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 active:scale-95"
-                                    >
-                                      <Layers className="w-3.5 h-3.5" />
-                                      <span>Browse Catalog</span>
-                                    </button>
-                                  </div>
-
-                                  {/* Secondary Action Row: Full Import All Services + Status Sync & Recalculate Prices */}
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <button
-                                      type="button"
-                                      disabled={syncingProviderId === prv.id}
-                                      onClick={() => handleSyncProviderCatalog(prv)}
-                                      className="py-2.5 px-3 rounded-2xl bg-sky-500/20 border border-sky-500/40 text-sky-300 font-extrabold text-[11px] flex items-center justify-center gap-1.5 active:scale-95"
-                                    >
-                                      <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${syncingProviderId === prv.id ? 'animate-spin' : ''}`} />
-                                      <span className="truncate">
-                                        {syncingProviderId === prv.id
-                                          ? `Syncing All (${prv.totalRemoteServices || 'All'})...`
-                                          : `Sync All (${prv.totalRemoteServices || 'All'}) & Status`}
-                                      </span>
-                                    </button>
-
-                                    <button
-                                      type="button"
-                                      disabled={repricingProviderId === prv.id}
-                                      onClick={() => handleRecalculateProviderPrices(prv)}
-                                      className="py-2.5 px-3 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold text-[11px] flex items-center justify-center gap-1.5 active:scale-95"
-                                    >
-                                      <DollarSign className="w-3.5 h-3.5 shrink-0" />
-                                      <span>{repricingProviderId === prv.id ? 'Updating...' : 'Re-Sync Prices'}</span>
-                                    </button>
-                                  </div>
-
-                                  {/* Footer Row: Auto-Sync 5m Status, Edit & Delete */}
-                                  <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[10px] text-slate-400">
-                                    <span className="font-mono text-emerald-400/90">
-                                      {prv.lastSyncAt
-                                        ? `Synced: ${new Date(prv.lastSyncAt).toLocaleTimeString()} · Auto 5m`
-                                        : 'Auto-Sync: Every 5m'}
-                                    </span>
-                                    <div className="flex items-center gap-3">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setNewProvider(prv);
-                                          setIsAddingProvider(true);
-                                        }}
-                                        className="text-sky-400 font-bold flex items-center gap-1"
-                                      >
-                                        <Edit3 className="w-3 h-3" />
-                                        Edit
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleDeleteProviderWithServices(prv, true)}
-                                        className="text-rose-400 font-bold flex items-center gap-1"
-                                      >
-                                        <Trash2 className="w-3 h-3" />
-                                        Delete + Services
-                                      </button>
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* -------------------------------------------------------
-                        API SUB-TAB 2: INTERACTIVE REMOTE CATALOG IMPORTER
-                       ------------------------------------------------------- */}
-                    {apiSubTab === 'importer' && (
-                      <div className="p-4 rounded-3xl bg-[#0B1120] border border-slate-800 space-y-3.5 text-xs">
-                        <div>
-                          <h4 className="font-extrabold text-white text-sm flex items-center gap-2">
-                            <Layers className="w-4 h-4 text-indigo-400" />
-                            <span>
-                              {language === 'bn'
-                                ? 'লাইভ প্রোভাইডার ক্যাটালগ ব্রাউজার ও সিলেক্টিভ ইমপোর্টার'
-                                : 'Live Remote Catalog Browser & Selective Importer'}
-                            </span>
-                          </h4>
-                          <p className="text-[11px] text-slate-400 mt-0.5">
-                            Browse upstream services live, preview converted BDT prices, and import specific categories or services.
-                          </p>
-                        </div>
-
-                        {/* Provider Selector + Load Catalog Button */}
-                        <div className="flex gap-2">
-                          <select
-                            value={selectedCatalogProviderId}
-                            onChange={(e) => setSelectedCatalogProviderId(e.target.value)}
-                            className="flex-1 bg-slate-950 border border-slate-800 rounded-2xl px-3 py-2.5 text-xs text-white font-bold"
-                          >
-                            {providers.length === 0 ? (
-                              <option value="">No Provider Connected</option>
-                            ) : (
-                              providers.map(p => (
-                                <option key={p.id} value={p.id}>
-                                  {p.name} (+{p.profitMargin}% Markup)
-                                </option>
-                              ))
-                            )}
-                          </select>
-                          <button
-                            type="button"
-                            disabled={loadingRemoteCatalog || providers.length === 0}
-                            onClick={() => handleLoadRemoteCatalogForBrowser()}
-                            className="py-2.5 px-4 rounded-2xl bg-indigo-500 hover:bg-indigo-400 text-white font-extrabold text-xs flex items-center gap-1.5 shrink-0 active:scale-95"
-                          >
-                            <RefreshCw className={`w-3.5 h-3.5 ${loadingRemoteCatalog ? 'animate-spin' : ''}`} />
-                            <span>{loadingRemoteCatalog ? 'Loading...' : 'Load Catalog'}</span>
-                          </button>
-                        </div>
-
-                        {remoteCatalogServices.length > 0 && (
-                          <>
-                            {/* Filter by Remote Category & Search */}
-                            <div className="space-y-2">
-                              <select
-                                value={selectedRemoteCategory}
-                                onChange={(e) => setSelectedRemoteCategory(e.target.value)}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-2.5 text-xs text-amber-300 font-bold"
-                              >
-                                <option value="All">
-                                  All Remote Categories ({remoteCategories.length} categories · {remoteCatalogServices.length} services)
-                                </option>
-                                {remoteCategories.map(cat => (
-                                  <option key={cat} value={cat}>
-                                    {cat}
-                                  </option>
-                                ))}
-                              </select>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                <input
-                                  type="text"
-                                  value={remoteSearchQuery}
-                                  onChange={(e) => setRemoteSearchQuery(e.target.value)}
-                                  placeholder="Search remote service name or ID..."
-                                  className="bg-slate-950 border border-slate-800 rounded-2xl p-2.5 text-xs text-white"
-                                />
-                                <input
-                                  type="text"
-                                  value={customLocalCategoryName}
-                                  onChange={(e) => setCustomLocalCategoryName(e.target.value)}
-                                  placeholder="Custom Local Category Name (Optional)"
-                                  className="bg-slate-950 border border-slate-800 rounded-2xl p-2.5 text-xs text-sky-300"
-                                />
-                              </div>
-                            </div>
-
-                            {/* Selection Controls */}
-                            <div className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-950 border border-slate-800">
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const allFilteredIds = filteredRemoteCatalog.map(s => s.service);
-                                    setSelectedRemoteServiceIds(allFilteredIds);
-                                  }}
-                                  className="py-1 px-2.5 rounded-lg bg-slate-800 text-sky-300 font-bold text-[11px]"
-                                >
-                                  Select All ({filteredRemoteCatalog.length})
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedRemoteServiceIds([])}
-                                  className="py-1 px-2.5 rounded-lg bg-slate-900 text-slate-400 font-bold text-[11px]"
-                                >
-                                  Clear
-                                </button>
-                              </div>
-                              <span className="font-mono font-extrabold text-emerald-400 text-[11px]">
-                                {selectedRemoteServiceIds.length} Selected
-                              </span>
-                            </div>
-
-                            {/* Import Selected CTA */}
-                            <button
-                              type="button"
-                              disabled={importingSelected || selectedRemoteServiceIds.length === 0}
-                              onClick={handleImportSelectedRemoteServices}
-                              className="w-full py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 font-black text-xs flex items-center justify-center gap-2 active:scale-95"
-                            >
-                              <Plus className="w-4 h-4 stroke-[2.5]" />
-                              <span>
-                                {importingSelected
-                                  ? 'Importing Selected Services to Cloud...'
-                                  : `Import ${selectedRemoteServiceIds.length} Selected Services to Catalog`}
-                              </span>
-                            </button>
-
-                            {/* Remote Services Scrollable List */}
-                            <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-                              {filteredRemoteCatalog.slice(0, 150).map(item => {
-                                const isChecked = selectedRemoteServiceIds.includes(item.service);
-                                return (
-                                  <div
-                                    key={item.service}
-                                    onClick={() => {
-                                      setSelectedRemoteServiceIds(prev =>
-                                        prev.includes(item.service)
-                                          ? prev.filter(id => id !== item.service)
-                                          : [...prev, item.service]
-                                      );
-                                    }}
-                                    className={`p-3 rounded-2xl border cursor-pointer transition-all flex items-start gap-2.5 ${
-                                      isChecked
-                                        ? 'bg-indigo-500/15 border-indigo-400'
-                                        : 'bg-slate-950 border-slate-800/90'
-                                    }`}
-                                  >
-                                    <div className="pt-0.5 text-indigo-400 shrink-0">
-                                      {isChecked ? (
-                                        <CheckSquare className="w-4 h-4" />
-                                      ) : (
-                                        <Square className="w-4 h-4 text-slate-600" />
-                                      )}
-                                    </div>
-                                    <div className="min-w-0 flex-1 space-y-1">
-                                      <div className="flex items-center justify-between gap-2">
-                                        <span className="font-mono font-bold text-sky-400">
-                                          #{item.service} · {item.category}
-                                        </span>
-                                        <span className="font-mono font-black text-emerald-400 shrink-0">
-                                          ৳{item.convertedRateBdt}/1K
-                                        </span>
-                                      </div>
-                                      <p className="text-slate-100 font-semibold leading-snug">{item.name}</p>
-                                      <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
-                                        <span>
-                                          Provider Cost: {item.rawRate} · Min: {item.min} · Max: {item.max}
-                                        </span>
-                                        {item.refill && <span className="text-emerald-300">Refill✓</span>}
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-
-                    {/* -------------------------------------------------------
-                        API SUB-TAB 3: API ORDER ROUTER & REFILL DISPATCHER
-                       ------------------------------------------------------- */}
-                    {apiSubTab === 'router' && (
-                      <div className="space-y-3.5 text-xs">
-                        {/* Batch Sync Card */}
-                        <div className="p-4 rounded-3xl bg-[#0B1120] border border-slate-800 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h4 className="font-extrabold text-white text-sm flex items-center gap-1.5">
-                                <Zap className="w-4 h-4 text-amber-400" />
-                                <span>API Order Router & Multi-Status Sync</span>
-                              </h4>
-                              <p className="text-[11px] text-slate-400">
-                                Batch sync up to 100 active orders per provider or manually re-dispatch pending orders.
-                              </p>
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={handleSyncAllOrders}
-                            disabled={syncingOrders}
-                            className="w-full py-3 rounded-2xl bg-amber-500 text-slate-950 font-black flex items-center justify-center gap-2 active:scale-95"
-                          >
-                            <RefreshCw className={`w-4 h-4 ${syncingOrders ? 'animate-spin' : ''}`} />
-                            <span>
-                              {syncingOrders
-                                ? 'Batch Syncing with Upstream Providers...'
-                                : `Batch Sync All Active API Orders (${apiRoutedOrders.length})`}
-                            </span>
-                          </button>
-                        </div>
-
-                        {/* API Orders Queue */}
-                        <div className="space-y-2.5">
-                          <h5 className="text-[11px] font-extrabold uppercase text-slate-400 px-1">
-                            API-Routed Orders ({apiRoutedOrders.length})
-                          </h5>
-                          {apiRoutedOrders.length === 0 ? (
-                            <div className="p-6 text-center bg-[#0B1120] border border-slate-800 rounded-3xl text-slate-400">
-                              No API-linked orders found yet.
-                            </div>
-                          ) : (
-                            apiRoutedOrders.slice(0, 30).map(ord => (
-                              <div
-                                key={ord.id}
-                                className="p-3.5 rounded-3xl bg-[#0B1120] border border-slate-800 space-y-2.5"
-                              >
-                                <div className="flex items-center justify-between">
-                                  <span className="font-mono font-black text-white">#{ord.id}</span>
-                                  {ord.providerOrderId ? (
-                                    <span className="font-mono text-[11px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg">
-                                      Upstream #{ord.providerOrderId} ({ord.status})
-                                    </span>
-                                  ) : (
-                                    <span className="font-mono text-[11px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-lg">
-                                      Not Dispatched Yet
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-slate-200 font-semibold truncate">{ord.serviceName}</p>
-                                {!ord.providerOrderId && (
-                                  <button
-                                    type="button"
-                                    disabled={dispatchingOrderId === ord.id}
-                                    onClick={() => handleManualOrderDispatch(ord)}
-                                    className="w-full py-2.5 rounded-2xl bg-indigo-500 text-white font-extrabold flex items-center justify-center gap-1.5 active:scale-95"
-                                  >
-                                    <Send className="w-3.5 h-3.5" />
-                                    <span>
-                                      {dispatchingOrderId === ord.id
-                                        ? 'Dispatching to Provider...'
-                                        : 'Dispatch to Upstream API Now'}
-                                    </span>
-                                  </button>
-                                )}
-                              </div>
-                            ))
-                          )}
-                        </div>
-
-                        {/* Upstream Refill Dispatcher */}
-                        <div className="space-y-2.5 pt-2">
-                          <h5 className="text-[11px] font-extrabold uppercase text-slate-400 px-1">
-                            Upstream API Refill Forwarding ({pendingRefills.length})
-                          </h5>
-                          {pendingRefills.map(r => (
-                            <div
-                              key={r.id}
-                              className="p-3.5 rounded-3xl bg-[#0B1120] border border-slate-800 flex items-center justify-between gap-2"
-                            >
-                              <div>
-                                <span className="font-mono font-bold text-white">#{r.id}</span>
-                                <span className="ml-2 font-mono text-sky-400">Order #{r.orderId}</span>
-                                <p className="text-[11px] text-slate-400 truncate">{r.serviceName}</p>
-                              </div>
-                              <button
-                                type="button"
-                                disabled={forwardingRefillId === r.id}
-                                onClick={() => handleForwardRefillToApi(r)}
-                                className="py-2 px-3 rounded-xl bg-emerald-500 text-slate-950 font-extrabold text-[11px] shrink-0 active:scale-95"
-                              >
-                                {forwardingRefillId === r.id ? 'Sending...' : 'Forward to API'}
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* -------------------------------------------------------
-                        API SUB-TAB 4: BULK PRICE & PROFIT ENGINE
-                       ------------------------------------------------------- */}
-                    {apiSubTab === 'pricing' && (
-                      <div className="p-4 rounded-3xl bg-[#0B1120] border border-slate-800 space-y-4 text-xs">
-                        <div>
-                          <h4 className="font-extrabold text-white text-sm flex items-center gap-1.5">
-                            <DollarSign className="w-4 h-4 text-emerald-400" />
-                            <span>Bulk API Profit Margin & Price Recalculator</span>
-                          </h4>
-                          <p className="text-[11px] text-slate-400">
-                            Update markup rules for any provider and atomically recalculate all linked service rates.
-                          </p>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2.5 p-3 rounded-2xl bg-slate-950 border border-slate-800 font-mono">
-                          <div>
-                            <span className="text-[10px] text-slate-400 block">API Order Revenue</span>
-                            <strong className="text-emerald-400 text-sm">{formatPrice(apiOrdersRevenue)}</strong>
-                          </div>
-                          <div>
-                            <span className="text-[10px] text-slate-400 block">API Linked Services</span>
-                            <strong className="text-amber-400 text-sm">{apiLinkedServices.length} Services</strong>
-                          </div>
-                        </div>
-
-                        <div className="space-y-3">
-                          <div>
-                            <label className="text-[10px] text-slate-400 font-bold block mb-1">
-                              Select Target API Provider
-                            </label>
-                            <select
-                              value={bulkRuleProviderId}
-                              onChange={(e) => {
-                                setBulkRuleProviderId(e.target.value);
-                                const p = providers.find(prv => prv.id === e.target.value);
-                                if (p) {
-                                  setBulkMarginPercent(p.profitMargin);
-                                  setBulkFixedMarkup(p.fixedMarkup || 0);
-                                  setBulkExchangeRate(p.customExchangeRate || siteSettings.usdToBdtRate || 122);
-                                  setBulkRounding(p.priceRounding || 'none');
-                                }
-                              }}
-                              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-bold"
-                            >
-                              {providers.map(p => (
-                                <option key={p.id} value={p.id}>
-                                  {p.name} ({services.filter(s => s.providerId === p.id).length} services)
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2.5">
-                            <div>
-                              <label className="text-[10px] text-slate-400 font-bold block mb-1">
-                                New Profit Margin (%)
-                              </label>
-                              <input
-                                type="number"
-                                value={bulkMarginPercent}
-                                onChange={(e) => setBulkMarginPercent(parseFloat(e.target.value) || 0)}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-[10px] text-slate-400 font-bold block mb-1">
-                                Fixed BDT Adder (+৳/1K)
-                              </label>
-                              <input
-                                type="number"
-                                value={bulkFixedMarkup}
-                                onChange={(e) => setBulkFixedMarkup(parseFloat(e.target.value) || 0)}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-[10px] text-slate-400 font-bold block mb-1">
-                                USD to BDT Rate
-                              </label>
-                              <input
-                                type="number"
-                                value={bulkExchangeRate}
-                                onChange={(e) => setBulkExchangeRate(parseFloat(e.target.value) || 122)}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-[10px] text-slate-400 font-bold block mb-1">
-                                Price Rounding
-                              </label>
-                              <select
-                                value={bulkRounding}
-                                onChange={(e) => setBulkRounding(e.target.value as any)}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-bold"
-                              >
-                                <option value="none">Exact Decimal</option>
-                                <option value="nearest_int">Nearest ৳1</option>
-                                <option value="ceil">Round Up ৳</option>
-                              </select>
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            disabled={applyingBulkPrice || providers.length === 0}
-                            onClick={handleApplyBulkPricingRule}
-                            className="w-full py-3.5 rounded-2xl bg-emerald-500 text-slate-950 font-black flex items-center justify-center gap-2 active:scale-95"
-                          >
-                            <RefreshCw className={`w-4 h-4 ${applyingBulkPrice ? 'animate-spin' : ''}`} />
-                            <span>
-                              {applyingBulkPrice
-                                ? 'Recalculating Catalog Prices...'
-                                : 'Apply Rule & Recalculate All Linked Services'}
-                            </span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* -------------------------------------------------------
-                        API SUB-TAB 5: LIVE TRAFFIC LOGS & RAW DEBUGGER
-                       ------------------------------------------------------- */}
-                    {apiSubTab === 'console' && (
-                      <div className="space-y-3.5 text-xs">
-                        {/* Raw Provider API Tester */}
-                        <div className="p-4 rounded-3xl bg-[#0B1120] border border-slate-800 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-extrabold text-white text-sm flex items-center gap-1.5">
-                              <Cpu className="w-4 h-4 text-sky-400" />
-                              <span>Raw Upstream Provider API Debugger</span>
-                            </h4>
-                            <span className="text-[10px] font-mono text-sky-400">Server Proxy</span>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2">
-                            <select
-                              value={rawTestProviderId}
-                              onChange={(e) => setRawTestProviderId(e.target.value)}
-                              className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-bold"
-                            >
-                              {providers.map(p => (
-                                <option key={p.id} value={p.id}>
-                                  {p.name}
-                                </option>
-                              ))}
-                            </select>
-
-                            <select
-                              value={rawTestAction}
-                              onChange={(e) => setRawTestAction(e.target.value)}
-                              className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-amber-300 font-mono font-bold"
-                            >
-                              <option value="balance">action=balance</option>
-                              <option value="services">action=services</option>
-                              <option value="status">action=status</option>
-                              <option value="refill">action=refill</option>
-                              <option value="cancel">action=cancel</option>
-                            </select>
-                          </div>
-
-                          {['status', 'refill', 'cancel'].includes(rawTestAction) && (
-                            <input
-                              type="text"
-                              value={rawTestOrderId}
-                              onChange={(e) => setRawTestOrderId(e.target.value)}
-                              placeholder="Upstream Provider Order ID (e.g. 948201)"
-                              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
-                            />
-                          )}
-
-                          <button
-                            type="button"
-                            disabled={runningRawTest || providers.length === 0}
-                            onClick={handleExecuteRawProviderTest}
-                            className="w-full py-3 rounded-2xl bg-sky-500 text-slate-950 font-black flex items-center justify-center gap-1.5 active:scale-95"
-                          >
-                            <Play className="w-3.5 h-3.5 fill-slate-950" />
-                            <span>{runningRawTest ? 'Executing Raw Call...' : 'Execute Raw Upstream Request'}</span>
-                          </button>
-
-                          {rawTestOutput && (
-                            <pre className="p-3 rounded-2xl bg-slate-950 border border-slate-800 font-mono text-[11px] text-emerald-400 overflow-x-auto max-h-56">
-                              {rawTestOutput}
-                            </pre>
-                          )}
-                        </div>
-
-                        {/* Live Server API Traffic Logs */}
-                        <div className="p-4 rounded-3xl bg-[#0B1120] border border-slate-800 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h4 className="font-extrabold text-white text-sm flex items-center gap-1.5">
-                                <Terminal className="w-4 h-4 text-emerald-400" />
-                                <span>Live Server API Traffic Stream</span>
-                              </h4>
-                              <p className="text-[10px] font-mono text-slate-400">
-                                Total: {apiLogsData.totalCalls} · Success: {apiLogsData.successRate}% · Avg: {apiLogsData.avgLatencyMs}ms
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={refreshApiTrafficLogs}
-                                className="p-2 rounded-xl bg-slate-900 text-slate-300"
-                              >
-                                <RefreshCw className={`w-3.5 h-3.5 ${loadingLogs ? 'animate-spin' : ''}`} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  await clearServerApiTrafficLogs();
-                                  refreshApiTrafficLogs();
-                                }}
-                                className="p-2 rounded-xl bg-rose-500/15 text-rose-400"
+                                className="p-1.5 rounded-lg border hover:border-rose-500 text-slate-500 hover:text-rose-600 transition-colors"
+                                title="Delete Service"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {filteredServices.length === 0 && (
+                        <tr>
+                          <td colSpan={8} className="py-12 text-center text-slate-400">
+                            {language === 'bn' ? 'কোনো সার্ভিস পাওয়া যায়নি' : 'No services found in this category'}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ===================================================================
+              SECTION 7: API PROVIDERS STUDIO (5 SUB-MODULES)
+             =================================================================== */}
+          {activeSection === 'providers' && (
+            <div className="space-y-4 animate-in fade-in-0 duration-200">
+              {/* 5 Sub-Tabs Navigation */}
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
+                {[
+                  { id: 'providers' as AdminApiSubTab, label: language === 'bn' ? 'কানেক্টেড প্রোভাইডার' : 'Connected Providers', icon: Server },
+                  { id: 'importer' as AdminApiSubTab, label: language === 'bn' ? 'রিমোট ক্যাটালগ ইমপোর্টার' : 'Catalog Importer', icon: Database },
+                  { id: 'router' as AdminApiSubTab, label: language === 'bn' ? 'স্মার্ট অর্ডার রাউটার' : 'Order Router', icon: Send },
+                  { id: 'pricing' as AdminApiSubTab, label: language === 'bn' ? 'বাল্ক প্রাইস ক্যালকুলেটর' : 'Bulk Pricing Rules', icon: DollarSign },
+                  { id: 'console' as AdminApiSubTab, label: language === 'bn' ? 'API কনসোল ও ট্রাফিক' : 'Raw API Terminal', icon: Terminal },
+                ].map(tab => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setApiSubTab(tab.id)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-2 transition-all ${
+                        apiSubTab === tab.id
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : `${surfaceSubtle} hover:border-indigo-500`
+                      }`}
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* SUB-TAB 1: PROVIDERS LIST */}
+              {apiSubTab === 'providers' && (
+                <div className="space-y-4">
+                  {/* Zero-Touch Automation Info & Instant Reconcile Bar */}
+                  <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${surfaceCard}`}>
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                        <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                          {language === 'bn'
+                            ? 'জিরো-টাচ অটোমেশন সক্রিয় (শুধুমাত্র অ্যাক্টিভ প্রোভাইডারের সচল সার্ভিস থাকবে)'
+                            : 'Zero-Touch Automation Active (Only Active Provider Services Retained)'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {language === 'bn'
+                          ? 'প্রোভাইডার যুক্ত করলে স্বয়ংক্রিয়ভাবে সব অ্যাক্টিভ সার্ভিস ইমপোর্ট হয় এবং প্রোভাইডার বন্ধ বা ডিলিট করলে তার সব সার্ভিস নিজে থেকেই মুছে যায়।'
+                          : 'Connecting a provider automatically imports all active services; disabling or deleting a provider automatically purges its services.'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleAutoCleanAndSyncAll}
+                        disabled={autoCleaningCatalog}
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs disabled:opacity-60"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${autoCleaningCatalog ? 'animate-spin' : ''}`} />
+                        <span>{autoCleaningCatalog ? 'Syncing...' : language === 'bn' ? 'সব অটো-সিঙ্ক ও ক্লিন' : 'Auto-Sync & Clean'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingProvider(true)}
+                        className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>{language === 'bn' ? 'নতুন প্রোভাইডার' : 'Connect Provider'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    {providers.map(prv => {
+                      const linkedCount = services.filter(s => s.providerId === prv.id).length;
+                      const isPrvActive = prv.status === 'active';
+                      return (
+                        <div key={prv.id} className={`p-4.5 rounded-2xl border space-y-3 ${surfaceCard}`}>
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <h4 className="font-bold text-sm tracking-tight text-slate-900 dark:text-slate-100">{prv.name}</h4>
+                              <p className="text-[11px] font-mono text-slate-400 truncate max-w-[200px]" title={prv.apiUrl}>
+                                {prv.apiUrl}
+                              </p>
                             </div>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleProviderStatus(prv)}
+                              disabled={syncingProviderId === prv.id}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors ${
+                                isPrvActive
+                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300'
+                                  : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                              }`}
+                              title={isPrvActive ? 'Click to deactivate & hide services' : 'Click to activate & auto-sync services'}
+                            >
+                              <span className={`w-2 h-2 rounded-full ${isPrvActive ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                              <span>{isPrvActive ? 'Active' : 'Inactive'}</span>
+                            </button>
                           </div>
 
-                          <div className="space-y-2 max-h-80 overflow-y-auto">
-                            {apiLogsData.logs.length === 0 ? (
-                              <div className="p-6 text-center bg-slate-950 border border-slate-800 rounded-2xl text-slate-500">
-                                No API calls logged in this session yet.
+                          <div className={`p-3 rounded-xl border flex items-center justify-between ${surfaceSubtle}`}>
+                            <div>
+                              <span className="text-[10px] text-slate-400 uppercase font-mono block">Live Balance</span>
+                              <span className="text-base font-black font-mono text-emerald-600 dark:text-emerald-400">
+                                ${prv.balance} {prv.currency || 'USD'}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handlePingAndCheckProvider(prv)}
+                              disabled={checkingBalanceId === prv.id}
+                              className="px-2 py-1 rounded bg-slate-200 dark:bg-slate-800 text-[10px] font-mono font-bold hover:bg-slate-300 transition-colors"
+                            >
+                              {checkingBalanceId === prv.id ? 'Pinging...' : 'Check Balance'}
+                            </button>
+                          </div>
+
+                          <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
+                            <span>Active Services: <strong className="text-slate-700 dark:text-slate-300">{linkedCount}</strong></span>
+                            <span>Margin: <strong className="text-indigo-600 dark:text-indigo-400">+{prv.profitMargin}%</strong></span>
+                          </div>
+
+                          <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSyncProviderCatalog(prv)}
+                              disabled={syncingProviderId === prv.id}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 text-xs font-semibold flex items-center gap-1"
+                            >
+                              <RefreshCw className={`w-3 h-3 ${syncingProviderId === prv.id ? 'animate-spin' : ''}`} />
+                              <span>{syncingProviderId === prv.id ? 'Syncing...' : 'Sync Active Catalog'}</span>
+                            </button>
+
+                            {confirmDeleteProviderId === prv.id ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteProviderWithServices(prv, true)}
+                                  disabled={syncingProviderId === prv.id}
+                                  className="px-2 py-1 rounded bg-rose-600 text-white text-[10px] font-bold hover:bg-rose-700"
+                                >
+                                  {language === 'bn' ? 'নিশ্চিত ডিলিট' : 'Confirm Delete'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteProviderId(null)}
+                                  className="px-1.5 py-1 rounded bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold"
+                                >
+                                  ✕
+                                </button>
                               </div>
                             ) : (
-                              apiLogsData.logs.map(log => (
-                                <div
-                                  key={log.id}
-                                  className="p-2.5 rounded-2xl bg-slate-950 border border-slate-800/90 space-y-1 font-mono text-[11px]"
-                                >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-1.5">
-                                      <span
-                                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-                                          log.direction === 'upstream'
-                                            ? 'bg-indigo-500/20 text-indigo-300'
-                                            : 'bg-sky-500/20 text-sky-300'
-                                        }`}
-                                      >
-                                        {log.direction === 'upstream' ? 'OUT' : 'IN v2'}
-                                      </span>
-                                      <span className="font-bold text-white">{log.action}</span>
-                                      <span className="text-slate-400 truncate max-w-[110px]">{log.endpoint}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 shrink-0">
-                                      <span
-                                        className={
-                                          log.status === 'success' ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'
-                                        }
-                                      >
-                                        {log.httpCode}
-                                      </span>
-                                      <span className="text-slate-500">{log.latencyMs}ms</span>
-                                    </div>
-                                  </div>
-                                  <p className="text-[10px] text-slate-300 truncate">{log.summary}</p>
-                                </div>
-                              ))
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteProviderId(prv.id)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 transition-colors"
+                                title="Delete Provider & All Its Services"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             )}
                           </div>
                         </div>
+                      );
+                    })}
+
+                    {providers.length === 0 && (
+                      <div className="col-span-full py-12 text-center text-slate-400">
+                        {language === 'bn' ? 'কোনো SMM API প্রোভাইডার সংযুক্ত নেই। উপরের বাটনে ক্লিক করে যুক্ত করুন।' : 'No API providers connected. Click Connect Provider above.'}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-            )}
-
-            {/* =========================================================
-                SECTION 5: ADMIN CONTROL HUB (MORE MENU)
-               ========================================================= */}
-            {activeSection === 'hub' && (
-              <div className="space-y-3">
-                <div className="p-4 rounded-3xl bg-[#0B1120] border border-slate-800 space-y-2">
-                  {[
-                    {
-                      id: 'finance',
-                      title: language === 'bn' ? 'প্রফিট ও ফাইন্যান্সিয়াল ইন্টেলিজেন্স' : 'Financial & Profit Intelligence',
-                      sub: `Net Profit: ${formatPrice(totalEstimatedNetProfit)} · P&L, API Burn, Margin Audit & Simulator`,
-                      icon: TrendingUp,
-                      color: 'text-[#22C55E] bg-[#22C55E]/15'
-                    },
-                    {
-                      id: 'blogs',
-                      title: language === 'bn' ? '১০০% SEO ব্লগ ও Gemini AI রাইটার' : '100% SEO Blog & Gemini AI Writer',
-                      sub: `${blogs.length} published SEO articles · Auto Sitemap.xml & FAQ Schema`,
-                      icon: BookOpen,
-                      color: 'text-fuchsia-400 bg-fuchsia-500/15'
-                    },
-                    {
-                      id: 'services',
-                      title: language === 'bn' ? 'সার্ভিস ক্যাটালগ ম্যানেজার' : 'Local Services Catalog',
-                      sub: `${services.length} active services in database`,
-                      icon: Layers,
-                      color: 'text-amber-400 bg-amber-500/15'
-                    },
-                    {
-                      id: 'users',
-                      title: language === 'bn' ? 'ইউজার এবং ব্যালেন্স কন্ট্রোল' : 'Users & Balance Control',
-                      sub: `${users.length} registered accounts`,
-                      icon: Users,
-                      color: 'text-purple-400 bg-purple-500/15'
-                    },
-                    {
-                      id: 'tickets',
-                      title: language === 'bn' ? 'কাস্টমার সাপোর্ট টিকেট' : 'Customer Support Tickets',
-                      sub: `${openTickets.length} open tickets awaiting reply`,
-                      icon: MessageSquare,
-                      color: 'text-rose-400 bg-rose-500/15'
-                    },
-                    {
-                      id: 'coupons',
-                      title: language === 'bn' ? 'প্রোমো কোড ও গিফট ভাউচার' : 'Promo Codes & Gift Vouchers',
-                      sub: `${coupons.length} active promo codes`,
-                      icon: Gift,
-                      color: 'text-pink-400 bg-pink-500/15'
-                    },
-                    {
-                      id: 'announcements',
-                      title: language === 'bn' ? 'অ্যাপ নোটিশ বোর্ড' : 'Live App Announcements',
-                      sub: `${announcements.length} published notices`,
-                      icon: Megaphone,
-                      color: 'text-sky-400 bg-sky-500/15'
-                    },
-                    {
-                      id: 'settings',
-                      title: language === 'bn' ? 'পেমেন্ট নাম্বার ও সাইট সেটিংস' : 'Payment Gateways & Site Settings',
-                      sub: 'bKash, Nagad, Rocket, USDT, USD Rate & Hotlines',
-                      icon: Settings,
-                      color: 'text-emerald-400 bg-emerald-500/15'
-                    },
-                  ].map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => navigateSection(item.id as AdminSection)}
-                        className="w-full p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800/90 flex items-center justify-between gap-3 text-left active:scale-98 transition-transform"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${item.color}`}>
-                            <Icon className="w-5 h-5" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-xs font-extrabold text-white truncate">{item.title}</p>
-                            <p className="text-[11px] text-slate-400 truncate mt-0.5">{item.sub}</p>
-                          </div>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-slate-500 shrink-0" />
-                      </button>
-                    );
-                  })}
                 </div>
+              )}
 
-                {onExitAdmin && (
-                  <button
-                    type="button"
-                    onClick={onExitAdmin}
-                    className="w-full p-4 rounded-3xl bg-rose-500/10 border border-rose-500/30 text-rose-300 font-extrabold text-xs flex items-center justify-center gap-2 active:scale-95"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    <span>{language === 'bn' ? 'অ্যাডমিন অ্যাপ থেকে বের হয়ে ইউজার প্যানেলে যান' : 'Exit Admin App & Return to User Panel'}</span>
-                  </button>
-                )}
-              </div>
-            )}
+              {/* SUB-TAB 2: REMOTE CATALOG IMPORTER */}
+              {apiSubTab === 'importer' && (
+                <div className="space-y-4">
+                  <div className={`p-4.5 rounded-2xl border ${surfaceCard} space-y-3`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wider">{language === 'bn' ? 'রিমোট API সার্ভিস ক্যাটালগ ব্রাউজার' : 'Remote API Catalog Browser'}</h4>
+                        <p className="text-xs text-slate-400">{language === 'bn' ? 'প্রোভাইডার সিলেক্ট করে লাইভ সার্ভিসসমূহ ব্রাউজ ও ১-ক্লিকে ইমপোর্ট করুন' : 'Select provider and selectively import upstream services'}</p>
+                      </div>
 
-            {/* =========================================================
-                HUB SUB-SCREEN: USERS MANAGEMENT
-               ========================================================= */}
-            {activeSection === 'users' && (
-              <div className="space-y-3">
-                <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={userSearch}
-                    onChange={(e) => setUserSearch(e.target.value)}
-                    placeholder="Search user by email or UID..."
-                    className="w-full bg-[#0B1120] border border-slate-800 rounded-2xl pl-10 pr-4 py-3 text-xs text-white placeholder-slate-500 focus:outline-none"
-                  />
-                </div>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={selectedCatalogProviderId}
+                          onChange={e => {
+                            setSelectedCatalogProviderId(e.target.value);
+                            handleLoadRemoteCatalogForBrowser(e.target.value);
+                          }}
+                          className={`h-9 px-3 rounded-xl border text-xs font-semibold focus:outline-none ${
+                            darkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-slate-50 border-slate-200 text-slate-900'
+                          }`}
+                        >
+                          {providers.map(p => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => handleLoadRemoteCatalogForBrowser()}
+                          disabled={loadingRemoteCatalog}
+                          className="h-9 px-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs shrink-0"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${loadingRemoteCatalog ? 'animate-spin' : ''}`} />
+                          <span>{loadingRemoteCatalog ? 'Loading...' : 'Fetch Catalog'}</span>
+                        </button>
+                      </div>
+                    </div>
 
-                <div className="space-y-2.5">
-                  {users
-                    .filter(u => !userSearch || u.email.toLowerCase().includes(userSearch.toLowerCase()) || u.uid.includes(userSearch))
-                    .map(u => (
-                      <div
-                        key={u.uid}
-                        className="p-4 rounded-3xl bg-[#0B1120] border border-slate-800 space-y-2.5 text-xs"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="font-extrabold text-white truncate">{u.displayName}</p>
-                            <p className="text-[11px] text-slate-400 truncate">{u.email}</p>
-                          </div>
-                          <span className="font-mono font-black text-emerald-400 text-sm shrink-0">
-                            ৳{u.balance.toLocaleString()}
+                    {remoteCatalogServices.length > 0 && (
+                      <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                            {selectedRemoteServiceIds.length} {language === 'bn' ? 'টি নির্বাচিত' : 'selected'}
                           </span>
-                        </div>
-
-                        <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono pt-1 border-t border-slate-800/80">
-                          <span>Spent: ৳{(u.totalSpent || 0).toLocaleString()}</span>
-                          <span className="uppercase text-amber-400 font-bold">{u.role}</span>
-                        </div>
-
-                        {balanceAdjustUid === u.uid ? (
-                          <div className="flex items-center gap-2 pt-1">
-                            <input
-                              type="number"
-                              value={balanceAdjustAmount}
-                              onChange={(e) => setBalanceAdjustAmount(parseFloat(e.target.value) || 0)}
-                              className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleSaveUserBalance(u.uid)}
-                              className="py-2 px-4 bg-emerald-500 text-slate-950 font-extrabold rounded-xl text-xs"
-                            >
-                              Save
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setBalanceAdjustUid(null)}
-                              className="py-2 px-3 bg-slate-800 text-slate-400 rounded-xl text-xs"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ) : (
                           <button
                             type="button"
-                            onClick={() => {
-                              setBalanceAdjustUid(u.uid);
-                              setBalanceAdjustAmount(u.balance);
-                            }}
-                            className="w-full py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 font-bold text-xs active:scale-95"
+                            onClick={() => setSelectedRemoteServiceIds(remoteCatalogServices.map(s => s.service))}
+                            className="text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline"
                           >
-                            {language === 'bn' ? 'ব্যালেন্স পরিবর্তন করুন' : 'Edit User Balance'}
+                            {language === 'bn' ? 'সব সিলেক্ট করুন' : 'Select All'}
                           </button>
-                        )}
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-
-            {/* =========================================================
-                HUB SUB-SCREEN: SUPPORT TICKETS
-               ========================================================= */}
-            {activeSection === 'tickets' && (
-              <div className="space-y-3">
-                {tickets.length === 0 ? (
-                  <div className="p-8 text-center bg-[#0B1120] border border-slate-800 rounded-3xl text-xs text-slate-400">
-                    No support tickets found.
-                  </div>
-                ) : (
-                  tickets.map(t => (
-                    <div key={t.id} className="p-4 rounded-3xl bg-[#0B1120] border border-slate-800 space-y-3 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono font-bold text-white">#{t.id} · {t.department}</span>
-                        <span className={`font-extrabold uppercase text-[10px] ${
-                          t.status === 'open' ? 'text-amber-400' : 'text-emerald-400'
-                        }`}>
-                          {t.status}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="font-extrabold text-white">{t.subject}</p>
-                        <p className="text-[11px] text-slate-400">{t.userEmail}</p>
-                      </div>
-
-                      <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800 space-y-2 text-[11px] max-h-44 overflow-y-auto">
-                        {t.messages.map((m, idx) => (
-                          <div
-                            key={idx}
-                            className={`p-2 rounded-xl ${
-                              m.senderRole === 'admin'
-                                ? 'bg-amber-500/10 border border-amber-500/20 text-amber-200 ml-4'
-                                : 'bg-slate-900 text-slate-200 mr-4'
-                            }`}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedRemoteServiceIds([])}
+                            className="text-xs text-slate-400 hover:underline"
                           >
-                            <span className="font-bold block text-[10px] opacity-75">{m.senderName}</span>
-                            <p className="mt-0.5">{m.message}</p>
-                          </div>
-                        ))}
-                      </div>
+                            {language === 'bn' ? 'ক্লিয়ার' : 'Clear'}
+                          </button>
+                        </div>
 
-                      {selectedTicketId === t.id ? (
-                        <div className="flex gap-2">
+                        <div className="flex items-center gap-2">
                           <input
                             type="text"
-                            placeholder="Write official reply..."
-                            value={adminReplyText}
-                            onChange={(e) => setAdminReplyText(e.target.value)}
-                            className="flex-1 bg-slate-950 border border-slate-800 rounded-2xl px-3.5 py-2.5 text-xs text-white"
+                            value={customLocalCategoryName}
+                            onChange={e => setCustomLocalCategoryName(e.target.value)}
+                            placeholder={language === 'bn' ? 'কাস্টম ক্যাটাগরি নাম (ঐচ্ছিক)' : 'Override category name (optional)'}
+                            className={`h-8 px-2.5 rounded-lg border text-xs ${
+                              darkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-slate-50 border-slate-200 text-slate-900'
+                            }`}
                           />
                           <button
                             type="button"
-                            onClick={() => handleSendAdminReply(t)}
-                            className="px-4 bg-amber-500 text-slate-950 font-extrabold rounded-2xl text-xs flex items-center gap-1"
+                            onClick={handleImportSelectedRemoteServices}
+                            disabled={importingSelected || selectedRemoteServiceIds.length === 0}
+                            className="h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold disabled:opacity-50"
                           >
-                            <Send className="w-3.5 h-3.5" />
+                            {importingSelected ? 'Importing...' : 'Import Selected'}
                           </button>
                         </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedTicketId(t.id)}
-                          className="w-full py-2.5 rounded-2xl bg-slate-900 border border-slate-800 text-amber-400 font-bold text-xs"
-                        >
-                          Reply to Customer
-                        </button>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-
-            {/* =========================================================
-                HUB SUB-SCREEN: PROMO CODES
-               ========================================================= */}
-            {activeSection === 'coupons' && (
-              <div className="space-y-3.5">
-                <form onSubmit={handleCreateCoupon} className="p-4 rounded-3xl bg-[#0B1120] border border-slate-800 space-y-3 text-xs">
-                  <h4 className="font-extrabold text-white">Create Gift Promo Code</h4>
-                  <input
-                    type="text"
-                    required
-                    placeholder="PROMO CODE (e.g. BONUS50)"
-                    value={newCouponCode}
-                    onChange={(e) => setNewCouponCode(e.target.value.toUpperCase())}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono uppercase"
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">Reward Amount (৳)</label>
-                      <input
-                        type="number"
-                        required
-                        min={5}
-                        value={newCouponReward}
-                        onChange={(e) => setNewCouponReward(parseInt(e.target.value) || 0)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-2.5 text-white font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">Max Uses Limit</label>
-                      <input
-                        type="number"
-                        required
-                        min={1}
-                        value={newCouponMaxUses}
-                        onChange={(e) => setNewCouponMaxUses(parseInt(e.target.value) || 1)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-2.5 text-white font-mono"
-                      />
-                    </div>
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full py-3 rounded-2xl bg-amber-500 text-slate-950 font-extrabold"
-                  >
-                    + Save Promo Code
-                  </button>
-                </form>
-
-                <div className="space-y-2">
-                  {coupons.map(cp => (
-                    <div
-                      key={cp.id}
-                      className="p-4 rounded-3xl bg-[#0B1120] border border-slate-800 flex items-center justify-between text-xs"
-                    >
-                      <div>
-                        <span className="font-mono font-black text-emerald-400 text-sm">{cp.code}</span>
-                        <span className="ml-2 font-bold text-white">৳{cp.rewardAmount} Bonus</span>
-                        <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                          Used: {cp.usedCount} / {cp.maxUses}
-                        </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => removeCoupon(cp.id)}
-                        className="p-2.5 rounded-2xl bg-rose-500/15 text-rose-400"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                    )}
+                  </div>
+
+                  {/* Remote Catalog Table */}
+                  {remoteCatalogServices.length > 0 && (
+                    <div className={`rounded-2xl border overflow-hidden ${surfaceCard}`}>
+                      <div className="overflow-x-auto max-h-[500px]">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead className="sticky top-0 z-10">
+                            <tr className={`border-b font-mono font-bold uppercase text-[11px] ${tableHeader}`}>
+                              <th className="py-2.5 px-3 w-8">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedRemoteServiceIds.length === remoteCatalogServices.length}
+                                  onChange={e => {
+                                    if (e.target.checked) setSelectedRemoteServiceIds(remoteCatalogServices.map(s => s.service));
+                                    else setSelectedRemoteServiceIds([]);
+                                  }}
+                                />
+                              </th>
+                              <th className="py-2.5 px-3">Service ID</th>
+                              <th className="py-2.5 px-3">Service Name</th>
+                              <th className="py-2.5 px-3">Category</th>
+                              <th className="py-2.5 px-3 text-right">Provider Rate</th>
+                              <th className="py-2.5 px-3 text-right">Selling Rate (BDT)</th>
+                              <th className="py-2.5 px-3 text-right">Min / Max</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                            {remoteCatalogServices.map(item => {
+                              const isChecked = selectedRemoteServiceIds.includes(item.service);
+                              return (
+                                <tr key={item.service} className={`transition-colors ${isChecked ? 'bg-indigo-50/40 dark:bg-indigo-950/20' : tableRowHover}`}>
+                                  <td className="py-2 px-3">
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={e => {
+                                        if (e.target.checked) setSelectedRemoteServiceIds(prev => [...prev, item.service]);
+                                        else setSelectedRemoteServiceIds(prev => prev.filter(id => id !== item.service));
+                                      }}
+                                    />
+                                  </td>
+                                  <td className="py-2 px-3 font-mono font-bold text-slate-500">#{item.service}</td>
+                                  <td className="py-2 px-3 font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[260px]">{item.name}</td>
+                                  <td className="py-2 px-3 text-slate-500">{item.category}</td>
+                                  <td className="py-2 px-3 text-right font-mono">${item.rawRate}</td>
+                                  <td className="py-2 px-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                    ৳{item.convertedRateBdt}
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-mono text-slate-400">{item.min} - {item.max}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  ))}
+                  )}
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* =========================================================
-                HUB SUB-SCREEN: ANNOUNCEMENTS
-               ========================================================= */}
-            {activeSection === 'announcements' && (
-              <div className="space-y-3.5">
-                <form onSubmit={handleCreateAnnouncement} className="p-4 rounded-3xl bg-[#0B1120] border border-slate-800 space-y-3 text-xs">
-                  <h4 className="font-extrabold text-white">Publish Live Notice</h4>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Notice Headline"
-                    value={newAnnTitle}
-                    onChange={(e) => setNewAnnTitle(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white"
-                  />
-                  <select
-                    value={newAnnType}
-                    onChange={(e) => setNewAnnType(e.target.value as any)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white"
-                  >
-                    <option value="info">Info Notice</option>
-                    <option value="promo">Special Offer / Promo</option>
-                    <option value="warning">Important Warning</option>
-                    <option value="maintenance">Server Maintenance</option>
-                  </select>
-                  <textarea
-                    rows={3}
-                    required
-                    placeholder="Write notice details..."
-                    value={newAnnContent}
-                    onChange={(e) => setNewAnnContent(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white"
-                  />
-                  <button
-                    type="submit"
-                    className="w-full py-3 rounded-2xl bg-amber-500 text-slate-950 font-extrabold"
-                  >
-                    Publish Notice
-                  </button>
-                </form>
+              {/* SUB-TAB 3: ORDER ROUTER */}
+              {apiSubTab === 'router' && (
+                <div className="space-y-4">
+                  <div className={`p-4.5 rounded-2xl border ${surfaceCard}`}>
+                    <h4 className="text-xs font-bold uppercase tracking-wider mb-2">Orders Awaiting API Dispatch</h4>
+                    <p className="text-xs text-slate-400 mb-4">
+                      {orders.filter(o => !o.providerOrderId && o.status !== 'canceled').length} orders pending upstream dispatch
+                    </p>
 
-                <div className="space-y-2">
-                  {announcements.map(ann => (
-                    <div
-                      key={ann.id}
-                      className="p-4 rounded-3xl bg-[#0B1120] border border-slate-800 flex items-center justify-between gap-3 text-xs"
-                    >
-                      <div>
-                        <p className="font-extrabold text-white">{ann.title}</p>
-                        <p className="text-slate-400 mt-1 leading-relaxed">{ann.content}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeAnnouncement(ann.id)}
-                        className="p-2.5 rounded-2xl bg-rose-500/15 text-rose-400 shrink-0"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                    <div className="divide-y divide-slate-200 dark:divide-slate-800 text-xs">
+                      {orders.filter(o => !o.providerOrderId && o.status !== 'canceled').slice(0, 10).map(o => {
+                        const srv = services.find(s => s.id === o.serviceId);
+                        const prv = providers.find(p => p.id === srv?.providerId);
+                        return (
+                          <div key={o.id} className="py-3 flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <span className="font-mono font-bold">#{o.id}</span> · <span className="font-semibold">{o.serviceName}</span>
+                              <p className="text-[11px] text-slate-400 font-mono mt-0.5">{o.link} · Qty: {o.quantity}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {prv ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleManualOrderDispatch(o)}
+                                  disabled={dispatchingOrderId === o.id}
+                                  className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+                                >
+                                  {dispatchingOrderId === o.id ? 'Dispatching...' : `Push to ${prv.name}`}
+                                </button>
+                              ) : (
+                                <span className="text-slate-400 text-xs">No Provider Linked</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* =========================================================
-                HUB SUB-SCREEN: GLOBAL SITE & ZINIPAY PAYMENT SETTINGS
-               ========================================================= */}
-            {activeSection === 'settings' && (
-              <form onSubmit={handleSaveGlobalSettings} className="space-y-4 text-xs">
-                {/* 1. ZINIPAY AUTOMATED PAYMENT GATEWAY SUITE */}
-                <div className="p-4 sm:p-5 rounded-3xl bg-[#0B1120] border border-[#22D3EE]/35 space-y-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-2xl bg-[#22D3EE]/15 border border-[#22D3EE]/30 flex items-center justify-center text-[#22D3EE] shrink-0">
-                        <Zap className="w-5 h-5" />
-                      </div>
+              {/* SUB-TAB 4: BULK PRICING CALCULATOR */}
+              {apiSubTab === 'pricing' && (
+                <div className="space-y-4">
+                  <div className={`p-5 rounded-2xl border ${surfaceCard} space-y-4 max-w-2xl`}>
+                    <h4 className="text-xs font-bold uppercase tracking-wider">Bulk Pricing Optimizer</h4>
+                    <p className="text-xs text-slate-400">
+                      Update profit margins and automatically recalculate BDT selling rates across all linked services for a provider.
+                    </p>
+
+                    <div className="space-y-3 text-xs">
                       <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="text-sm font-extrabold text-white">
-                            ZiniPay Automated Payment Gateway
-                          </h3>
-                          <span className="px-2 py-0.5 rounded bg-[#22D3EE]/15 text-[#22D3EE] font-mono text-[10px] font-bold uppercase">
-                            API v1
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-400">
-                          Hosted Checkout (/v1/payment/create & /verify) + 2-Step Trx Verification (/v1/trx/verify & /confirm)
-                        </p>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSettingsForm({
-                          ...settingsForm,
-                          zinipayEnabled: !(settingsForm.zinipayEnabled !== false)
-                        })
-                      }
-                      className={`px-3 py-1.5 rounded-xl font-mono text-[10px] font-extrabold uppercase border transition-all ${
-                        settingsForm.zinipayEnabled !== false
-                          ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                          : 'bg-slate-900 border-slate-800 text-slate-400'
-                      }`}
-                    >
-                      {settingsForm.zinipayEnabled !== false ? 'ENABLED' : 'DISABLED'}
-                    </button>
-                  </div>
-
-                  {/* Environment Mode Selector: Sandbox vs Live */}
-                  <div className="grid grid-cols-2 gap-2 p-1.5 rounded-2xl bg-slate-950 border border-slate-800">
-                    <button
-                      type="button"
-                      onClick={() => setSettingsForm({ ...settingsForm, zinipayMode: 'sandbox' })}
-                      className={`py-2.5 rounded-xl font-extrabold text-xs transition-all ${
-                        (settingsForm.zinipayMode || 'sandbox') === 'sandbox'
-                          ? 'bg-[#22D3EE] text-slate-950 shadow'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      Sandbox Mode (Testing & Simulator)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSettingsForm({ ...settingsForm, zinipayMode: 'live' })}
-                      className={`py-2.5 rounded-xl font-extrabold text-xs transition-all ${
-                        settingsForm.zinipayMode === 'live'
-                          ? 'bg-emerald-500 text-slate-950 shadow'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      Live Production (api.zinipay.com)
-                    </button>
-                  </div>
-
-                  {/* ZiniPay Brand API Key (zini-api-key) */}
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                        ZiniPay Brand / Service API Key (zini-api-key)
-                      </label>
-                      <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-2xl pr-2.5">
-                        <input
-                          type={showZiniApiKey ? 'text' : 'password'}
-                          value={settingsForm.zinipayApiKey || ''}
-                          onChange={(e) => setSettingsForm({ ...settingsForm, zinipayApiKey: e.target.value })}
-                          placeholder="Paste your Brand Key from ZiniPay Dashboard -> Main Menu -> Brands"
-                          className="flex-1 bg-transparent p-3 text-emerald-300 font-mono focus:outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowZiniApiKey(!showZiniApiKey)}
-                          className="p-1.5 text-slate-400 hover:text-white"
-                        >
-                          {showZiniApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                          Primary ZiniPay API Node (Auto-Failover Enabled)
-                        </label>
+                        <label className="font-bold block mb-1">Select Provider</label>
                         <select
-                          value={settingsForm.zinipayBaseUrl || 'https://api.zinipay.com'}
-                          onChange={(e) => setSettingsForm({ ...settingsForm, zinipayBaseUrl: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-sky-300 font-mono font-bold"
+                          value={bulkRuleProviderId}
+                          onChange={e => setBulkRuleProviderId(e.target.value)}
+                          className={`w-full h-9 px-3 rounded-xl border ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
                         >
-                          <option value="https://api.zinipay.com">https://api.zinipay.com (Primary)</option>
-                          <option value="https://api2.zinipay.com">https://api2.zinipay.com (Node 2)</option>
-                          <option value="https://api3.zinipay.com">https://api3.zinipay.com (Node 3)</option>
-                          <option value="https://api4.zinipay.com">https://api4.zinipay.com (Node 4)</option>
+                          {providers.map(p => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
                         </select>
                       </div>
 
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                          Brand Website Domain (Optional for redirect_url)
-                        </label>
-                        <input
-                          type="text"
-                          value={settingsForm.zinipayBrandDomain || ''}
-                          onChange={(e) => setSettingsForm({ ...settingsForm, zinipayBrandDomain: e.target.value })}
-                          placeholder="e.g. https://yourdomain.com"
-                          className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                          ZiniPay Deposit Bonus (%)
-                        </label>
-                        <input
-                          type="number"
-                          value={settingsForm.zinipayBonusPercent ?? 3}
-                          onChange={(e) =>
-                            setSettingsForm({
-                              ...settingsForm,
-                              zinipayBonusPercent: parseFloat(e.target.value) || 0
-                            })
-                          }
-                          className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                        />
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="font-bold block mb-1">Profit Margin (%)</label>
+                          <input
+                            type="number"
+                            value={bulkMarginPercent}
+                            onChange={e => setBulkMarginPercent(Number(e.target.value))}
+                            className={`w-full h-9 px-3 rounded-xl border ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                          />
+                        </div>
+                        <div>
+                          <label className="font-bold block mb-1">USD to BDT Rate</label>
+                          <input
+                            type="number"
+                            value={bulkExchangeRate}
+                            onChange={e => setBulkExchangeRate(Number(e.target.value))}
+                            className={`w-full h-9 px-3 rounded-xl border ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                          />
+                        </div>
                       </div>
 
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                          2-Step TrxID Auto-Verification
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSettingsForm({
-                              ...settingsForm,
-                              zinipayAutoVerifyTrx: !(settingsForm.zinipayAutoVerifyTrx !== false)
-                            })
-                          }
-                          className={`w-full p-3 rounded-2xl border font-mono font-bold text-xs flex items-center justify-between ${
-                            settingsForm.zinipayAutoVerifyTrx !== false
-                              ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
-                              : 'bg-slate-950 border-slate-800 text-slate-400'
-                          }`}
-                        >
-                          <span>/v1/trx/verify + confirm</span>
-                          <span>{settingsForm.zinipayAutoVerifyTrx !== false ? 'ON' : 'OFF'}</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Webhook Endpoint URL Copy Box */}
-                    <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800/90 flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase block">
-                          ZiniPay Webhook & SMS Automation Callback URL:
-                        </span>
-                        <span className="font-mono text-[11px] text-[#22D3EE] truncate block mt-0.5">
-                          {`${window.location.origin}/api/zinipay/webhook`}
-                        </span>
-                      </div>
                       <button
                         type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(`${window.location.origin}/api/zinipay/webhook`);
-                          onShowToast('ZiniPay Webhook URL copied!', 'info');
-                        }}
-                        className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white font-bold text-[11px] flex items-center gap-1 shrink-0"
+                        onClick={handleApplyBulkPricingRule}
+                        disabled={applyingBulkPrice}
+                        className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
                       >
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>Copy</span>
+                        {applyingBulkPrice ? 'Applying Rules & Recalculating...' : 'Apply & Recalculate Catalog Prices'}
                       </button>
                     </div>
                   </div>
+                </div>
+              )}
 
-                  {/* Multi-Node Ping Diagnostics */}
-                  {ziniPingResult && (
-                    <div className="p-3.5 rounded-2xl bg-slate-950 border border-[#22D3EE]/30 space-y-2 font-mono text-[11px]">
-                      <div className="flex items-center justify-between">
-                        <span className="text-emerald-400 font-bold">
-                          ZiniPay Nodes Reachable: {ziniPingResult.reachableNodes}/{ziniPingResult.totalNodes}
-                        </span>
-                        <span className="text-[#22D3EE]">
-                          Primary Latency: {ziniPingResult.primaryLatencyMs}ms
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                        {ziniPingResult.nodes.map((n) => (
-                          <div
-                            key={n.node}
-                            className={`p-2 rounded-xl border text-[10px] ${
-                              n.reachable
-                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                                : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
-                            }`}
-                          >
-                            <div className="truncate font-bold">{n.node.replace('https://', '')}</div>
-                            <div>{n.reachable ? `${n.latencyMs}ms (HTTP ${n.httpCode})` : 'Offline'}</div>
-                          </div>
+              {/* SUB-TAB 5: RAW API TERMINAL */}
+              {apiSubTab === 'console' && (
+                <div className="space-y-4">
+                  <div className={`p-4.5 rounded-2xl border ${surfaceCard} space-y-3`}>
+                    <h4 className="text-xs font-bold uppercase tracking-wider">Execute Raw API Request</h4>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        value={rawTestProviderId}
+                        onChange={e => setRawTestProviderId(e.target.value)}
+                        className={`h-9 px-3 rounded-xl border text-xs ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                      >
+                        {providers.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
                         ))}
-                      </div>
-                    </div>
-                  )}
+                      </select>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={testingZiniPay}
-                      onClick={handleTestZiniPayConnection}
-                      className="flex-1 py-3 rounded-2xl bg-slate-900 border border-[#22D3EE]/40 text-[#22D3EE] font-extrabold text-xs flex items-center justify-center gap-1.5 active:scale-95"
-                    >
-                      <Activity className={`w-4 h-4 ${testingZiniPay ? 'animate-spin' : ''}`} />
-                      <span>
-                        {testingZiniPay ? 'Pinging ZiniPay Nodes...' : 'Test ZiniPay Multi-Node Connection'}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={refreshZiniPayLogs}
-                      className="p-3 rounded-2xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white"
-                      title="Refresh ZiniPay Logs"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                    </button>
+                      <select
+                        value={rawTestAction}
+                        onChange={e => setRawTestAction(e.target.value)}
+                        className={`h-9 px-3 rounded-xl border text-xs ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                      >
+                        <option value="balance">Action: balance</option>
+                        <option value="services">Action: services</option>
+                        <option value="status">Action: status</option>
+                      </select>
+
+                      {rawTestAction === 'status' && (
+                        <input
+                          type="text"
+                          value={rawTestOrderId}
+                          onChange={e => setRawTestOrderId(e.target.value)}
+                          placeholder="Provider Order ID"
+                          className={`h-9 px-3 rounded-xl border text-xs ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                        />
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={handleExecuteRawProviderTest}
+                        disabled={runningRawTest}
+                        className="h-9 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5"
+                      >
+                        <Play className="w-3.5 h-3.5" />
+                        <span>{runningRawTest ? 'Running...' : 'Send Request'}</span>
+                      </button>
+                    </div>
+
+                    {rawTestOutput && (
+                      <pre className="p-3 rounded-xl bg-slate-950 text-emerald-400 font-mono text-[11px] overflow-x-auto max-h-60 border border-slate-800">
+                        {rawTestOutput}
+                      </pre>
+                    )}
                   </div>
+                </div>
+              )}
+            </div>
+          )}
 
-                  {/* Live ZiniPay Gateway Event Stream */}
-                  {ziniLogs.length > 0 && (
-                    <div className="space-y-1.5 pt-2 border-t border-slate-800">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase block">
-                        Recent ZiniPay Gateway & Webhook Events ({ziniLogs.length})
-                      </span>
-                      <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
-                        {ziniLogs.slice(0, 12).map((lg) => (
-                          <div
-                            key={lg.id}
-                            className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-between gap-2 font-mono text-[10px]"
-                          >
-                            <div className="min-w-0">
-                              <span
-                                className={`px-1.5 py-0.5 rounded mr-1.5 font-bold uppercase ${
-                                  lg.status === 'success'
-                                    ? 'bg-emerald-500/20 text-emerald-300'
-                                    : lg.status === 'pending'
-                                    ? 'bg-amber-500/20 text-amber-300'
-                                    : 'bg-rose-500/20 text-rose-300'
-                                }`}
-                              >
-                                {lg.type}
-                              </span>
-                              <span className="text-slate-200">{lg.summary}</span>
-                            </div>
-                            <span className="text-slate-500 shrink-0">{lg.latencyMs}ms</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+          {/* ===================================================================
+              SECTION 8: 100% SEO BLOG & GEMINI AI WRITER
+             =================================================================== */}
+          {activeSection === 'blogs' && (
+            <div className="animate-in fade-in-0 duration-200">
+              <AdminBlogManager
+                blogs={blogs}
+                siteSettings={siteSettings}
+                onOpenGeminiSettings={() => navigateSection('settings')}
+                onPreviewBlogSlug={onPreviewBlogSlug}
+              />
+            </div>
+          )}
+
+          {/* ===================================================================
+              SECTION 9: USERS MANAGEMENT
+             =================================================================== */}
+          {activeSection === 'users' && (
+            <div className="space-y-4 animate-in fade-in-0 duration-200">
+              <div className={`p-4.5 rounded-2xl border ${surfaceCard} flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3`}>
+                <div>
+                  <h3 className="text-sm font-bold tracking-tight">{language === 'bn' ? 'ইউজার একাউন্ট ও ব্যালেন্স কন্ট্রোল' : 'Users & Balances Control'}</h3>
+                  <p className="text-xs text-slate-400">{users.length} {language === 'bn' ? 'জন নিবন্ধিত গ্রাহক' : 'registered user accounts'}</p>
                 </div>
 
-                {/* 2. MANUAL / DIRECT GATEWAYS & GLOBAL SITE SETTINGS */}
-                <div className="p-4 sm:p-5 rounded-3xl bg-[#0B1120] border border-slate-800 space-y-4">
-                  <div>
-                    <h3 className="text-sm font-extrabold text-white">Direct MFS Accounts & Global Settings</h3>
-                    <p className="text-[11px] text-slate-400">Synced live across all users via Cloud Firestore</p>
-                  </div>
+                <div className="relative min-w-[240px]">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={userSearch}
+                    onChange={e => setUserSearch(e.target.value)}
+                    placeholder={language === 'bn' ? 'ইউজার নাম বা ইমেইল খুঁজুন...' : 'Search by name, email, UID...'}
+                    className={`w-full h-9 pl-9 pr-3 rounded-xl text-xs font-medium border focus:outline-none focus:border-indigo-600 transition-colors ${
+                      darkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-slate-50 border-slate-200 text-slate-900'
+                    }`}
+                  />
+                </div>
+              </div>
 
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">bKash Personal/Merchant Number</label>
-                      <input
-                        type="text"
-                        value={settingsForm.bkashNumber}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, bkashNumber: e.target.value })}
-                        placeholder="01XXXXXXXXX"
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Nagad Number</label>
-                      <input
-                        type="text"
-                        value={settingsForm.nagadNumber}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, nagadNumber: e.target.value })}
-                        placeholder="01XXXXXXXXX"
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
+              {/* Users Table */}
+              <div className={`rounded-2xl border overflow-hidden ${surfaceCard}`}>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className={`border-b font-mono font-bold uppercase text-[11px] ${tableHeader}`}>
+                        <th className="py-3 px-4">User</th>
+                        <th className="py-3 px-3">Role</th>
+                        <th className="py-3 px-3">Joined Date</th>
+                        <th className="py-3 px-3 text-right">Orders Placed</th>
+                        <th className="py-3 px-3 text-right">Total Spent</th>
+                        <th className="py-3 px-3 text-right">Current Balance</th>
+                        <th className="py-3 px-4 text-right">Adjust Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                      {users
+                        .filter(u => !userSearch || u.email?.toLowerCase().includes(userSearch.toLowerCase()) || (u.displayName || '').toLowerCase().includes(userSearch.toLowerCase()))
+                        .map(u => (
+                          <tr key={u.uid} className={tableRowHover}>
+                            <td className="py-3 px-4">
+                              <span className="font-bold text-slate-900 dark:text-slate-100 block">{u.displayName || u.email.split('@')[0]}</span>
+                              <span className="text-[11px] text-slate-400 font-mono">{u.email}</span>
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                u.role === 'admin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                              }`}>
+                                {u.role || 'user'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-slate-400 font-mono">
+                              {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A'}
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono font-semibold">
+                              {orders.filter(o => o.userId === u.uid).length}
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono font-semibold text-slate-700 dark:text-slate-300">
+                              ৳{u.totalSpent ? u.totalSpent.toLocaleString() : 0}
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono font-black text-emerald-600 dark:text-emerald-400">
+                              ৳{u.balance ? u.balance.toLocaleString() : 0}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setBalanceAdjustUid(u.uid);
+                                  setBalanceAdjustAmount(u.balance || 0);
+                                }}
+                                className="px-2.5 py-1 rounded-lg border hover:border-indigo-500 text-xs font-semibold"
+                              >
+                                {language === 'bn' ? 'ব্যালেন্স পরিবর্তন' : 'Set Balance'}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ===================================================================
+              SECTION 10: SUPPORT TICKETS HELPDESK
+             =================================================================== */}
+          {activeSection === 'tickets' && (
+            <div className="space-y-4 animate-in fade-in-0 duration-200">
+              <div className={`p-4 rounded-2xl border ${surfaceCard} flex items-center justify-between`}>
+                <h3 className="text-sm font-bold tracking-tight">{language === 'bn' ? 'কাস্টমার সাপোর্ট টিকেট' : 'Customer Support Helpdesk'}</h3>
+                <span className="font-mono text-xs px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400 font-bold">
+                  {openTickets.length} {language === 'bn' ? 'ওপেন' : 'Open Tickets'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {tickets.map(t => (
+                  <div key={t.id} className={`p-4 rounded-2xl border space-y-2.5 ${surfaceCard}`}>
+                    <div className="flex items-start justify-between gap-2">
                       <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Rocket Number</label>
-                        <input
-                          type="text"
-                          value={settingsForm.rocketNumber}
-                          onChange={(e) => setSettingsForm({ ...settingsForm, rocketNumber: e.target.value })}
-                          placeholder="01XXXXXXXXX"
-                          className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                        />
+                        <span className="font-mono text-[11px] font-bold text-slate-400">#{t.id} · {t.department}</span>
+                        <h4 className="text-sm font-bold tracking-tight mt-0.5 text-slate-900 dark:text-slate-100">{t.subject}</h4>
+                        <p className="text-[11px] text-slate-400 font-mono">{t.userEmail}</p>
                       </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Upay Number</label>
-                        <input
-                          type="text"
-                          value={settingsForm.upayNumber}
-                          onChange={(e) => setSettingsForm({ ...settingsForm, upayNumber: e.target.value })}
-                          placeholder="01XXXXXXXXX"
-                          className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                        />
-                      </div>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        t.status === 'open' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300' :
+                        t.status === 'answered' ? 'bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300' :
+                        'bg-slate-100 text-slate-600'
+                      }`}>
+                        {t.status}
+                      </span>
                     </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Binance / USDT (TRC-20) Address</label>
+
+                    <div className={`p-3 rounded-xl border text-xs max-h-36 overflow-y-auto space-y-2 ${surfaceSubtle}`}>
+                      {t.messages.map((m, idx) => (
+                        <div key={idx} className={m.senderRole === 'admin' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-700 dark:text-slate-300'}>
+                          <span className="font-bold">{m.senderName}: </span>
+                          <span>{m.message}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="pt-2 flex items-center gap-2">
                       <input
                         type="text"
-                        value={settingsForm.usdtAddress}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, usdtAddress: e.target.value })}
-                        placeholder="T..."
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
+                        value={selectedTicketId === t.id ? adminReplyText : ''}
+                        onChange={e => {
+                          setSelectedTicketId(t.id);
+                          setAdminReplyText(e.target.value);
+                        }}
+                        placeholder={language === 'bn' ? 'কাস্টমারকে রিপ্লাই লিখুন...' : 'Type admin reply...'}
+                        className={`flex-1 h-8 px-2.5 rounded-lg border text-xs ${
+                          darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
+                        }`}
                       />
+                      <button
+                        type="button"
+                        onClick={() => handleSendAdminReply(t)}
+                        className="h-8 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1 shadow-xs"
+                      >
+                        <Send className="w-3 h-3" />
+                        <span>{language === 'bn' ? 'পাঠান' : 'Reply'}</span>
+                      </button>
                     </div>
                   </div>
+                ))}
+                {tickets.length === 0 && (
+                  <div className="col-span-full py-12 text-center text-slate-400">
+                    {language === 'bn' ? 'কোনো সাপোর্ট টিকেট নেই' : 'No support tickets found'}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
-                  <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-slate-800">
+          {/* ===================================================================
+              SECTION 11: PROMO COUPONS
+             =================================================================== */}
+          {activeSection === 'coupons' && (
+            <div className="space-y-4 animate-in fade-in-0 duration-200">
+              <div className={`p-4.5 rounded-2xl border ${surfaceCard}`}>
+                <h4 className="text-xs font-bold uppercase tracking-wider mb-3">Create New Promotional Coupon</h4>
+                <form onSubmit={handleCreateCoupon} className="flex flex-wrap items-center gap-3">
+                  <input
+                    type="text"
+                    value={newCouponCode}
+                    onChange={e => setNewCouponCode(e.target.value)}
+                    placeholder="Coupon Code (e.g. EID50)"
+                    className={`h-9 px-3 rounded-xl border text-xs font-mono uppercase ${
+                      darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  />
+                  <input
+                    type="number"
+                    value={newCouponReward}
+                    onChange={e => setNewCouponReward(Number(e.target.value))}
+                    placeholder="Reward Amount in BDT"
+                    className={`h-9 px-3 rounded-xl border text-xs font-mono ${
+                      darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  />
+                  <input
+                    type="number"
+                    value={newCouponMaxUses}
+                    onChange={e => setNewCouponMaxUses(Number(e.target.value))}
+                    placeholder="Max Uses"
+                    className={`h-9 px-3 rounded-xl border text-xs font-mono ${
+                      darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  />
+                  <button
+                    type="submit"
+                    className="h-9 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs"
+                  >
+                    Save Coupon
+                  </button>
+                </form>
+              </div>
+
+              <div className={`rounded-2xl border overflow-hidden ${surfaceCard}`}>
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className={`border-b font-mono font-bold uppercase text-[11px] ${tableHeader}`}>
+                      <th className="py-3 px-4">Code</th>
+                      <th className="py-3 px-3">Reward</th>
+                      <th className="py-3 px-3">Used / Max</th>
+                      <th className="py-3 px-3">Status</th>
+                      <th className="py-3 px-4 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono">
+                    {coupons.map(cp => (
+                      <tr key={cp.id} className={tableRowHover}>
+                        <td className="py-3 px-4 font-bold text-indigo-600 dark:text-indigo-400">{cp.code}</td>
+                        <td className="py-3 px-3 font-black">৳{cp.rewardAmount}</td>
+                        <td className="py-3 px-3">{cp.usedCount} / {cp.maxUses}</td>
+                        <td className="py-3 px-3">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                            Active
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => removeCoupon(cp.id)}
+                            className="p-1 rounded text-slate-400 hover:text-rose-600"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {coupons.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-slate-400 font-sans">No coupons created yet</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ===================================================================
+              SECTION 12: ANNOUNCEMENTS / NOTICE BOARD
+             =================================================================== */}
+          {activeSection === 'announcements' && (
+            <div className="space-y-4 animate-in fade-in-0 duration-200">
+              <div className={`p-4.5 rounded-2xl border ${surfaceCard} space-y-3`}>
+                <h4 className="text-xs font-bold uppercase tracking-wider">Publish New Broadcast Notice</h4>
+                <form onSubmit={handleCreateAnnouncement} className="space-y-3 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <input
+                      type="text"
+                      value={newAnnTitle}
+                      onChange={e => setNewAnnTitle(e.target.value)}
+                      placeholder="Notice Title"
+                      className={`h-9 px-3 rounded-xl border ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                    />
+                    <select
+                      value={newAnnType}
+                      onChange={e => setNewAnnType(e.target.value as Announcement['type'])}
+                      className={`h-9 px-3 rounded-xl border ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                    >
+                      <option value="info">Type: Info Banner</option>
+                      <option value="success">Type: Success / Promo</option>
+                      <option value="warning">Type: Warning Notice</option>
+                      <option value="alert">Type: Critical Alert</option>
+                    </select>
+                    <button
+                      type="submit"
+                      className="h-9 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+                    >
+                      Publish Notice
+                    </button>
+                  </div>
+                  <textarea
+                    value={newAnnContent}
+                    onChange={e => setNewAnnContent(e.target.value)}
+                    placeholder="Announcement message body to broadcast across user dashboard..."
+                    rows={2}
+                    className={`w-full p-2.5 rounded-xl border ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                  />
+                </form>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {announcements.map(ann => (
+                  <div key={ann.id} className={`p-4 rounded-2xl border space-y-2 ${surfaceCard}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-indigo-600 dark:text-indigo-400">{ann.title}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeAnnouncement(ann.id)}
+                        className="p-1 rounded text-slate-400 hover:text-rose-600"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{ann.content}</p>
+                    <span className="text-[10px] text-slate-400 font-mono block">{new Date(ann.createdAt).toLocaleDateString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ===================================================================
+              SECTION 13: SETTINGS & SYSTEM CONTROL
+             =================================================================== */}
+          {activeSection === 'settings' && (
+            <div className="space-y-5 animate-in fade-in-0 duration-200 max-w-4xl">
+              <form onSubmit={handleSaveGlobalSettings} className="space-y-5">
+                {/* General Settings */}
+                <div className={`p-5 rounded-2xl border ${surfaceCard} space-y-4`}>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 border-b pb-2 border-slate-200 dark:border-slate-800">
+                    Platform Identity & Currency Rate
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                     <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">bKash Bonus (%)</label>
+                      <label className="font-bold block mb-1">Platform Name</label>
                       <input
-                        type="number"
-                        value={settingsForm.bkashBonusPercent}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, bkashBonusPercent: parseFloat(e.target.value) || 0 })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
+                        type="text"
+                        value={settingsForm.siteName || ''}
+                        onChange={e => setSettingsForm({ ...settingsForm, siteName: e.target.value })}
+                        className={`w-full h-9 px-3 rounded-xl border ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">USDT Bonus (%)</label>
-                      <input
-                        type="number"
-                        value={settingsForm.usdtBonusPercent}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, usdtBonusPercent: parseFloat(e.target.value) || 0 })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Referral Bonus (%)</label>
-                      <input
-                        type="number"
-                        value={settingsForm.referralCommissionPercent}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, referralCommissionPercent: parseFloat(e.target.value) || 0 })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">1 USD = BDT Rate</label>
+                      <label className="font-bold block mb-1">USD to BDT Exchange Rate</label>
                       <input
                         type="number"
                         value={settingsForm.usdToBdtRate || 122}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, usdToBdtRate: parseFloat(e.target.value) || 122 })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2.5 pt-2 border-t border-slate-800">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">WhatsApp Support URL</label>
-                      <input
-                        type="text"
-                        value={settingsForm.whatsappUrl}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, whatsappUrl: e.target.value })}
-                        placeholder="https://wa.me/8801XXXXXXXXX"
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
+                        onChange={e => setSettingsForm({ ...settingsForm, usdToBdtRate: Number(e.target.value) })}
+                        className={`w-full h-9 px-3 rounded-xl border font-mono ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Telegram Support URL</label>
+                      <label className="font-bold block mb-1">Brand Logo / OpenGraph Image URL</label>
                       <input
                         type="text"
-                        value={settingsForm.telegramUrl}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, telegramUrl: e.target.value })}
-                        placeholder="https://t.me/..."
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
+                        value={settingsForm.seoOgImage || ''}
+                        onChange={e => setSettingsForm({ ...settingsForm, seoOgImage: e.target.value })}
+                        className={`w-full h-9 px-3 rounded-xl border font-mono ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                      />
+                    </div>
+                    <div>
+                      <label className="font-bold block mb-1">Support WhatsApp Number</label>
+                      <input
+                        type="text"
+                        value={settingsForm.whatsappNumber || ''}
+                        onChange={e => setSettingsForm({ ...settingsForm, whatsappNumber: e.target.value })}
+                        className={`w-full h-9 px-3 rounded-xl border font-mono ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
                       />
                     </div>
                   </div>
                 </div>
 
-                {/* =========================================================
-                    GOOGLE GEMINI AI API & AUTO SEO BLOG ENGINE CONFIGURATION
-                   ========================================================= */}
-                <div className="bg-gradient-to-b from-[#131129] to-[#080B14] border border-indigo-500/40 rounded-3xl p-4 sm:p-5 space-y-4 text-xs shadow-[0_16px_40px_rgba(0,0,0,0.6)]">
-                  <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/[0.08]">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-indigo-400" />
-                        <h3 className="text-sm font-black text-white">
-                          Google Gemini AI API & 100% SEO Blog Writer Configuration
-                        </h3>
-                      </div>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        এখানে আপনার Google Gemini API Key যোগ করুন। এই API দিয়ে অ্যাডমিন প্যানেলের ব্লগ সেকশনে ১-ক্লিকে ১০০% SEO অপ্টিমাইজড ব্লগ লেখা হবে।
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handleTestGeminiConnection}
-                        disabled={testingGemini}
-                        className="px-3 py-2 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 text-indigo-300 font-bold text-[11px] flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 ${testingGemini ? 'animate-spin' : ''}`} />
-                        <span>{testingGemini ? 'যাচাই হচ্ছে...' : 'Gemini API টেস্ট করুন'}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => navigateSection('blogs')}
-                        className="px-3 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-bold text-[11px] flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <BookOpen className="w-3.5 h-3.5" />
-                        <span>ব্লগ রাইটারে যান</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {geminiStatusMsg && (
-                    <div className="p-3 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 text-indigo-200 text-[11px] font-bold flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>{geminiStatusMsg}</span>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="sm:col-span-2">
-                      <label className="text-[10px] font-bold text-slate-300 uppercase block mb-1">
-                        Google Gemini API Key (AI Studio Key)
-                      </label>
-                      <div className="relative">
-                        <input
-                          type={showGeminiApiKey ? 'text' : 'password'}
-                          value={settingsForm.geminiApiKey || ''}
-                          onChange={(e) =>
-                            setSettingsForm({ ...settingsForm, geminiApiKey: e.target.value.trim() })
-                          }
-                          placeholder="AIzaSy... (আপনার Google Gemini API Key এখানে পেস্ট করুন)"
-                          className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 pr-10 text-white font-mono"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowGeminiApiKey(!showGeminiApiKey)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                        >
-                          {showGeminiApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-300 uppercase block mb-1">
-                        Gemini AI Model
-                      </label>
-                      <select
-                        value={settingsForm.geminiModel || 'gemini-2.5-flash'}
-                        onChange={(e) =>
-                          setSettingsForm({ ...settingsForm, geminiModel: e.target.value })
-                        }
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-bold"
-                      >
-                        <option value="gemini-2.5-flash">gemini-2.5-flash (Fast & 100% SEO)</option>
-                        <option value="gemini-2.5-pro">gemini-2.5-pro (Deep Pillar Content)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-white/[0.07]">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-300 uppercase block mb-1">
-                        ডিফল্ট ব্লগ ভাষা (Default Blog Language)
-                      </label>
-                      <select
-                        value={settingsForm.geminiDefaultLanguage || 'bn'}
-                        onChange={(e) =>
-                          setSettingsForm({
-                            ...settingsForm,
-                            geminiDefaultLanguage: e.target.value as 'bn' | 'en' | 'mixed'
-                          })
-                        }
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-bold"
-                      >
-                        <option value="bn">বাংলা + SEO English Keywords</option>
-                        <option value="mixed">Bilingual (Bangla + English)</option>
-                        <option value="en">100% English SEO</option>
-                      </select>
-                    </div>
-
-                    <label className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-950 border border-slate-800 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={settingsForm.geminiAutoInternalLinks !== false}
-                        onChange={(e) =>
-                          setSettingsForm({
-                            ...settingsForm,
-                            geminiAutoInternalLinks: e.target.checked
-                          })
-                        }
-                        className="w-4 h-4 accent-indigo-500 rounded"
-                      />
-                      <div>
-                        <span className="text-white font-bold block text-[11px]">
-                          Auto Internal Backlinks
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          ব্লগে সার্ভিস পেজের ইন্টারনাল লিংক যুক্ত করবে
-                        </span>
-                      </div>
-                    </label>
-
-                    <label className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-950 border border-slate-800 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={settingsForm.geminiAutoFaqSchema !== false}
-                        onChange={(e) =>
-                          setSettingsForm({
-                            ...settingsForm,
-                            geminiAutoFaqSchema: e.target.checked
-                          })
-                        }
-                        className="w-4 h-4 accent-indigo-500 rounded"
-                      />
-                      <div>
-                        <span className="text-white font-bold block text-[11px]">
-                          Auto FAQPage Rich Schema
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          গুগল র‍্যাংকিংয়ের জন্য অটো FAQ স্কিমা তৈরি করবে
-                        </span>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                {/* =========================================================
-                    GOOGLE BANGLADESH SEO & INDEXING COMMAND CENTER
-                   ========================================================= */}
-                <div className="bg-gradient-to-b from-[#0D1220] to-[#080B14] border border-emerald-500/30 rounded-3xl p-4 sm:p-5 space-y-4 text-xs shadow-[0_16px_40px_rgba(0,0,0,0.6)]">
-                  <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/[0.08]">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Globe className="w-4 h-4 text-emerald-400" />
-                        <h3 className="text-sm font-black text-white">
-                          Google Bangladesh SEO & Indexing Command Center
-                        </h3>
-                      </div>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        100% Geo-Targeted Bangladesh (`bn-BD` / `gl=bd`) Search Ranking, Rich Snippets & Sitemap Engine
-                      </p>
-                    </div>
+                {/* Gemini AI Settings */}
+                <div className={`p-5 rounded-2xl border ${surfaceCard} space-y-4`}>
+                  <div className="flex items-center justify-between border-b pb-2 border-slate-200 dark:border-slate-800">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                      Google Gemini AI Key & SEO Engine
+                    </h3>
                     <button
                       type="button"
-                      onClick={() => {
-                        setSettingsForm({
-                          ...settingsForm,
-                          seoTitle: `${settingsForm.siteName || 'AmarTrend SMM'} – #1 ${BD_MAIN_SEO_KEYWORD}`,
-                          seoDescription:
-                            'বাংলাদেশের সেরা ও সবচেয়ে কম দামে অটোমেটিক SMM Panel। বিকাশ ও নগদে তাৎক্ষণিক ডিপোজিট করে Facebook Page Monetization, 60k Watchtime, Non-Drop Followers, YouTube 4000h Watchtime ও TikTok Views নিন।',
-                          seoKeywords: DEFAULT_BD_SEO_KEYWORDS_STRING
-                        });
-                        onShowToast(
-                          'Loaded researched Bangladesh Low-Competition Main + 15 Sub-Keywords!',
-                          'success'
-                        );
-                      }}
-                      className="px-3 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-bold text-[11px] flex items-center gap-1.5 cursor-pointer"
+                      onClick={handleTestGeminiConnection}
+                      disabled={testingGemini}
+                      className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 text-xs font-bold"
                     >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Load Researched BD Keywords (1 Main + 15 Sub)</span>
+                      {testingGemini ? 'Testing...' : 'Test Gemini Connection'}
                     </button>
                   </div>
-
-                  {/* Live Google Search Result Snippet Preview (SERP Card) */}
-                  <div className="rounded-2xl bg-[#080B14] border border-white/10 p-4 space-y-1.5">
-                    <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 mb-1">
-                      <span>GOOGLE.COM.BD LIVE SEARCH SNIPPET PREVIEW</span>
-                      <span className="text-emerald-400">Schema.org Rich Snippets Active</span>
-                    </div>
-                    <div className="text-xs text-slate-300 font-mono truncate">
-                      {window.location.origin} › bangladesh-smm-panel
-                    </div>
-                    <div className="text-base font-bold text-[#8AB4F8] leading-snug">
-                      {settingsForm.seoTitle?.trim() ||
-                        `${settingsForm.siteName || 'AmarTrend SMM'} – #1 ${BD_MAIN_SEO_KEYWORD}`}
-                    </div>
-                    <div className="flex items-center gap-2 text-[11px] text-amber-400 font-mono">
-                      <span>★★★★★</span>
-                      <span className="text-slate-300">Rating: 4.9/5 · 1,480 votes · Price range: ৳5 – ৳25,000 BDT</span>
-                    </div>
-                    <p className="text-xs text-slate-300 leading-relaxed line-clamp-2">
-                      {settingsForm.seoDescription?.trim() ||
-                        'বাংলাদেশের সেরা ও সবচেয়ে কম দামে অটোমেটিক SMM Panel। বিকাশ ও নগদে তাৎক্ষণিক ডিপোজিট করে Facebook Page Monetization, 60k Watchtime, Non-Drop Followers, YouTube 4000h Watchtime ও TikTok Views নিন।'}
-                    </p>
-                  </div>
-
-                  {/* SEO Meta Title & Meta Description Inputs with Character Health Meters */}
-                  <div className="grid grid-cols-1 gap-3">
+                  {geminiStatusMsg && (
+                    <p className="text-xs font-mono text-emerald-600 dark:text-emerald-400">{geminiStatusMsg}</p>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                     <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-[10px] font-bold text-slate-300 uppercase">
-                          SEO Meta Title (Google Headline)
-                        </label>
-                        <span
-                          className={`text-[10px] font-mono ${
-                            (settingsForm.seoTitle || '').length >= 30 &&
-                            (settingsForm.seoTitle || '').length <= 65
-                              ? 'text-emerald-400'
-                              : 'text-amber-400'
-                          }`}
-                        >
-                          {(settingsForm.seoTitle || '').length} / 60 chars (Optimal: 30–60)
-                        </span>
-                      </div>
+                      <label className="font-bold block mb-1">Gemini API Key</label>
+                      <input
+                        type={showGeminiApiKey ? 'text' : 'password'}
+                        value={settingsForm.geminiApiKey || ''}
+                        onChange={e => setSettingsForm({ ...settingsForm, geminiApiKey: e.target.value })}
+                        placeholder="AIzaSy..."
+                        className={`w-full h-9 px-3 rounded-xl border font-mono ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                      />
+                    </div>
+                    <div>
+                      <label className="font-bold block mb-1">Model Alias</label>
                       <input
                         type="text"
-                        value={settingsForm.seoTitle || ''}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, seoTitle: e.target.value })}
-                        placeholder="AmarTrend SMM – #1 Cheapest bKash Nagad SMM Panel Bangladesh"
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white"
+                        value={settingsForm.geminiModel || 'gemini-2.5-flash'}
+                        onChange={e => setSettingsForm({ ...settingsForm, geminiModel: e.target.value })}
+                        className={`w-full h-9 px-3 rounded-xl border font-mono ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
                       />
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-[10px] font-bold text-slate-300 uppercase">
-                          SEO Meta Description (Bilingual Bengali + English Summary)
-                        </label>
-                        <span
-                          className={`text-[10px] font-mono ${
-                            (settingsForm.seoDescription || '').length >= 110 &&
-                            (settingsForm.seoDescription || '').length <= 170
-                              ? 'text-emerald-400'
-                              : 'text-amber-400'
-                          }`}
-                        >
-                          {(settingsForm.seoDescription || '').length} / 160 chars (Optimal: 120–160)
-                        </span>
-                      </div>
-                      <textarea
-                        rows={2}
-                        value={settingsForm.seoDescription || ''}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, seoDescription: e.target.value })}
-                        placeholder="বাংলাদেশের সেরা ও সবচেয়ে কম দামে অটোমেটিক SMM Panel..."
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white leading-relaxed"
-                      />
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-[10px] font-bold text-slate-300 uppercase">
-                          Target Keywords (Main Keyword + 15 Low-Competition BD Sub-Keywords)
-                        </label>
-                        <span className="text-[10px] font-mono text-cyan-400">
-                          {(settingsForm.seoKeywords || '')
-                            .split(',')
-                            .map((s) => s.trim())
-                            .filter(Boolean).length}{' '}
-                          Active Keywords
-                        </span>
-                      </div>
-                      <textarea
-                        rows={3}
-                        value={settingsForm.seoKeywords || ''}
-                        onChange={(e) => setSettingsForm({ ...settingsForm, seoKeywords: e.target.value })}
-                        placeholder={DEFAULT_BD_SEO_KEYWORDS_STRING}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono text-[11px] leading-relaxed"
-                      />
-
-                      {/* Quick-Insert Researched Keyword Matrix */}
-                      <div className="mt-2 p-3 rounded-2xl bg-slate-950/80 border border-white/[0.06] space-y-2">
-                        <div className="text-[10px] font-mono text-slate-400 flex items-center justify-between">
-                          <span>MAIN KEYWORD: {BD_MAIN_SEO_KEYWORD}</span>
-                          <span className="text-emerald-400">Low-Competition BD Cluster</span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {[BD_MAIN_SEO_KEYWORD, ...BD_SUB_SEO_KEYWORDS].map((kw) => {
-                            const isIncluded = (settingsForm.seoKeywords || '')
-                              .toLowerCase()
-                              .includes(kw.toLowerCase());
-                            return (
-                              <button
-                                key={kw}
-                                type="button"
-                                onClick={() => {
-                                  const current = (settingsForm.seoKeywords || '')
-                                    .split(',')
-                                    .map((k) => k.trim())
-                                    .filter(Boolean);
-                                  if (!isIncluded) {
-                                    setSettingsForm({
-                                      ...settingsForm,
-                                      seoKeywords: [...current, kw].join(', ')
-                                    });
-                                  }
-                                }}
-                                className={`px-2 py-1 rounded-lg text-[10px] font-mono border transition-colors cursor-pointer ${
-                                  isIncluded
-                                    ? 'bg-emerald-500/15 border-emerald-500/35 text-emerald-300'
-                                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                                }`}
-                              >
-                                {isIncluded ? '✓ ' : '+ '}
-                                {kw}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Canonical Domain, Google Search Console Verification & GA4 ID */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-white/[0.07]">
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-[10px] font-bold text-slate-300 uppercase">
-                          Live Website Domain (Auto-Detected)
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSettingsForm({
-                              ...settingsForm,
-                              seoCanonicalDomain: window.location.origin,
-                              zinipayBrandDomain: window.location.origin
-                            })
-                          }
-                          className="text-[10px] font-bold text-emerald-400 hover:underline cursor-pointer"
-                        >
-                          Sync Live URL
-                        </button>
-                      </div>
-                      <input
-                        type="text"
-                        value={settingsForm.seoCanonicalDomain || window.location.origin}
-                        onChange={(e) =>
-                          setSettingsForm({ ...settingsForm, seoCanonicalDomain: e.target.value })
-                        }
-                        placeholder={window.location.origin}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-300 uppercase block mb-1">
-                        Google Search Console Code / HTML Tag
-                      </label>
-                      <input
-                        type="text"
-                        value={settingsForm.googleSiteVerification || ''}
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          const metaMatch = raw.match(/content=["']([^"']+)["']/i);
-                          const cleaned = metaMatch?.[1] ? metaMatch[1].trim() : raw;
-                          setSettingsForm({ ...settingsForm, googleSiteVerification: cleaned });
-                        }}
-                        placeholder="Paste token, <meta> tag, or googleXXXX.html"
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-300 uppercase block mb-1">
-                        Google Analytics 4 ID (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        value={settingsForm.googleAnalyticsId || ''}
-                        onChange={(e) =>
-                          setSettingsForm({ ...settingsForm, googleAnalyticsId: e.target.value })
-                        }
-                        placeholder="G-XXXXXXXXXX"
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-white font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Google Search Console 100% Guaranteed Verification Guide & Live Tester */}
-                  <div className="p-3.5 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 space-y-2.5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-[11px] font-bold text-emerald-300 flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>Google Search Console ১০০% গ্যারান্টিড ভেরিফিকেশন ইঞ্জিন (HTML File + Meta Tag)</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const raw = (settingsForm.googleSiteVerification || '').trim().replace(/\.html$/i, '');
-                          const fileName =
-                            raw && raw.startsWith('google')
-                              ? `${raw}.html`
-                              : 'google9d68b630512313f4.html';
-                          try {
-                            const res = await fetch(`/${fileName}`);
-                            const text = await res.text();
-                            if (res.ok && text.includes('google-site-verification:')) {
-                              onShowToast(`ভেরিফিকেশন সচল! সার্ভার রেসপন্স: "${text.trim()}"`, 'success');
-                            } else {
-                              onShowToast('ভেরিফিকেশন ফাইল ও মেটা ট্যাগ প্রস্তুত আছে! Vercel-এ ডেপ্লয় করে Verify দিন।', 'info');
-                            }
-                          } catch {
-                            onShowToast('ভেরিফিকেশন রাউট প্রস্তুত আছে!', 'info');
-                          }
-                        }}
-                        className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-bold text-[10px] cursor-pointer"
-                      >
-                        Test Live GSC Verification
-                      </button>
-                    </div>
-                    <p className="text-[11px] text-slate-300 leading-relaxed">
-                      ১ ক্লিকে ভেরিফাই করতে: Google Search Console-এ <strong>URL Prefix</strong> সিলেক্ট করে প্রথম অপশন <strong>HTML file (Upload an HTML file)</strong>-এ যান। কোনো ফাইল ডাউনলোড বা আপলোড করার প্রয়োজন নেই—সরাসরি <strong>VERIFY</strong> বাটনে ক্লিক করুন! আমাদের সার্ভার যেকোনো <code>/google*.html</code> রিকোয়েস্ট স্বয়ংক্রিয়ভাবে ভেরিফাই করে দেয়। অথবা উপরে কোড বসিয়ে Save করে <strong>HTML tag</strong> অপশন দিয়ে ভেরিফাই করুন।
-                    </p>
-                  </div>
-
-                  {/* Sitemap.xml & Robots.txt Quick Copy & Test Bar for Google Search Console */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-white/[0.07]">
-                    <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="text-[10px] font-bold text-emerald-400 uppercase">
-                          Dynamic XML Sitemap URL (Live Domain)
-                        </div>
-                        <div className="text-[11px] font-mono text-slate-300 truncate">
-                          {window.location.origin.replace(/\/+$/, '')}/sitemap.xml
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const url = `${window.location.origin.replace(/\/+$/, '')}/sitemap.xml`;
-                            navigator.clipboard.writeText(url);
-                            onShowToast('Live Sitemap.xml URL copied for Google Search Console!', 'success');
-                          }}
-                          className="px-2.5 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold text-[10px] cursor-pointer"
-                        >
-                          Copy URL
-                        </button>
-                        <a
-                          href="/sitemap.xml"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-200 font-bold text-[10px]"
-                        >
-                          Open
-                        </a>
-                      </div>
-                    </div>
-
-                    <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="text-[10px] font-bold text-cyan-400 uppercase">
-                          Crawler Robots.txt URL (Live Domain)
-                        </div>
-                        <div className="text-[11px] font-mono text-slate-300 truncate">
-                          {window.location.origin.replace(/\/+$/, '')}/robots.txt
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const url = `${window.location.origin.replace(/\/+$/, '')}/robots.txt`;
-                            navigator.clipboard.writeText(url);
-                            onShowToast('Live Robots.txt URL copied!', 'success');
-                          }}
-                          className="px-2.5 py-1.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 font-bold text-[10px] cursor-pointer"
-                        >
-                          Copy URL
-                        </button>
-                        <a
-                          href="/robots.txt"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-200 font-bold text-[10px]"
-                        >
-                          Open
-                        </a>
-                      </div>
                     </div>
                   </div>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={savingSettings}
-                  className="w-full py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all cursor-pointer"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>
-                    {savingSettings
-                      ? 'Saving ZiniPay, SEO & Global Settings...'
-                      : 'Save ZiniPay, SEO & Global Settings'}
-                  </span>
-                </button>
-              </form>
-            )}
-          </motion.div>
-        </AnimatePresence>
-      </main>
-
-      {/* STANDALONE NATIVE MOBILE ADMIN BOTTOM NAVIGATION DOCK */}
-      <nav
-        aria-label="Admin Mobile Navigation"
-        className="lg:hidden fixed bottom-0 inset-x-0 z-40 pointer-events-none flex justify-center pb-[max(8px,env(safe-area-inset-bottom))] px-3"
-      >
-        <div className="pointer-events-auto w-full max-w-md bg-[#0D1220]/95 backdrop-blur-2xl border border-[#8B5CF6]/30 rounded-[28px] shadow-[0_16px_50px_rgba(0,0,0,0.9)] p-1.5 flex items-center justify-between">
-          {[
-            {
-              id: 'overview',
-              target: 'overview' as AdminSection,
-              label: language === 'bn' ? 'ড্যাশবোর্ড' : 'Home',
-              icon: LayoutGrid
-            },
-            {
-              id: 'orders',
-              target: 'orders' as AdminSection,
-              label: language === 'bn' ? 'অর্ডারস' : 'Orders',
-              icon: Package,
-              badge: pendingOrders.length > 0 ? pendingOrders.length : undefined
-            },
-            {
-              id: 'payments',
-              target: 'payments' as AdminSection,
-              label: language === 'bn' ? 'ডিপোজিট' : 'Deposits',
-              icon: Wallet,
-              badge: pendingDeposits.length > 0 ? pendingDeposits.length : undefined
-            },
-            {
-              id: 'api',
-              target: 'providers' as AdminSection,
-              label: language === 'bn' ? 'API প্যানেল' : 'API Studio',
-              icon: Server,
-              badge: providers.length > 0 ? providers.length : undefined
-            },
-            {
-              id: 'hub',
-              target: 'hub' as AdminSection,
-              label: language === 'bn' ? 'কন্ট্রোল হাব' : 'Hub',
-              icon: SlidersHorizontal,
-              badge: openTickets.length > 0 ? openTickets.length : undefined
-            }
-          ].map((tab) => {
-            const isActive = activeBottomTab === tab.id;
-            const Icon = tab.icon;
-
-            return (
-              <motion.button
-                key={tab.id}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => navigateSection(tab.target)}
-                className="relative flex-1 py-1.5 px-1 rounded-2xl transition-all flex flex-col items-center justify-center min-h-[48px] focus:outline-none"
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="adminBottomNavActivePill"
-                    transition={{ type: 'spring', stiffness: 450, damping: 32 }}
-                    className="absolute inset-0 bg-gradient-to-b from-[#8B5CF6]/25 to-[#8B5CF6]/10 border border-[#8B5CF6]/40 rounded-2xl"
-                  />
-                )}
-
-                <div className="relative z-10 flex flex-col items-center">
-                  <div className="relative">
-                    <Icon
-                      className={`w-4.5 h-4.5 transition-colors ${
-                        isActive ? 'text-[#22D3EE] stroke-[2.5]' : 'text-[#94A3B8] stroke-[2]'
-                      }`}
-                    />
-                    {tab.badge && (
-                      <span className="absolute -top-1.5 -right-2.5 min-w-4 h-4 px-1 rounded-full bg-[#8B5CF6] text-white font-black text-[9px] flex items-center justify-center font-mono">
-                        {tab.badge}
-                      </span>
-                    )}
+                {/* ZiniPay Gateway Settings */}
+                <div className={`p-5 rounded-2xl border ${surfaceCard} space-y-4`}>
+                  <div className="flex items-center justify-between border-b pb-2 border-slate-200 dark:border-slate-800">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                      ZiniPay Automated Payment Gateway
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={handleTestZiniPayConnection}
+                      disabled={testingZiniPay}
+                      className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 text-xs font-bold"
+                    >
+                      {testingZiniPay ? 'Testing...' : 'Test ZiniPay'}
+                    </button>
                   </div>
-                  <span
-                    className={`text-[10px] mt-0.5 tracking-tight ${
-                      isActive ? 'text-[#F1F5F9] font-extrabold' : 'text-[#94A3B8] font-medium'
-                    }`}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <label className="font-bold block mb-1">ZiniPay API Key</label>
+                      <input
+                        type={showZiniApiKey ? 'text' : 'password'}
+                        value={settingsForm.zinipayApiKey || ''}
+                        onChange={e => setSettingsForm({ ...settingsForm, zinipayApiKey: e.target.value })}
+                        placeholder="zini_live_..."
+                        className={`w-full h-9 px-3 rounded-xl border font-mono ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                      />
+                    </div>
+                    <div>
+                      <label className="font-bold block mb-1">Referral Commission (%)</label>
+                      <input
+                        type="number"
+                        value={settingsForm.referralCommissionPercent || 5}
+                        onChange={e => setSettingsForm({ ...settingsForm, referralCommissionPercent: Number(e.target.value) })}
+                        className={`w-full h-9 px-3 rounded-xl border font-mono ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Save Button */}
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={savingSettings}
+                    className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2"
                   >
-                    {tab.label}
-                  </span>
+                    <Save className="w-4 h-4" />
+                    <span>{savingSettings ? 'Saving Settings...' : 'Save All Settings'}</span>
+                  </button>
                 </div>
-              </motion.button>
-            );
-          })}
+              </form>
+
+              {/* Danger Zone: Purge Demo Data */}
+              <div className="p-5 rounded-2xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/50 dark:bg-rose-950/20 space-y-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-rose-700 dark:text-rose-400 flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4" />
+                  Danger Zone: Reset Demo Records
+                </h4>
+                <p className="text-xs text-rose-600 dark:text-rose-300">
+                  Purge all legacy mock transactions, mock orders, and initial seeded data from the Cloud Firestore database.
+                </p>
+                <button
+                  type="button"
+                  onClick={handlePurgeDemoData}
+                  disabled={purgingDemo}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs"
+                >
+                  {purgingDemo ? 'Purging Demo Data...' : 'Purge All Legacy Demo Data'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ===================================================================
+              SECTION 14: MOBILE CONTROL HUB & NATIVE APP LAUNCHER (hub)
+             =================================================================== */}
+          {activeSection === 'hub' && (
+            <div className="space-y-4 animate-in fade-in-0 duration-200">
+              {/* Executive Mobile Hero Banner */}
+              <div className={`dark-hero-card p-4.5 rounded-3xl border text-white space-y-3 ${
+                darkMode
+                  ? 'bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-950 border-indigo-500/30'
+                  : 'bg-gradient-to-br from-indigo-700 via-indigo-800 to-slate-900 border-indigo-600 shadow-lg shadow-indigo-600/15'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-600/30">
+                      <ShieldCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-sm tracking-tight text-white">
+                        {language === 'bn' ? 'অ্যাডমিন কন্ট্রোল হাব' : 'Admin Control Hub'}
+                      </h3>
+                      <p className="text-[10px] font-mono text-indigo-200">
+                        AmarTrend SMM Engine · {serverHealth ? `Uptime ${Math.floor(serverHealth.uptimeSeconds / 60)}m` : 'Live'}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400/80" />
+                </div>
+
+                {/* Quick 3-Metric Mini Strip */}
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/10 font-mono">
+                  <div className="bg-black/20 rounded-xl p-2 text-center">
+                    <span className="text-[9px] uppercase text-slate-300 block">{language === 'bn' ? 'মোট রেভিনিউ' : 'Revenue'}</span>
+                    <span className="font-bold text-xs text-emerald-400">৳{totalRevenue > 99999 ? `${Math.round(totalRevenue/1000)}k` : totalRevenue.toLocaleString()}</span>
+                  </div>
+                  <div className="bg-black/20 rounded-xl p-2 text-center">
+                    <span className="text-[9px] uppercase text-slate-300 block">{language === 'bn' ? 'অর্ডার' : 'Orders'}</span>
+                    <span className="font-bold text-xs text-amber-400">{orders.length}</span>
+                  </div>
+                  <div className="bg-black/20 rounded-xl p-2 text-center">
+                    <span className="text-[9px] uppercase text-slate-300 block">{language === 'bn' ? 'কানেক্টেড API' : 'APIs'}</span>
+                    <span className="font-bold text-xs text-sky-400">{providers.length}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Native App Springboard Grid */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">
+                    {language === 'bn' ? 'অ্যাডমিনিস্ট্রেটিভ মডিউলস' : 'Administrative Modules'}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">10 Apps</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  {/* 1. Financial Intelligence */}
+                  <button
+                    type="button"
+                    onClick={() => navigateSection('finance')}
+                    className={`p-3.5 rounded-2xl border text-left transition-all active:scale-95 flex flex-col justify-between gap-3 ${surfaceCard} hover:border-emerald-500`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                        <TrendingUp className="w-5 h-5" />
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-400" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                        {language === 'bn' ? 'ফাইন্যান্স ও প্রফিট' : 'Financial Intelligence'}
+                      </h4>
+                      <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
+                        {language === 'bn' ? 'নেট মার্জিন ও প্রফিট রিপোর্ট' : 'Net profit, margins & ROI'}
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* 2. API Providers Studio */}
+                  <button
+                    type="button"
+                    onClick={() => navigateSection('providers')}
+                    className={`p-3.5 rounded-2xl border text-left transition-all active:scale-95 flex flex-col justify-between gap-3 ${surfaceCard} hover:border-sky-500`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="w-9 h-9 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center">
+                        <Server className="w-5 h-5" />
+                      </div>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-bold">
+                        {providers.length}
+                      </span>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                        {language === 'bn' ? 'API প্রোভাইডার স্টুডিও' : 'API Providers Studio'}
+                      </h4>
+                      <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
+                        {language === 'bn' ? 'SMM API v2 সিঙ্ক ও রাউটিং' : 'Catalog sync & routing'}
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* 3. SEO Blog CMS & Gemini AI */}
+                  <button
+                    type="button"
+                    onClick={() => navigateSection('blogs')}
+                    className={`p-3.5 rounded-2xl border text-left transition-all active:scale-95 flex flex-col justify-between gap-3 ${surfaceCard} hover:border-purple-500`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="w-9 h-9 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                        <Sparkles className="w-5 h-5" />
+                      </div>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-bold">
+                        {blogs.length}
+                      </span>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                        {language === 'bn' ? 'SEO ব্লগ ও Gemini AI' : 'SEO Blog & Gemini AI'}
+                      </h4>
+                      <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
+                        {language === 'bn' ? 'অটোমেটেড কন্টেন্ট ও কীওয়ার্ড' : 'AI articles & rich snippets'}
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* 4. Users & Balances */}
+                  <button
+                    type="button"
+                    onClick={() => navigateSection('users')}
+                    className={`p-3.5 rounded-2xl border text-left transition-all active:scale-95 flex flex-col justify-between gap-3 ${surfaceCard} hover:border-blue-500`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                        <Users className="w-5 h-5" />
+                      </div>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold">
+                        {users.length}
+                      </span>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                        {language === 'bn' ? 'ইউজার ও ওয়ালেট' : 'Users & Balances'}
+                      </h4>
+                      <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
+                        {language === 'bn' ? 'ব্যালেন্স অ্যাডজাস্ট ও অ্যাকাউন্টস' : 'Manage wallets & roles'}
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* 5. Support Helpdesk */}
+                  <button
+                    type="button"
+                    onClick={() => navigateSection('tickets')}
+                    className={`p-3.5 rounded-2xl border text-left transition-all active:scale-95 flex flex-col justify-between gap-3 ${surfaceCard} hover:border-rose-500`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="w-9 h-9 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                        <MessageSquare className="w-5 h-5" />
+                      </div>
+                      {openTickets.length > 0 && (
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-rose-500 text-white font-bold animate-pulse">
+                          {openTickets.length} open
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                        {language === 'bn' ? 'সাপোর্ট হেল্পডেস্ক' : 'Support Helpdesk'}
+                      </h4>
+                      <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
+                        {language === 'bn' ? 'কাস্টমার মেসেজের উত্তর দিন' : 'Answer user inquiries'}
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* 6. Refill Queue */}
+                  <button
+                    type="button"
+                    onClick={() => navigateSection('refills')}
+                    className={`p-3.5 rounded-2xl border text-left transition-all active:scale-95 flex flex-col justify-between gap-3 ${surfaceCard} hover:border-amber-500`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                        <RefreshCw className="w-5 h-5" />
+                      </div>
+                      {pendingRefills.length > 0 && (
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-amber-500 text-slate-950 font-bold">
+                          {pendingRefills.length} new
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                        {language === 'bn' ? 'রিফিল কিউ' : 'Refill Queue'}
+                      </h4>
+                      <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
+                        {language === 'bn' ? 'রিফিল অর্ডার ফরোয়ার্ড' : 'Forward refills to API'}
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* 7. Promo Vouchers */}
+                  <button
+                    type="button"
+                    onClick={() => navigateSection('coupons')}
+                    className={`p-3.5 rounded-2xl border text-left transition-all active:scale-95 flex flex-col justify-between gap-3 ${surfaceCard} hover:border-pink-500`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="w-9 h-9 rounded-xl bg-pink-500/15 text-pink-600 dark:text-pink-400 flex items-center justify-center">
+                        <Gift className="w-5 h-5" />
+                      </div>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-pink-100 dark:bg-pink-950 text-pink-700 dark:text-pink-300 font-bold">
+                        {coupons.length}
+                      </span>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                        {language === 'bn' ? 'প্রোমো কোড' : 'Promo Vouchers'}
+                      </h4>
+                      <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
+                        {language === 'bn' ? 'ডিসকাউন্ট ও বোনাস কোড' : 'Manage coupon codes'}
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* 8. Announcements */}
+                  <button
+                    type="button"
+                    onClick={() => navigateSection('announcements')}
+                    className={`p-3.5 rounded-2xl border text-left transition-all active:scale-95 flex flex-col justify-between gap-3 ${surfaceCard} hover:border-orange-500`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="w-9 h-9 rounded-xl bg-orange-500/15 text-orange-600 dark:text-orange-400 flex items-center justify-center">
+                        <Megaphone className="w-5 h-5" />
+                      </div>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300 font-bold">
+                        {announcements.length}
+                      </span>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                        {language === 'bn' ? 'নোটিশ বোর্ড' : 'Announcements'}
+                      </h4>
+                      <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
+                        {language === 'bn' ? 'ইউজারদের লাইভ নোটিশ পাঠান' : 'Broadcast notifications'}
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* 9. System & SEO Settings */}
+                  <button
+                    type="button"
+                    onClick={() => navigateSection('settings')}
+                    className={`p-3.5 rounded-2xl border text-left transition-all active:scale-95 flex flex-col justify-between gap-3 ${surfaceCard} hover:border-indigo-500`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="w-9 h-9 rounded-xl bg-slate-500/15 text-slate-600 dark:text-slate-400 flex items-center justify-center">
+                        <Settings className="w-5 h-5" />
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-400" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                        {language === 'bn' ? 'সিস্টেম সেটিংস' : 'System Settings'}
+                      </h4>
+                      <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
+                        {language === 'bn' ? 'USD রেট, কী ও কনফিগ' : 'USD rate, keys & SEO'}
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* 10. Switch to User App */}
+                  {onExitAdmin && (
+                    <button
+                      type="button"
+                      onClick={onExitAdmin}
+                      className={`p-3.5 rounded-2xl border text-left transition-all active:scale-95 flex flex-col justify-between gap-3 ${surfaceCard} hover:border-indigo-500 bg-indigo-50/30 dark:bg-indigo-950/20`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                          <LogOut className="w-5 h-5" />
+                        </div>
+                        <ArrowUpRight className="w-4 h-4 text-indigo-500" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-xs text-indigo-600 dark:text-indigo-400">
+                          {language === 'bn' ? 'ইউজার প্যানেলে ফিরুন' : 'Exit to Storefront'}
+                        </h4>
+                        <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
+                          {language === 'bn' ? 'কাস্টমার ভিউ প্রিভিউ করুন' : 'Switch back to user view'}
+                        </p>
+                      </div>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Quick Actions Action Bar */}
+              <div className={`p-4 rounded-2xl border ${surfaceCard} space-y-2.5`}>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono block">
+                  {language === 'bn' ? 'কুইক অ্যাকশন কন্ট্রোল' : 'Quick Actions'}
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSyncAllOrders}
+                    disabled={syncingOrders}
+                    className="py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${syncingOrders ? 'animate-spin' : ''}`} />
+                    <span>{language === 'bn' ? 'অর্ডার সিঙ্ক' : 'Sync Orders'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setIsAddingService(true); navigateSection('services'); }}
+                    className="py-2.5 px-3 rounded-xl border border-slate-300 dark:border-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>{language === 'bn' ? 'নতুন সার্ভিস' : 'Add Service'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+
+      {/* =========================================================================
+          NATIVE MOBILE APP BOTTOM NAVIGATION DOCK (iOS / Android Native App Bar)
+         ========================================================================= */}
+      <nav 
+        aria-label="Admin Mobile Navigation"
+        className="admin-mobile-dock fixed bottom-0 inset-x-0 z-40 lg:hidden pointer-events-none"
+      >
+        <div className="max-w-md mx-auto px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-1">
+          <div className={`pointer-events-auto backdrop-blur-2xl rounded-2xl border px-2 py-1.5 flex items-center justify-around transition-colors ${
+            darkMode
+              ? 'bg-slate-900/95 border-slate-700/60 shadow-2xl shadow-black/40'
+              : 'bg-white/95 border-slate-300/90 shadow-2xl shadow-slate-900/15'
+          }`}>
+            {/* 1. Dashboard / Home Tab */}
+            <button
+              type="button"
+              onClick={() => navigateSection('overview')}
+              className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all relative ${
+                activeSection === 'overview'
+                  ? darkMode ? 'text-white font-bold' : 'text-indigo-700 font-bold'
+                  : darkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-950'
+              }`}
+            >
+              {activeSection === 'overview' && (
+                <span className="absolute -top-1 w-6 h-0.5 rounded-full bg-indigo-500 shadow-sm shadow-indigo-500/80" />
+              )}
+              <div className={`p-1 rounded-lg ${
+                activeSection === 'overview'
+                  ? darkMode ? 'bg-indigo-600/30 text-indigo-400' : 'bg-indigo-100 text-indigo-700'
+                  : ''
+              }`}>
+                <LayoutGrid className="w-4.5 h-4.5" />
+              </div>
+              <span className="text-[10px] font-semibold tracking-tight mt-0.5">
+                {language === 'bn' ? 'হোম' : 'Home'}
+              </span>
+            </button>
+
+            {/* 2. Orders Tab */}
+            <button
+              type="button"
+              onClick={() => navigateSection('orders')}
+              className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all relative ${
+                activeSection === 'orders' || activeSection === 'refills'
+                  ? darkMode ? 'text-white font-bold' : 'text-amber-700 font-bold'
+                  : darkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-950'
+              }`}
+            >
+              {(activeSection === 'orders' || activeSection === 'refills') && (
+                <span className="absolute -top-1 w-6 h-0.5 rounded-full bg-amber-500 shadow-sm shadow-amber-500/80" />
+              )}
+              <div className="relative">
+                <div className={`p-1 rounded-lg ${
+                  activeSection === 'orders' || activeSection === 'refills'
+                    ? darkMode ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'
+                    : ''
+                }`}>
+                  <Package className="w-4.5 h-4.5" />
+                </div>
+                {pendingOrders.length > 0 && (
+                  <span className={`absolute -top-1 -right-1.5 px-1 min-w-[15px] h-[15px] rounded-full bg-amber-500 text-slate-950 font-mono text-[9px] font-black flex items-center justify-center ring-2 ${
+                    darkMode ? 'ring-slate-900' : 'ring-white'
+                  }`}>
+                    {pendingOrders.length > 99 ? '99+' : pendingOrders.length}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] font-semibold tracking-tight mt-0.5">
+                {language === 'bn' ? 'অর্ডার' : 'Orders'}
+              </span>
+            </button>
+
+            {/* 3. Deposits / Payments Tab */}
+            <button
+              type="button"
+              onClick={() => navigateSection('payments')}
+              className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all relative ${
+                activeSection === 'payments'
+                  ? darkMode ? 'text-white font-bold' : 'text-emerald-700 font-bold'
+                  : darkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-950'
+              }`}
+            >
+              {activeSection === 'payments' && (
+                <span className="absolute -top-1 w-6 h-0.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/80" />
+              )}
+              <div className="relative">
+                <div className={`p-1 rounded-lg ${
+                  activeSection === 'payments'
+                    ? darkMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                    : ''
+                }`}>
+                  <Wallet className="w-4.5 h-4.5" />
+                </div>
+                {pendingDeposits.length > 0 && (
+                  <span className={`absolute -top-1 -right-1.5 px-1 min-w-[15px] h-[15px] rounded-full bg-emerald-500 text-slate-950 font-mono text-[9px] font-black flex items-center justify-center ring-2 animate-pulse ${
+                    darkMode ? 'ring-slate-900' : 'ring-white'
+                  }`}>
+                    {pendingDeposits.length}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] font-semibold tracking-tight mt-0.5">
+                {language === 'bn' ? 'ডিপোজিট' : 'Deposits'}
+              </span>
+            </button>
+
+            {/* 4. Services Tab */}
+            <button
+              type="button"
+              onClick={() => navigateSection('services')}
+              className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all relative ${
+                activeSection === 'services'
+                  ? darkMode ? 'text-white font-bold' : 'text-indigo-700 font-bold'
+                  : darkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-950'
+              }`}
+            >
+              {activeSection === 'services' && (
+                <span className="absolute -top-1 w-6 h-0.5 rounded-full bg-indigo-500 shadow-sm shadow-indigo-500/80" />
+              )}
+              <div className={`p-1 rounded-lg ${
+                activeSection === 'services'
+                  ? darkMode ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-100 text-indigo-700'
+                  : ''
+              }`}>
+                <Layers className="w-4.5 h-4.5" />
+              </div>
+              <span className="text-[10px] font-semibold tracking-tight mt-0.5">
+                {language === 'bn' ? 'সার্ভিস' : 'Services'}
+              </span>
+            </button>
+
+            {/* 5. Mobile Control Hub / Apps Launcher Tab */}
+            <button
+              type="button"
+              onClick={() => navigateSection('hub')}
+              className={`flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all relative ${
+                ['hub', 'finance', 'blogs', 'providers', 'users', 'tickets', 'coupons', 'announcements', 'settings'].includes(activeSection)
+                  ? darkMode ? 'text-white font-bold' : 'text-purple-700 font-bold'
+                  : darkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-950'
+              }`}
+            >
+              {['hub', 'finance', 'blogs', 'providers', 'users', 'tickets', 'coupons', 'announcements', 'settings'].includes(activeSection) && (
+                <span className="absolute -top-1 w-6 h-0.5 rounded-full bg-purple-500 shadow-sm shadow-purple-500/80" />
+              )}
+              <div className="relative">
+                <div className={`p-1 rounded-lg ${
+                  ['hub', 'finance', 'blogs', 'providers', 'users', 'tickets', 'coupons', 'announcements', 'settings'].includes(activeSection)
+                    ? darkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-700'
+                    : ''
+                }`}>
+                  <SlidersHorizontal className="w-4.5 h-4.5" />
+                </div>
+                {(openTickets.length > 0 || pendingRefills.length > 0) && (
+                  <span className={`absolute -top-1 -right-1.5 px-1 min-w-[15px] h-[15px] rounded-full bg-rose-500 text-white font-mono text-[9px] font-black flex items-center justify-center ring-2 ${
+                    darkMode ? 'ring-slate-900' : 'ring-white'
+                  }`}>
+                    {openTickets.length + pendingRefills.length}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] font-semibold tracking-tight mt-0.5">
+                {language === 'bn' ? 'হাব' : 'Hub'}
+              </span>
+            </button>
+          </div>
         </div>
       </nav>
-      </div>
+
+      {/* =========================================================================
+          MODAL: ADD / EDIT SERVICE
+         ========================================================================= */}
+      {(isAddingService || editingService) && (
+        <div 
+          onClick={() => { setIsAddingService(false); setEditingService(null); }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in-0 duration-150"
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className={`w-full max-w-lg p-6 rounded-3xl border shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto ${surfaceCard}`}
+          >
+            <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-slate-800">
+              <h3 className="font-extrabold text-sm tracking-tight">
+                {editingService ? 'Edit SMM Service' : 'Add New Service to Catalog'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => { setIsAddingService(false); setEditingService(null); }}
+                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={e => {
+                e.preventDefault();
+                const target = editingService || newService;
+                handleSaveService(target as SMMService);
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="font-bold block mb-1">Service Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editingService ? editingService.name : newService.name}
+                  onChange={e => {
+                    if (editingService) setEditingService({ ...editingService, name: e.target.value });
+                    else setNewService({ ...newService, name: e.target.value });
+                  }}
+                  className={`w-full h-9 px-3 rounded-xl border ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold block mb-1">Category</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingService ? editingService.category : newService.category}
+                    onChange={e => {
+                      if (editingService) setEditingService({ ...editingService, category: e.target.value });
+                      else setNewService({ ...newService, category: e.target.value });
+                    }}
+                    className={`w-full h-9 px-3 rounded-xl border ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                  />
+                </div>
+                <div>
+                  <label className="font-bold block mb-1">Selling Rate / 1,000 (BDT)</label>
+                  <input
+                    type="number"
+                    required
+                    value={editingService ? editingService.rate : newService.rate}
+                    onChange={e => {
+                      if (editingService) setEditingService({ ...editingService, rate: Number(e.target.value) });
+                      else setNewService({ ...newService, rate: Number(e.target.value) });
+                    }}
+                    className={`w-full h-9 px-3 rounded-xl border font-mono ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold block mb-1">Min Order</label>
+                  <input
+                    type="number"
+                    value={editingService ? editingService.min : newService.min}
+                    onChange={e => {
+                      if (editingService) setEditingService({ ...editingService, min: Number(e.target.value) });
+                      else setNewService({ ...newService, min: Number(e.target.value) });
+                    }}
+                    className={`w-full h-9 px-3 rounded-xl border font-mono ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                  />
+                </div>
+                <div>
+                  <label className="font-bold block mb-1">Max Order</label>
+                  <input
+                    type="number"
+                    value={editingService ? editingService.max : newService.max}
+                    onChange={e => {
+                      if (editingService) setEditingService({ ...editingService, max: Number(e.target.value) });
+                      else setNewService({ ...newService, max: Number(e.target.value) });
+                    }}
+                    className={`w-full h-9 px-3 rounded-xl border font-mono ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold block mb-1">Link Upstream API Provider</label>
+                <select
+                  value={editingService ? editingService.providerId || '' : newService.providerId || ''}
+                  onChange={e => {
+                    if (editingService) setEditingService({ ...editingService, providerId: e.target.value || undefined });
+                    else setNewService({ ...newService, providerId: e.target.value || undefined });
+                  }}
+                  className={`w-full h-9 px-3 rounded-xl border ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                >
+                  <option value="">None (Manual / Direct Fulfillment)</option>
+                  {providers.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.apiUrl})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold block mb-1">Service Description</label>
+                <textarea
+                  rows={2}
+                  value={editingService ? editingService.description || '' : newService.description || ''}
+                  onChange={e => {
+                    if (editingService) setEditingService({ ...editingService, description: e.target.value });
+                    else setNewService({ ...newService, description: e.target.value });
+                  }}
+                  placeholder="Instructions or features for customers..."
+                  className={`w-full p-2.5 rounded-xl border ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setIsAddingService(false); setEditingService(null); }}
+                  className="px-4 py-2 rounded-xl border font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+                >
+                  Save Service
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL: ADD API PROVIDER
+         ========================================================================= */}
+      {isAddingProvider && (
+        <div 
+          onClick={() => setIsAddingProvider(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in-0 duration-150"
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className={`w-full max-w-lg p-6 rounded-3xl border shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto ${surfaceCard}`}
+          >
+            <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-slate-800">
+              <h3 className="font-extrabold text-sm tracking-tight">Connect SMM API v2 Provider</h3>
+              <button
+                type="button"
+                onClick={() => setIsAddingProvider(false)}
+                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Presets */}
+            <div className="space-y-1">
+              <span className="text-[11px] font-bold text-slate-400 uppercase">Popular Presets</span>
+              <div className="flex flex-wrap gap-1.5">
+                {POPULAR_SMM_PROVIDER_PRESETS.map(preset => (
+                  <button
+                    key={preset.name}
+                    type="button"
+                    onClick={() => {
+                      setNewProvider(prev => ({
+                        ...prev,
+                        name: preset.name,
+                        apiUrl: preset.apiUrl,
+                        profitMargin: preset.margin
+                      }));
+                    }}
+                    className={`px-2 py-1 rounded-lg border text-[11px] font-semibold hover:border-indigo-500 ${surfaceSubtle}`}
+                  >
+                    {preset.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold block mb-1">Provider Name</label>
+                <input
+                  type="text"
+                  value={newProvider.name || ''}
+                  onChange={e => setNewProvider({ ...newProvider, name: e.target.value })}
+                  placeholder="e.g. Peakerr SMM"
+                  className={`w-full h-9 px-3 rounded-xl border ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                />
+              </div>
+
+              <div>
+                <label className="font-bold block mb-1">API v2 Endpoint URL</label>
+                <input
+                  type="text"
+                  value={newProvider.apiUrl || ''}
+                  onChange={e => setNewProvider({ ...newProvider, apiUrl: e.target.value })}
+                  placeholder="https://domain.com/api/v2"
+                  className={`w-full h-9 px-3 rounded-xl border font-mono ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                />
+              </div>
+
+              <div>
+                <label className="font-bold block mb-1">API Secret Key</label>
+                <div className="relative">
+                  <input
+                    type={showProviderSecret ? 'text' : 'password'}
+                    value={newProvider.apiKey || ''}
+                    onChange={e => setNewProvider({ ...newProvider, apiKey: e.target.value })}
+                    placeholder="Enter API Key from provider account"
+                    className={`w-full h-9 pl-3 pr-10 rounded-xl border font-mono ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowProviderSecret(!showProviderSecret)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  >
+                    {showProviderSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold block mb-1">Default Profit Margin (%)</label>
+                  <input
+                    type="number"
+                    value={newProvider.profitMargin || 25}
+                    onChange={e => setNewProvider({ ...newProvider, profitMargin: Number(e.target.value) })}
+                    className={`w-full h-9 px-3 rounded-xl border font-mono ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                  />
+                </div>
+                <div>
+                  <label className="font-bold block mb-1">Custom USD/BDT Rate</label>
+                  <input
+                    type="number"
+                    value={newProvider.customExchangeRate || 122}
+                    onChange={e => setNewProvider({ ...newProvider, customExchangeRate: Number(e.target.value) })}
+                    className={`w-full h-9 px-3 rounded-xl border font-mono ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}
+                  />
+                </div>
+              </div>
+
+              {newProviderPingResult && (
+                <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 font-mono text-xs">
+                  Ping: {newProviderPingResult.latencyMs}ms · Balance: ${newProviderPingResult.balance} {newProviderPingResult.currency}
+                </div>
+              )}
+
+              <div className="pt-2 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={handleTestNewProviderConnection}
+                  disabled={testingNewProvider}
+                  className="px-3 py-2 rounded-xl border font-bold flex items-center gap-1.5"
+                >
+                  <Play className="w-3 h-3 text-indigo-500" />
+                  <span>{testingNewProvider ? 'Pinging...' : 'Test Ping'}</span>
+                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingProvider(false)}
+                    className="px-4 py-2 rounded-xl border font-bold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveProvider}
+                    className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+                  >
+                    Save Provider
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL: BALANCE ADJUSTMENT (USER CONTROL)
+         ========================================================================= */}
+      {balanceAdjustUid && (
+        <div 
+          onClick={() => setBalanceAdjustUid(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in-0 duration-150"
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className={`w-full max-w-sm p-5 rounded-3xl border shadow-2xl space-y-4 ${surfaceCard}`}
+          >
+            <div className="flex items-center justify-between border-b pb-2 border-slate-200 dark:border-slate-800">
+              <h3 className="font-extrabold text-sm tracking-tight">Adjust Customer Balance</h3>
+              <button
+                type="button"
+                onClick={() => setBalanceAdjustUid(null)}
+                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold block mb-1">New Balance in BDT (৳)</label>
+                <input
+                  type="number"
+                  value={balanceAdjustAmount}
+                  onChange={e => setBalanceAdjustAmount(Number(e.target.value))}
+                  className={`w-full h-10 px-3 rounded-xl border font-mono text-base font-bold ${
+                    darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
+                  }`}
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBalanceAdjustUid(null)}
+                  className="px-3.5 py-1.5 rounded-xl border font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveUserBalance(balanceAdjustUid)}
+                  className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+                >
+                  Update Balance
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          DRAWER / MODAL: ORDER DETAILS
+         ========================================================================= */}
+      {activeOrderDetail && (
+        <div 
+          onClick={() => setActiveOrderDetail(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in-0 duration-150"
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className={`w-full max-w-md p-5 rounded-3xl border shadow-2xl space-y-3.5 ${surfaceCard}`}
+          >
+            <div className="flex items-center justify-between border-b pb-2.5 border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <Package className="w-4 h-4 text-indigo-500" />
+                <h3 className="font-extrabold text-sm tracking-tight">Order #{activeOrderDetail.id} Details</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveOrderDetail(null)}
+                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs font-mono">
+              <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                <span className="text-slate-400">Customer:</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">{activeOrderDetail.userEmail}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                <span className="text-slate-400">Service:</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[200px]">{activeOrderDetail.serviceName}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                <span className="text-slate-400">Quantity:</span>
+                <span className="font-semibold">{activeOrderDetail.quantity.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                <span className="text-slate-400">Charge:</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">৳{activeOrderDetail.charge}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                <span className="text-slate-400">Target Link:</span>
+                <a
+                  href={activeOrderDetail.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-indigo-600 dark:text-indigo-400 hover:underline truncate max-w-[200px]"
+                >
+                  {activeOrderDetail.link}
+                </a>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                <span className="text-slate-400">Upstream Provider:</span>
+                <span className="font-semibold">{activeOrderDetail.providerOrderId ? `Provider #${activeOrderDetail.providerOrderId}` : 'Not dispatched'}</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-slate-400">Order Placed:</span>
+                <span>{new Date(activeOrderDetail.createdAt).toLocaleString()}</span>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setActiveOrderDetail(null)}
+                className="px-4 py-1.5 rounded-xl bg-indigo-600 text-white font-bold text-xs"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

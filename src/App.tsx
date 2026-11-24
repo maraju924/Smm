@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useRef, useMemo, Suspense, lazy } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { PublicLandingView } from './components/views/PublicLandingView';
 import { Toast, ToastMessage } from './components/common/Toast';
@@ -32,12 +32,17 @@ import {
   subscribeCoupons,
   subscribeProviders,
   subscribeSiteSettings,
-  syncActiveOrdersWithProviders
+  syncActiveOrdersWithProviders,
+  filterActiveProviderServices,
+  reconcileAndPurgeInactiveServices,
+  autoSyncAllProvidersEverything
 } from './services/db';
 import { subscribeBlogs } from './services/blogSeoService';
 import { DEFAULT_SITE_SETTINGS, INITIAL_SEO_BLOG_POSTS } from './data/seedServices';
 import { AdminView } from './components/views/AdminView';
 import { BlogView } from './components/views/BlogView';
+import { AuthModal } from './components/modals/AuthModal';
+import { CommandPaletteModal } from './components/modals/CommandPaletteModal';
 
 function lazyWithRetry<T extends React.ComponentType<any>>(
   importer: () => Promise<{ default: T }>
@@ -71,8 +76,6 @@ const ApiDocsView = lazyWithRetry(() => import('./components/views/ApiDocsView')
 const ProfileView = lazyWithRetry(() => import('./components/views/ProfileView').then(m => ({ default: m.ProfileView })));
 const MenuView = lazyWithRetry(() => import('./components/views/MenuView').then(m => ({ default: m.MenuView })));
 const ProductionPagesView = lazyWithRetry(() => import('./components/views/ProductionPagesView').then(m => ({ default: m.ProductionPagesView })));
-const AuthModal = lazyWithRetry(() => import('./components/modals/AuthModal').then(m => ({ default: m.AuthModal })));
-const CommandPaletteModal = lazyWithRetry(() => import('./components/modals/CommandPaletteModal').then(m => ({ default: m.CommandPaletteModal })));
 
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
@@ -199,15 +202,15 @@ function resolveInitialRoute(): { tab: string; isWorkspace: boolean; params: any
 
 const ViewLoadingFallback: React.FC = () => (
   <div className="min-h-[50vh] w-full flex items-center justify-center p-8">
-    <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-[#0E1320] border border-white/[0.08] text-xs font-semibold text-[#CBD5E1]">
-      <span className="w-2 h-2 rounded-full bg-[#8B5CF6] animate-ping" />
+    <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl solid-panel text-xs font-semibold">
+      <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping" />
       <span>লোড হচ্ছে... / Loading...</span>
     </div>
   </div>
 );
 
 const MainAppContent: React.FC = () => {
-  const { user, profile, loading, isAdmin } = useAuth();
+  const { user, profile, loading, isAdmin, darkMode } = useAuth();
   const isLoggedIn = Boolean(user || profile || (loading && hasStoredAuthSession()));
   
   // Navigation tab (supports deep-linked SEO URLs like /?tab=about, /about, /?tab=services&category=Facebook)
@@ -267,6 +270,7 @@ const MainAppContent: React.FC = () => {
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [coupons, setCoupons] = useState<SMMCoupon[]>([]);
   const [providers, setProviders] = useState<SMMProvider[]>([]);
+  const [providersLoaded, setProvidersLoaded] = useState<boolean>(false);
   const [blogs, setBlogs] = useState<SMMBlogPost[]>(INITIAL_SEO_BLOG_POSTS);
   const [siteSettings, setSiteSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS);
 
@@ -275,6 +279,17 @@ const MainAppContent: React.FC = () => {
   const servicesRef = useRef<SMMService[]>([]);
   const siteSettingsRef = useRef<SiteSettings>(DEFAULT_SITE_SETTINGS);
   const isAutoSyncingRef = useRef<boolean>(false);
+  const isProviderCatalogSyncingRef = useRef<boolean>(false);
+
+  // Strictly filtered active services from active API providers only
+  const activeServices = useMemo(() => {
+    return filterActiveProviderServices(
+      services,
+      providers,
+      siteSettings,
+      isAdmin && providersLoaded
+    );
+  }, [services, providers, siteSettings, isAdmin, providersLoaded]);
 
   useEffect(() => {
     providersRef.current = providers;
@@ -390,7 +405,10 @@ const MainAppContent: React.FC = () => {
       const unsubTickets = subscribeAllTickets(setTickets);
       const unsubRefills = subscribeAllRefills(setRefills);
       const unsubUsers = subscribeAllUsers(setAllUsers);
-      const unsubProviders = subscribeProviders(setProviders);
+      const unsubProviders = subscribeProviders((loadedProviders) => {
+        setProviders(loadedProviders);
+        setProvidersLoaded(true);
+      });
 
       return () => {
         unsubOrders();
@@ -401,6 +419,7 @@ const MainAppContent: React.FC = () => {
         unsubProviders();
       };
     } else {
+      setProvidersLoaded(false);
       const unsubOrders = subscribeUserOrders(activeUid, setOrders);
       const unsubRefills = subscribeUserRefills(activeUid, setRefills);
       const unsubPayments = subscribeUserPayments(activeUid, setPayments);
@@ -414,6 +433,85 @@ const MainAppContent: React.FC = () => {
       };
     }
   }, [profile?.uid, isAdmin]);
+
+  // 100% Autonomous Provider & Active Service Reconciliation + 5-Minute Full Auto-Sync Engine
+  useEffect(() => {
+    if (!isAdmin || !providersLoaded || servicesLoading) return;
+
+    // 1. Immediately purge any services in Firestore that do not belong to currently active providers
+    const activeProviderIdSet = new Set(
+      providers
+        .filter((p) => p.status === 'active' && Boolean(p.apiUrl?.trim() && p.apiKey?.trim()))
+        .map((p) => p.id)
+    );
+    const hasOrphanedOrInactive = services.some(
+      (s) =>
+        s.status !== 'active' ||
+        !s.providerId ||
+        !s.providerServiceId ||
+        !activeProviderIdSet.has(s.providerId)
+    );
+    const currentSettingIds = siteSettings.activeProviderIds || [];
+    const settingsOutOfSync =
+      currentSettingIds.length !== activeProviderIdSet.size ||
+      Array.from(activeProviderIdSet).some((id) => !currentSettingIds.includes(id));
+
+    if (hasOrphanedOrInactive || settingsOutOfSync) {
+      reconcileAndPurgeInactiveServices(providers).catch((err) => {
+        console.warn('Auto-reconcile inactive services warning:', err);
+      });
+    }
+  }, [isAdmin, providersLoaded, servicesLoading, providers, services, siteSettings.activeProviderIds]);
+
+  // Continuous 5-Minute Background Provider Catalog & Balance Auto-Sync
+  useEffect(() => {
+    if (!isAdmin || !providersLoaded) return;
+
+    const runFullProviderAutoSync = async (isInitialBoot: boolean = false) => {
+      if (isProviderCatalogSyncingRef.current) return;
+      const activePrvs = providersRef.current.filter(
+        (p) => p.status === 'active' && Boolean(p.apiUrl?.trim() && p.apiKey?.trim())
+      );
+      if (activePrvs.length === 0) return;
+
+      // On initial boot, only trigger full remote fetch if any active provider hasn't synced in the last 5 minutes or has 0 local services
+      if (isInitialBoot) {
+        const now = Date.now();
+        const needsSync = activePrvs.some((prv) => {
+          const lastSync = prv.lastSyncAt || 0;
+          const hasLocalServices = servicesRef.current.some(
+            (s) => s.providerId === prv.id && s.status === 'active'
+          );
+          return !hasLocalServices || now - lastSync > FIVE_MINUTES_MS;
+        });
+        if (!needsSync) return;
+      }
+
+      isProviderCatalogSyncingRef.current = true;
+      setIsSyncingCatalog(true);
+      try {
+        await autoSyncAllProvidersEverything(
+          providersRef.current,
+          ordersRef.current,
+          servicesRef.current,
+          siteSettingsRef.current.usdToBdtRate || 122
+        );
+      } catch (e) {
+        console.warn('Automatic provider catalog sync warning:', e);
+      } finally {
+        isProviderCatalogSyncingRef.current = false;
+        setIsSyncingCatalog(false);
+      }
+    };
+
+    const bootTimer = window.setTimeout(() => runFullProviderAutoSync(true), 2200);
+    const intervalId = window.setInterval(() => runFullProviderAutoSync(false), FIVE_MINUTES_MS);
+
+    return () => {
+      window.clearTimeout(bootTimer);
+      window.clearInterval(intervalId);
+    };
+  }, [isAdmin, providersLoaded]);
 
   const handleNavigate = (tabId: string, params?: any) => {
     const rawNormalized = normalizeTabId(tabId);
@@ -480,7 +578,7 @@ const MainAppContent: React.FC = () => {
           <AdminView
             orders={orders}
             payments={payments}
-            services={services}
+            services={activeServices}
             tickets={tickets}
             users={allUsers}
             refills={refills}
@@ -506,7 +604,7 @@ const MainAppContent: React.FC = () => {
           currentTab="maintenance"
           navParams={navParams}
           siteSettings={siteSettings}
-          services={services}
+          services={activeServices}
         />
         <Toast toasts={toasts} onDismiss={removeToast} />
         {isAuthOpen && (
@@ -526,7 +624,7 @@ const MainAppContent: React.FC = () => {
           <ProductionPagesView
             page="maintenance"
             siteSettings={siteSettings}
-            services={services}
+            services={activeServices}
             onNavigateTab={handleNavigate}
             onOpenAuth={() => openAuthModal('login')}
             onShowToast={addToast}
@@ -537,15 +635,15 @@ const MainAppContent: React.FC = () => {
     );
   }
 
-  // STANDALONE PUBLIC SEO BLOG HUB & ARTICLE READER (For Googlebot & Unauthenticated Guests)
-  if (!isLoggedIn && !guestWorkspaceMode && currentTab === 'blog') {
+  // STANDALONE PUBLIC SEO BLOG HUB & ARTICLE READER (For Googlebot & Unauthenticated Visitors)
+  if (!isLoggedIn && currentTab === 'blog') {
     return (
       <>
         <SeoHeadManager
           currentTab="blog"
           navParams={navParams}
           siteSettings={siteSettings}
-          services={services}
+          services={activeServices}
           blogs={blogs}
         />
         <Toast toasts={toasts} onDismiss={removeToast} />
@@ -565,16 +663,22 @@ const MainAppContent: React.FC = () => {
         <Suspense fallback={<ViewLoadingFallback />}>
           <BlogView
             blogs={blogs}
-            services={services}
+            services={activeServices}
             siteSettings={siteSettings}
             userProfile={profile}
             coupons={coupons}
             selectedSlug={navParams?.slug || null}
             onSelectSlug={(slug) => handleNavigate('blog', slug ? { slug } : {})}
-            onNavigate={(tabId) => handleNavigate(tabId)}
-            onSelectService={(srv) => {
-              setGuestWorkspaceMode(true);
-              handleNavigate('new-order', { serviceId: srv.id, category: srv.category });
+            onNavigate={(tabId) => {
+              const norm = normalizeTabId(tabId);
+              if (norm === 'blog' || norm === 'landing' || PRODUCTION_PAGE_TABS.has(norm)) {
+                handleNavigate(norm);
+              } else {
+                openAuthModal('register');
+              }
+            }}
+            onSelectService={() => {
+              openAuthModal('register');
             }}
             isPublicStandalone={true}
             onOpenAuth={() => openAuthModal('login')}
@@ -584,15 +688,15 @@ const MainAppContent: React.FC = () => {
     );
   }
 
-  // STANDALONE PUBLIC SEO PRODUCTION PAGES (ONLY when visited by unauthenticated guests outside workspace)
-  if (!isLoggedIn && !guestWorkspaceMode && PRODUCTION_PAGE_TABS.has(currentTab)) {
+  // STANDALONE PUBLIC SEO PRODUCTION PAGES (About, Contact, Terms, Privacy, Refund for Unauthenticated Visitors)
+  if (!isLoggedIn && PRODUCTION_PAGE_TABS.has(currentTab)) {
     return (
       <>
         <SeoHeadManager
           currentTab={currentTab}
           navParams={navParams}
           siteSettings={siteSettings}
-          services={services}
+          services={activeServices}
           blogs={blogs}
         />
         <Toast toasts={toasts} onDismiss={removeToast} />
@@ -613,12 +717,15 @@ const MainAppContent: React.FC = () => {
           <ProductionPagesView
             page={currentTab as ProductionPageType}
             siteSettings={siteSettings}
-            services={services}
+            services={activeServices}
             onNavigateTab={(tabId, params) => {
-              if (!PRODUCTION_PAGE_TABS.has(normalizeTabId(tabId)) && tabId !== 'landing') {
-                setGuestWorkspaceMode(true);
+              const norm = normalizeTabId(tabId);
+              if (PRODUCTION_PAGE_TABS.has(norm) || norm === 'landing' || norm === 'blog') {
+                handleNavigate(norm, params);
+              } else {
+                handleNavigate('landing');
+                openAuthModal('login');
               }
-              handleNavigate(tabId, params);
             }}
             onOpenAuth={() => openAuthModal('login')}
             onShowToast={addToast}
@@ -629,49 +736,42 @@ const MainAppContent: React.FC = () => {
     );
   }
 
-  // STANDALONE PUBLIC LANDING PAGE (STRICTLY ONLY for unauthenticated guests — logged-in users NEVER see this)
-  if (!isLoggedIn && (currentTab === 'landing' || (currentTab === 'home' && !guestWorkspaceMode))) {
+  // STANDALONE PUBLIC LANDING PAGE (ALL Unauthenticated Visitors see the Public Landing Page)
+  if (!isLoggedIn) {
     return (
       <>
         <SeoHeadManager
           currentTab="landing"
           navParams={navParams}
           siteSettings={siteSettings}
-          services={services}
+          services={activeServices}
           blogs={blogs}
         />
         <Toast toasts={toasts} onDismiss={removeToast} />
         {isAuthOpen && (
-          <Suspense fallback={null}>
-            <AuthModal
-              isOpen={isAuthOpen}
-              initialMode={authInitialMode}
-              onClose={() => setIsAuthOpen(false)}
-              onSuccessToast={(msg) => {
-                addToast(msg, 'success');
-                setCurrentTab('home');
-              }}
-            />
-          </Suspense>
+          <AuthModal
+            isOpen={isAuthOpen}
+            initialMode={authInitialMode}
+            onClose={() => setIsAuthOpen(false)}
+            onSuccessToast={(msg) => {
+              addToast(msg, 'success');
+              setCurrentTab('home');
+            }}
+          />
         )}
         <PublicLandingView
-          services={services}
+          services={activeServices}
           announcements={announcements}
           siteSettings={siteSettings}
           onNavigateTab={(tabId, params) => {
             const norm = normalizeTabId(tabId);
-            if (!PRODUCTION_PAGE_TABS.has(norm) && norm !== 'landing' && norm !== 'blog') {
-              setGuestWorkspaceMode(true);
+            if (PRODUCTION_PAGE_TABS.has(norm) || norm === 'landing' || norm === 'blog') {
+              handleNavigate(norm, params);
             } else {
-              setGuestWorkspaceMode(false);
+              openAuthModal('login');
             }
-            handleNavigate(norm, params);
           }}
           onOpenAuth={(mode) => openAuthModal(mode || 'login')}
-          onEnterWorkspace={() => {
-            setGuestWorkspaceMode(true);
-            handleNavigate('home');
-          }}
         />
       </>
     );
@@ -680,12 +780,15 @@ const MainAppContent: React.FC = () => {
   const activeDashboardTab = isLoggedIn && currentTab === 'landing' ? 'home' : currentTab;
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#080B14] text-[#F1F5F9] flex font-sans selection:bg-[#8B5CF6] selection:text-white">
+    <div
+      data-theme={darkMode ? 'dark' : 'light'}
+      className="user-workspace-shell min-h-screen w-full max-w-[100vw] overflow-x-hidden flex selection:bg-indigo-600 selection:text-white"
+    >
       <SeoHeadManager
         currentTab={activeDashboardTab}
         navParams={navParams}
         siteSettings={siteSettings}
-        services={services}
+        services={activeServices}
         blogs={blogs}
       />
       {/* Toast notifications */}
@@ -693,27 +796,23 @@ const MainAppContent: React.FC = () => {
 
       {/* Auth Modal */}
       {isAuthOpen && (
-        <Suspense fallback={null}>
-          <AuthModal 
-            isOpen={isAuthOpen} 
-            initialMode={authInitialMode}
-            onClose={() => setIsAuthOpen(false)}
-            onSuccessToast={(msg) => addToast(msg, 'success')}
-          />
-        </Suspense>
+        <AuthModal 
+          isOpen={isAuthOpen} 
+          initialMode={authInitialMode}
+          onClose={() => setIsAuthOpen(false)}
+          onSuccessToast={(msg) => addToast(msg, 'success')}
+        />
       )}
 
       {/* Global Command Palette (Cmd+K / Search) */}
       {isCommandPaletteOpen && (
-        <Suspense fallback={null}>
-          <CommandPaletteModal
-            isOpen={isCommandPaletteOpen}
-            onClose={() => setIsCommandPaletteOpen(false)}
-            services={services}
-            orders={orders}
-            onNavigateTab={handleNavigate}
-          />
-        </Suspense>
+        <CommandPaletteModal
+          isOpen={isCommandPaletteOpen}
+          onClose={() => setIsCommandPaletteOpen(false)}
+          services={activeServices}
+          orders={orders}
+          onNavigateTab={handleNavigate}
+        />
       )}
 
       {/* Desktop Operational Sidebar (lg+) */}
@@ -726,17 +825,13 @@ const MainAppContent: React.FC = () => {
           collapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           ordersBadgeCount={inProgressOrderCount}
-          servicesCount={services.length}
+          servicesCount={activeServices.length}
           openTicketsCount={tickets.filter((t) => t.status !== 'closed').length}
         />
       </Suspense>
 
       {/* Main Application Shell */}
-      <div
-        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${
-          isSidebarCollapsed ? 'lg:pl-20' : 'lg:pl-64'
-        }`}
-      >
+      <div className="flex-1 flex flex-col min-w-0 transition-all duration-200">
         {/* Top Utility & Mobile App Header */}
         <Suspense fallback={null}>
           <Navbar 
@@ -757,14 +852,14 @@ const MainAppContent: React.FC = () => {
                   onNavigateTab={handleNavigate}
                   onOpenAuth={() => setIsAuthOpen(true)}
                   orders={orders}
-                  services={services}
+                  services={activeServices}
                   announcements={announcements}
                 />
               )}
 
               {currentTab === 'new-order' && (
                 <NewOrderView
-                  services={services}
+                  services={activeServices}
                   orders={orders}
                   onOrderSuccess={(id) => {
                     addToast(`অর্ডার #${id} সফলভাবে গ্রহণ করা হয়েছে!`, 'success');
@@ -779,7 +874,7 @@ const MainAppContent: React.FC = () => {
 
               {currentTab === 'mass-order' && (
                 <MassOrderView
-                  services={services}
+                  services={activeServices}
                   onOrderSuccess={() => {
                     addToast('ম্যাস অর্ডার সফলভাবে প্লেস হয়েছে!', 'success');
                     handleNavigate('orders');
@@ -793,7 +888,7 @@ const MainAppContent: React.FC = () => {
                 <OrdersView
                   orders={orders}
                   refills={refills}
-                  services={services}
+                  services={activeServices}
                   providers={providers}
                   onNavigateTab={handleNavigate}
                   onShowToast={addToast}
@@ -802,7 +897,7 @@ const MainAppContent: React.FC = () => {
 
               {currentTab === 'services' && (
                 <ServicesView
-                  services={services}
+                  services={activeServices}
                   orders={orders}
                   isLoading={servicesLoading}
                   isSyncing={isSyncingCatalog}
@@ -865,7 +960,7 @@ const MainAppContent: React.FC = () => {
 
               {currentTab === 'api-docs' && (
                 <ApiDocsView
-                  services={services}
+                  services={activeServices}
                   orders={orders}
                   refills={refills}
                   onShowToast={addToast}
@@ -891,7 +986,7 @@ const MainAppContent: React.FC = () => {
               {currentTab === 'blog' && (
                 <BlogView
                   blogs={blogs}
-                  services={services}
+                  services={activeServices}
                   siteSettings={siteSettings}
                   userProfile={profile}
                   coupons={coupons}
@@ -910,7 +1005,7 @@ const MainAppContent: React.FC = () => {
                 <ProductionPagesView
                   page={currentTab as ProductionPageType}
                   siteSettings={siteSettings}
-                  services={services}
+                  services={activeServices}
                   onNavigateTab={handleNavigate}
                   onOpenAuth={() => setIsAuthOpen(true)}
                   onShowToast={addToast}

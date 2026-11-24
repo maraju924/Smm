@@ -16,7 +16,6 @@ import {
   ArrowRight,
   ShieldCheck
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
 import { SMMService, SMMOrder } from '../../types';
 
@@ -118,21 +117,17 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       .slice(0, 5);
   }, [orders, query]);
 
+  if (!isOpen) return null;
+
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <div
-          onClick={onClose}
-          className="fixed inset-0 z-50 flex items-start justify-center pt-14 sm:pt-24 px-3 sm:px-4 bg-black/75 backdrop-blur-md"
-        >
-          <motion.div
-            onClick={e => e.stopPropagation()}
-            initial={{ opacity: 0, scale: 0.96, y: -10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: -10 }}
-            transition={{ duration: 0.16, ease: 'easeOut' }}
-            className="w-full max-w-xl rounded-3xl glass-panel border border-violet-500/30 shadow-2xl overflow-hidden text-[#F1F5F9]"
-          >
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-start justify-center pt-14 sm:pt-24 px-3 sm:px-4 bg-black/75 backdrop-blur-md transition-opacity duration-150"
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        className="w-full max-w-xl rounded-3xl glass-panel border border-violet-500/30 shadow-2xl overflow-hidden text-[#F1F5F9] transition-all duration-150"
+      >
             {/* Search Bar */}
             <div className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-800/80 bg-[#080B14]/70">
               <Search className="w-4 h-4 text-[#22D3EE] shrink-0" />
@@ -288,9 +283,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                 </div>
               )}
             </div>
-          </motion.div>
+          </div>
         </div>
-      )}
-    </AnimatePresence>
   );
 };

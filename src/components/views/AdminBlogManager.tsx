@@ -829,7 +829,7 @@ export const AdminBlogManager: React.FC<AdminBlogManagerProps> = ({
       {/* =========================================================
           TOP HERO & 10-18H AUTOPILOT COMMAND BAR
          ========================================================= */}
-      <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-5 sm:p-7 border border-indigo-500/20 shadow-lg space-y-5">
+      <div className="dark-hero-card bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-5 sm:p-7 border border-indigo-500/20 shadow-lg space-y-5">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">

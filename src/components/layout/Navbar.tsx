@@ -8,7 +8,10 @@ import {
   Search,
   BarChart3,
   LayoutGrid,
-  ChevronRight
+  ChevronRight,
+  Sun,
+  Moon,
+  Wallet,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
@@ -28,7 +31,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigateTab,
   onOpenCommandPalette,
   currentTab,
-  announcements
+  announcements,
 }) => {
   const {
     profile,
@@ -37,8 +40,10 @@ export const Navbar: React.FC<NavbarProps> = ({
     setCurrency,
     language,
     setLanguage,
+    darkMode,
+    setDarkMode,
     logout,
-    formatPrice
+    formatPrice,
   } = useAuth();
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -49,72 +54,87 @@ export const Navbar: React.FC<NavbarProps> = ({
       case 'home':
         return {
           title: language === 'bn' ? 'হোম ড্যাশবোর্ড' : 'Dashboard',
-          group: language === 'bn' ? 'হোম' : 'Home'
+          group: language === 'bn' ? 'ড্যাশবোর্ড' : 'Home',
         };
       case 'new-order':
         return {
           title: language === 'bn' ? 'নতুন অর্ডার করুন' : 'New Order',
-          group: language === 'bn' ? 'অর্ডার' : 'Order'
+          group: language === 'bn' ? 'অর্ডার' : 'Order',
         };
       case 'mass-order':
         return {
-          title: language === 'bn' ? 'একসাথে অনেক অর্ডার' : 'Bulk Order',
-          group: language === 'bn' ? 'অর্ডার' : 'Order'
+          title: language === 'bn' ? 'বাল্ক অর্ডার' : 'Bulk Order',
+          group: language === 'bn' ? 'অর্ডার' : 'Order',
         };
       case 'orders':
         return {
           title: language === 'bn' ? 'আমার অর্ডারসমূহ' : 'My Orders',
-          group: language === 'bn' ? 'অর্ডার তালিকা' : 'Orders'
+          group: language === 'bn' ? 'অর্ডার তালিকা' : 'Orders',
         };
       case 'services':
         return {
           title: language === 'bn' ? 'সার্ভিস ও মূল্য তালিকা' : 'Services & Pricing',
-          group: language === 'bn' ? 'সার্ভিস' : 'Services'
+          group: language === 'bn' ? 'ক্যাটালগ' : 'Services',
         };
       case 'analytics':
         return {
           title: language === 'bn' ? 'খরচ ও অর্ডার হিসাব' : 'Order Summary',
-          group: language === 'bn' ? 'হিসাব' : 'Summary'
+          group: language === 'bn' ? 'রিপোর্ট' : 'Summary',
         };
       case 'add-funds':
         return {
           title: language === 'bn' ? 'ওয়ালেট ও ব্যালেন্স' : 'My Wallet',
-          group: language === 'bn' ? 'ওয়ালেট' : 'Wallet'
+          group: language === 'bn' ? 'পেমেন্ট' : 'Wallet',
         };
       case 'affiliates':
         return {
           title: language === 'bn' ? 'রেফারেল ও বোনাস' : 'Refer & Earn',
-          group: language === 'bn' ? 'বোনাস' : 'Rewards'
+          group: language === 'bn' ? 'বোনাস' : 'Rewards',
         };
       case 'tickets':
         return {
           title: language === 'bn' ? 'হেল্প ও সাপোর্ট' : 'Help & Support',
-          group: language === 'bn' ? 'সহায়তা' : 'Support'
+          group: language === 'bn' ? 'সহায়তা' : 'Support',
         };
       case 'track-order':
         return {
           title: language === 'bn' ? 'অর্ডার ট্র্যাকিং' : 'Track Order',
-          group: language === 'bn' ? 'ট্র্যাকার' : 'Track'
+          group: language === 'bn' ? 'ট্র্যাকার' : 'Track',
+        };
+      case 'api-docs':
+        return {
+          title: language === 'bn' ? 'রিসেলার API ডকুমেন্টেশন' : 'Reseller API v2',
+          group: language === 'bn' ? 'ডেভেলপার' : 'API',
         };
       case 'profile':
         return {
           title: language === 'bn' ? 'প্রোফাইল ও সেটিংস' : 'Profile & Settings',
-          group: language === 'bn' ? 'অ্যাকাউন্ট' : 'Account'
+          group: language === 'bn' ? 'অ্যাকাউন্ট' : 'Account',
         };
       default:
         return {
           title: language === 'bn' ? 'সকল মেনু' : 'Menu',
-          group: language === 'bn' ? 'মেনু' : 'Menu'
+          group: language === 'bn' ? 'মেনু' : 'Menu',
         };
     }
   };
 
   const currentMeta = getTabTitle(currentTab);
 
+  const headerBg = darkMode
+    ? 'bg-slate-950/90 border-slate-800 text-slate-100'
+    : 'bg-white/95 border-slate-200 text-slate-900';
+  const pillSurface = darkMode
+    ? 'bg-slate-900 border-slate-800 text-slate-200 hover:border-slate-700'
+    : 'bg-slate-100/90 border-slate-200 text-slate-700 hover:border-slate-300';
+  const popoverSurface = darkMode
+    ? 'bg-slate-900 border-slate-800 text-slate-100 shadow-xl'
+    : 'bg-white border-slate-200 text-slate-900 shadow-xl';
+
   return (
-    <header className="sticky top-0 z-30 w-full max-w-[100vw] bg-[#090D16]/95 backdrop-blur-xl border-b border-white/[0.07]">
-      <div className="w-full px-3.5 sm:px-5 lg:px-7 h-14 lg:h-16 flex items-center justify-between gap-2">
-        {/* Left: Native Mobile Brand Header OR Desktop Context Title */}
+    <header className={`sticky top-0 z-30 w-full max-w-[100vw] backdrop-blur-md border-b transition-colors ${headerBg}`}>
+      <div className="w-full px-3.5 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+        {/* Left: Mobile Brand Header OR Desktop Context Breadcrumb */}
         <div className="flex items-center gap-2.5 min-w-0">
           {/* Mobile Brand Identity */}
           <div
@@ -124,15 +144,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             <img
               src={BRAND_LOGO_URL}
               alt="Boostlagbe.com"
-              width={34}
-              height={34}
-              className="w-8.5 h-8.5 rounded-xl object-contain bg-[#111726] border border-white/10 p-0.5 active:scale-95 transition-transform shrink-0"
+              width={36}
+              height={36}
+              className={`w-9 h-9 rounded-xl object-cover border shrink-0 ${
+                darkMode ? 'border-slate-800' : 'border-slate-200'
+              }`}
             />
             <div className="min-w-0">
-              <span className="font-extrabold text-[15px] tracking-tight text-white block leading-none truncate">
+              <span className="font-extrabold text-[15px] tracking-tight block leading-none truncate">
                 Boostlagbe.com
               </span>
-              <span className="text-[10px] font-medium text-emerald-400 block mt-0.5 truncate">
+              <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 block mt-0.5 truncate">
                 {currentMeta.title}
               </span>
             </div>
@@ -140,9 +162,11 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Desktop Breadcrumb & Title */}
           <div className="hidden lg:flex items-center gap-2 text-xs">
-            <span className="text-[#94A3B8] font-medium">{currentMeta.group}</span>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
-            <h1 className="text-sm font-extrabold text-[#F8FAFC] tracking-tight">
+            <span className={`font-medium ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+              {currentMeta.group}
+            </span>
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+            <h1 className="text-sm font-extrabold tracking-tight">
               {currentMeta.title}
             </h1>
           </div>
@@ -153,74 +177,103 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             type="button"
             onClick={onOpenCommandPalette}
-            className="w-full py-2 px-3.5 rounded-xl bg-[#111726] hover:bg-[#171F32] border border-white/[0.08] text-xs text-[#94A3B8] hover:text-white flex items-center justify-between gap-3 transition-all"
+            className={`w-full py-2 px-3.5 rounded-xl border text-xs flex items-center justify-between gap-3 transition-colors cursor-pointer ${pillSurface}`}
           >
             <div className="flex items-center gap-2 min-w-0">
-              <Search className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <Search className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
               <span className="truncate">
                 {language === 'bn'
-                  ? 'সার্ভিস বা অর্ডার খুঁজুন...'
-                  : 'Search services or orders...'}
+                  ? 'সার্ভিস বা অর্ডার খুঁজুন (Ctrl+K)...'
+                  : 'Search services or orders (Ctrl+K)...'}
               </span>
             </div>
+            <kbd
+              className={`px-1.5 py-0.5 text-[10px] font-mono rounded border ${
+                darkMode
+                  ? 'bg-slate-950 border-slate-800 text-slate-400'
+                  : 'bg-white border-slate-200 text-slate-500'
+              }`}
+            >
+              ⌘K
+            </kbd>
           </button>
         </div>
 
-        {/* Right Native Mobile Action Controls */}
+        {/* Right Controls */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Mobile Search Icon */}
           <button
             type="button"
             onClick={onOpenCommandPalette}
-            className="md:hidden flex items-center justify-center w-9 h-9 rounded-xl bg-[#111726] border border-white/[0.08] text-[#94A3B8] active:scale-95 transition-transform"
+            className={`md:hidden flex items-center justify-center w-9 h-9 rounded-xl border cursor-pointer ${pillSurface}`}
             title={language === 'bn' ? 'খুঁজুন' : 'Search'}
           >
-            <Search className="w-4 h-4 text-slate-200" />
+            <Search className="w-4 h-4" />
           </button>
 
-          {/* Balance Chip */}
+          {/* Wallet Balance Button */}
           {profile ? (
-            <motion.button
-              whileTap={{ scale: 0.96 }}
+            <button
+              type="button"
               onClick={() => onNavigateTab('add-funds')}
-              className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[#111726] border border-indigo-500/30 hover:border-indigo-400/50 transition-all text-left"
+              className={`flex items-center gap-2 h-9 px-3 rounded-xl border transition-all cursor-pointer ${
+                darkMode
+                  ? 'bg-emerald-950/50 border-emerald-800/60 text-emerald-300 hover:border-emerald-600'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:border-emerald-300'
+              }`}
               title={language === 'bn' ? 'ব্যালেন্স যোগ করুন' : 'Add Balance'}
             >
-              <span className="text-xs font-extrabold text-white font-mono tracking-tight tabular-nums whitespace-nowrap">
+              <Wallet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span className="text-xs font-extrabold font-mono tracking-tight tabular-nums whitespace-nowrap">
                 {formatPrice(profile.balance)}
               </span>
-              <div className="w-4 h-4 rounded-md bg-indigo-600 text-white flex items-center justify-center font-bold shrink-0">
+              <span className="w-4 h-4 rounded-md bg-emerald-600 text-white flex items-center justify-center font-bold shrink-0">
                 <Plus className="w-2.5 h-2.5 stroke-[3]" />
-              </div>
-            </motion.button>
+              </span>
+            </button>
           ) : (
-            <motion.button
-              whileTap={{ scale: 0.96 }}
+            <button
+              type="button"
               onClick={onOpenAuth}
-              className="h-9 px-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all whitespace-nowrap"
+              className="h-9 px-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors whitespace-nowrap cursor-pointer"
             >
               {language === 'bn' ? 'লগইন' : 'Sign In'}
-            </motion.button>
+            </button>
           )}
 
-          {/* Currency Switcher (Desktop/Tablet) */}
+          {/* Light / Dark Mode Switcher */}
+          <button
+            type="button"
+            onClick={() => setDarkMode(!darkMode)}
+            className={`flex items-center justify-center w-9 h-9 rounded-xl border transition-colors cursor-pointer ${pillSurface}`}
+            title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            aria-label="Toggle Light or Dark Mode"
+          >
+            {darkMode ? (
+              <Sun className="w-4 h-4 text-amber-400" />
+            ) : (
+              <Moon className="w-4 h-4 text-slate-700" />
+            )}
+          </button>
+
+          {/* Currency Switcher */}
           <button
             type="button"
             onClick={() => setCurrency(currency === 'BDT' ? 'USD' : 'BDT')}
-            className="hidden sm:flex items-center justify-center h-9 px-2.5 rounded-xl bg-[#111726] border border-white/[0.08] text-white font-mono font-bold text-[11px] hover:border-indigo-500/40 transition-colors"
+            className={`hidden sm:flex items-center justify-center h-9 px-2.5 rounded-xl border font-mono font-bold text-xs transition-colors cursor-pointer ${pillSurface}`}
             title="Switch Currency"
           >
             {currency === 'BDT' ? '৳ BDT' : '$ USD'}
           </button>
 
-          {/* Language Switcher (Desktop/Tablet) */}
+          {/* Language Switcher */}
           <button
             type="button"
             onClick={() => setLanguage(language === 'bn' ? 'en' : 'bn')}
-            className="hidden sm:flex items-center justify-center h-9 px-2.5 rounded-xl bg-[#111726] border border-white/[0.08] text-white text-[11px] font-bold hover:border-indigo-500/40 transition-colors"
+            className={`hidden sm:flex items-center justify-center h-9 px-2.5 rounded-xl border text-xs font-bold transition-colors cursor-pointer ${pillSurface}`}
             title="Switch Language"
           >
-            {language === 'bn' ? 'বাং' : 'EN'}
+            {language === 'bn' ? 'EN' : 'বাংলা'}
           </button>
 
           {/* Notifications Center */}
@@ -231,43 +284,51 @@ export const Navbar: React.FC<NavbarProps> = ({
                 setShowNotifications(!showNotifications);
                 setShowUserMenu(false);
               }}
-              className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-[#111726] border border-white/[0.08] text-[#94A3B8] hover:text-white active:scale-95 transition-all"
+              className={`relative flex items-center justify-center w-9 h-9 rounded-xl border transition-colors cursor-pointer ${pillSurface}`}
               title={language === 'bn' ? 'নোটিফিকেশন' : 'Notifications'}
             >
               <Bell className="w-4 h-4" />
-              {announcements.some(a => a.active) && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#090D16]" />
+              {announcements.some((a) => a.active) && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-indigo-600" />
               )}
             </button>
 
             <AnimatePresence>
               {showNotifications && (
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                  initial={{ opacity: 0, scale: 0.96, y: -4 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                  exit={{ opacity: 0, scale: 0.96, y: -4 }}
                   transition={{ duration: 0.14 }}
-                  className="absolute right-0 mt-2 w-72 sm:w-80 glass-panel rounded-2xl p-3.5 z-50 text-left"
+                  className={`absolute right-0 mt-2 w-72 sm:w-80 rounded-2xl border p-3.5 z-50 text-left ${popoverSurface}`}
                 >
-                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/[0.08] text-xs font-bold text-white">
+                  <div
+                    className={`flex items-center justify-between pb-2 mb-2 border-b text-xs font-bold ${
+                      darkMode ? 'border-slate-800' : 'border-slate-200'
+                    }`}
+                  >
                     <span>{language === 'bn' ? 'নোটিশ ও আপডেট' : 'Updates & Notices'}</span>
-                    <span className="text-[10px] font-mono text-emerald-400">
+                    <span className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400">
                       {announcements.length}
                     </span>
                   </div>
                   {announcements.length === 0 ? (
-                    <p className="text-xs text-[#94A3B8] py-4 text-center">
+                    <p className="text-xs text-slate-500 py-4 text-center">
                       {language === 'bn' ? 'কোনো নতুন নোটিশ নেই' : 'No new notifications'}
                     </p>
                   ) : (
                     <div className="space-y-2 max-h-60 overflow-y-auto no-scrollbar">
-                      {announcements.map(a => (
+                      {announcements.map((a) => (
                         <div
                           key={a.id}
-                          className="p-2.5 rounded-xl bg-[#090D16] border border-white/[0.07] text-left"
+                          className={`p-3 rounded-xl border text-left ${
+                            darkMode
+                              ? 'bg-slate-950 border-slate-800'
+                              : 'bg-slate-50 border-slate-200'
+                          }`}
                         >
-                          <p className="text-xs font-bold text-white">{a.title}</p>
-                          <p className="text-[11px] text-[#94A3B8] mt-1 leading-relaxed">
+                          <p className="text-xs font-bold">{a.title}</p>
+                          <p className={`text-[11px] mt-1 leading-relaxed ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                             {a.content}
                           </p>
                         </div>
@@ -284,10 +345,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               type="button"
               onClick={() => onNavigateTab('admin')}
-              className="flex items-center gap-1 h-9 px-2.5 rounded-xl text-[11px] font-extrabold transition-all bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 active:scale-95"
+              className="flex items-center gap-1 h-9 px-2.5 rounded-xl text-xs font-bold transition-colors bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-700 dark:text-amber-300 cursor-pointer"
               title="Admin Panel"
             >
-              <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
               <span className="hidden sm:inline">Admin</span>
             </button>
           )}
@@ -301,7 +362,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   setShowUserMenu(!showUserMenu);
                   setShowNotifications(false);
                 }}
-                className="flex items-center justify-center w-9 h-9 rounded-xl bg-indigo-600/25 border border-indigo-500/40 text-white font-extrabold text-xs overflow-hidden active:scale-95 transition-transform"
+                className="flex items-center justify-center w-9 h-9 rounded-xl bg-indigo-600 text-white font-extrabold text-xs overflow-hidden cursor-pointer shadow-xs"
               >
                 {profile.photoURL ? (
                   <img src={profile.photoURL} alt="Avatar" className="w-full h-full object-cover" />
@@ -313,15 +374,21 @@ export const Navbar: React.FC<NavbarProps> = ({
               <AnimatePresence>
                 {showUserMenu && (
                   <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                    initial={{ opacity: 0, scale: 0.96, y: -4 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                    exit={{ opacity: 0, scale: 0.96, y: -4 }}
                     transition={{ duration: 0.14 }}
-                    className="absolute right-0 mt-2 w-52 glass-panel rounded-2xl p-2 z-50 text-left"
+                    className={`absolute right-0 mt-2 w-56 rounded-2xl border p-2 z-50 text-left ${popoverSurface}`}
                   >
-                    <div className="px-2.5 py-2 border-b border-white/[0.08] mb-1">
-                      <p className="text-xs font-bold text-white truncate">{profile.displayName}</p>
-                      <p className="text-[10px] text-[#94A3B8] truncate">{profile.email}</p>
+                    <div
+                      className={`px-2.5 py-2 border-b mb-1 ${
+                        darkMode ? 'border-slate-800' : 'border-slate-200'
+                      }`}
+                    >
+                      <p className="text-xs font-bold truncate">{profile.displayName}</p>
+                      <p className={`text-[11px] truncate ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                        {profile.email}
+                      </p>
                     </div>
                     <button
                       type="button"
@@ -329,9 +396,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                         onNavigateTab('profile');
                         setShowUserMenu(false);
                       }}
-                      className="flex items-center gap-2 w-full p-2 text-xs text-slate-200 hover:text-white hover:bg-[#171F32] rounded-xl transition-colors"
+                      className={`flex items-center gap-2 w-full p-2 text-xs font-medium rounded-xl transition-colors cursor-pointer ${
+                        darkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
+                      }`}
                     >
-                      <UserIcon className="w-3.5 h-3.5 text-indigo-400" />
+                      <UserIcon className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                       <span>{language === 'bn' ? 'প্রোফাইল ও সেটিংস' : 'Profile & Settings'}</span>
                     </button>
                     <button
@@ -340,9 +409,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                         onNavigateTab('analytics');
                         setShowUserMenu(false);
                       }}
-                      className="flex items-center gap-2 w-full p-2 text-xs text-slate-200 hover:text-white hover:bg-[#171F32] rounded-xl transition-colors"
+                      className={`flex items-center gap-2 w-full p-2 text-xs font-medium rounded-xl transition-colors cursor-pointer ${
+                        darkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
+                      }`}
                     >
-                      <BarChart3 className="w-3.5 h-3.5 text-emerald-400" />
+                      <BarChart3 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                       <span>{language === 'bn' ? 'খরচ ও রিপোর্ট' : 'Spending Summary'}</span>
                     </button>
                     <button
@@ -351,9 +422,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                         onNavigateTab('menu');
                         setShowUserMenu(false);
                       }}
-                      className="flex items-center gap-2 w-full p-2 text-xs text-slate-200 hover:text-white hover:bg-[#171F32] rounded-xl transition-colors lg:hidden"
+                      className={`flex items-center gap-2 w-full p-2 text-xs font-medium rounded-xl transition-colors lg:hidden cursor-pointer ${
+                        darkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
+                      }`}
                     >
-                      <LayoutGrid className="w-3.5 h-3.5 text-amber-400" />
+                      <LayoutGrid className="w-3.5 h-3.5 text-amber-500" />
                       <span>{language === 'bn' ? 'সকল মেনু' : 'All Menu'}</span>
                     </button>
                     <button
@@ -362,7 +435,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                         logout();
                         setShowUserMenu(false);
                       }}
-                      className="flex items-center gap-2 w-full p-2 text-xs text-rose-400 hover:bg-rose-950/40 rounded-xl transition-colors mt-1"
+                      className="flex items-center gap-2 w-full p-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors mt-1 cursor-pointer"
                     >
                       <LogOut className="w-3.5 h-3.5" />
                       <span>{language === 'bn' ? 'লগআউট' : 'Sign Out'}</span>

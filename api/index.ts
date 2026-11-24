@@ -166,6 +166,55 @@ function mapRawStatusToEnum(rawStatusInput: any): string {
   return 'in_progress';
 }
 
+function isUpstreamServiceActive(item: any): boolean {
+  if (!item || typeof item !== 'object') return false;
+  const srvId = String(item.service ?? item.id ?? '').trim();
+  const name = String(item.name || '').trim();
+  const category = String(item.category || '').trim();
+  if (!srvId || !name) return false;
+
+  const rate = Number(item.rate);
+  const min = Number(item.min);
+  const max = Number(item.max);
+  if (!Number.isFinite(rate) || rate <= 0) return false;
+  if (!Number.isFinite(min) || min <= 0) return false;
+  if (!Number.isFinite(max) || max < min) return false;
+
+  // Check explicit status / active / enabled flags if provided by upstream SMM panel
+  if (item.status !== undefined && item.status !== null) {
+    const st = String(item.status).trim().toLowerCase();
+    if (['disabled', 'inactive', 'off', 'paused', 'closed', 'false', '0', 'deleted'].includes(st)) {
+      return false;
+    }
+  }
+  if (item.enabled !== undefined && item.enabled !== null) {
+    const en = String(item.enabled).trim().toLowerCase();
+    if (['false', '0', 'no', 'disabled', 'off'].includes(en)) return false;
+  }
+  if (item.active !== undefined && item.active !== null) {
+    const ac = String(item.active).trim().toLowerCase();
+    if (['false', '0', 'no', 'disabled', 'off'].includes(ac)) return false;
+  }
+  if (item.is_active !== undefined && item.is_active !== null) {
+    const ia = String(item.is_active).trim().toLowerCase();
+    if (['false', '0', 'no', 'disabled', 'off'].includes(ia)) return false;
+  }
+
+  // Filter out services explicitly labeled as disabled or not working in their title/category
+  const combinedLabel = `${name} ${category}`.toUpperCase();
+  if (
+    combinedLabel.includes('[DISABLED]') ||
+    combinedLabel.includes('[OFFLINE]') ||
+    combinedLabel.includes('[NOT WORKING]') ||
+    combinedLabel.includes('[CLOSED]') ||
+    combinedLabel.includes('DO NOT ORDER')
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 async function resolveUserByApiKey(apiKey: string, fallbackUid?: string): Promise<{ uid: string; user: any } | null> {
   if (!apiKey) return null;
 
@@ -392,7 +441,7 @@ app.post('/api/provider/ping', async (req: Request, res: Response) => {
         if (srvResp.ok) {
           const srvList: any = await parseUpstreamJson(srvResp);
           if (Array.isArray(srvList)) {
-            totalRemoteServices = srvList.length;
+            totalRemoteServices = srvList.filter(isUpstreamServiceActive).length;
           }
         }
       } catch {
@@ -581,8 +630,9 @@ app.post('/api/provider/catalog', async (req: Request, res: Response) => {
       return;
     }
 
+    const activeRawServices = rawServices.filter(isUpstreamServiceActive);
     const categorySet = new Set<string>();
-    const catalog = rawServices.map((item: any) => {
+    const catalog = activeRawServices.map((item: any) => {
       const cat = String(item.category || 'General').trim();
       categorySet.add(cat);
       const rawRate = Number(item.rate || 0);
@@ -620,13 +670,13 @@ app.post('/api/provider/catalog', async (req: Request, res: Response) => {
       status: 'success',
       httpCode: 200,
       latencyMs,
-      summary: `Loaded ${rawServices.length} remote services across ${categorySet.size} categories`
+      summary: `Loaded ${activeRawServices.length} active remote services across ${categorySet.size} categories`
     });
 
     res.json({
       status: 'success',
       latencyMs,
-      totalAvailable: rawServices.length,
+      totalAvailable: activeRawServices.length,
       categories: Array.from(categorySet),
       services: catalog
     });
@@ -704,7 +754,8 @@ app.post('/api/provider/services', async (req: Request, res: Response) => {
       return;
     }
 
-    let filteredRaw = rawServices;
+    const activeRawServices = rawServices.filter(isUpstreamServiceActive);
+    let filteredRaw = activeRawServices;
     if (Array.isArray(selectedServiceIds) && selectedServiceIds.length > 0) {
       const idSet = new Set(selectedServiceIds.map((id: any) => String(id)));
       filteredRaw = filteredRaw.filter((item: any) => idSet.has(String(item.service)));
@@ -759,12 +810,12 @@ app.post('/api/provider/services', async (req: Request, res: Response) => {
       status: 'success',
       httpCode: 200,
       latencyMs,
-      summary: `Imported ${mappedServices.length} / ${rawServices.length} services (+${profitMargin}% margin)`
+      summary: `Imported ${mappedServices.length} / ${activeRawServices.length} active services (+${profitMargin}% margin)`
     });
 
     res.json({
       status: 'success',
-      totalAvailable: rawServices.length,
+      totalAvailable: activeRawServices.length,
       importedCount: mappedServices.length,
       services: mappedServices
     });
@@ -1198,10 +1249,28 @@ const handleApiV2 = async (req: Request, res: Response) => {
     }
 
     if (action === 'services') {
+      let activeProviderIds: Set<string> | null = null;
+      try {
+        const settingsSnap = await getDoc(doc(serverDb, 'settings', 'global'));
+        if (settingsSnap.exists()) {
+          const cfg = settingsSnap.data() || {};
+          if (Array.isArray(cfg.activeProviderIds)) {
+            activeProviderIds = new Set(cfg.activeProviderIds.map((id: any) => String(id)));
+          }
+        }
+      } catch {
+        // ignore
+      }
+
       const snap = await getDocs(collection(serverDb, 'services'));
       const services = snap.docs
         .map((d) => ({ ...d.data(), id: d.id } as any))
-        .filter((s) => s.status !== 'disabled')
+        .filter((s) => {
+          if (s.status !== 'active') return false;
+          if (!s.providerId || !s.providerServiceId) return false;
+          if (activeProviderIds && !activeProviderIds.has(String(s.providerId))) return false;
+          return true;
+        })
         .map((s) => ({
           service: s.id,
           name: s.name,

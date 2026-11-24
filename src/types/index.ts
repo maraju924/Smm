@@ -240,6 +240,9 @@ export interface SiteSettings {
   minAffiliatePayout: number;
   maintenanceMode: boolean;
   usdToBdtRate?: number;
+  activeProviderIds?: string[];
+  providerAutoSyncEnabled?: boolean;
+  providerLastAutoSyncAt?: number;
   // ZiniPay Payment Gateway Configuration
   zinipayEnabled?: boolean;
   zinipayMode?: 'sandbox' | 'live';

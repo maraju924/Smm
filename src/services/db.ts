@@ -255,7 +255,15 @@ export function subscribeServices(
     (snapshot) => {
       const services = snapshot.docs
         .map(d => ({ ...d.data(), id: d.id } as SMMService))
-        .filter(s => !LEGACY_DEMO_IDS.services.includes(s.id));
+        .filter(
+          s =>
+            !LEGACY_DEMO_IDS.services.includes(s.id) &&
+            s.status === 'active' &&
+            Boolean(s.providerId && s.providerServiceId) &&
+            Number(s.rate) > 0 &&
+            Number(s.min) > 0 &&
+            Number(s.max) >= Number(s.min)
+        );
       callback(services);
     },
     (err) => {
@@ -263,6 +271,38 @@ export function subscribeServices(
       callback([]);
     }
   );
+}
+
+/**
+ * Strictly filters services so ONLY active services belonging to currently active API providers remain.
+ */
+export function filterActiveProviderServices(
+  services: SMMService[],
+  providers: SMMProvider[] = [],
+  siteSettings?: SiteSettings,
+  hasLoadedProviders: boolean = false
+): SMMService[] {
+  const activeProvidersList = providers.filter(
+    p => p.status === 'active' && Boolean(p.apiUrl?.trim() && p.apiKey?.trim())
+  );
+  const activeIdSetFromProviders = new Set(activeProvidersList.map(p => p.id));
+  const activeIdSetFromSettings = Array.isArray(siteSettings?.activeProviderIds)
+    ? new Set(siteSettings!.activeProviderIds!.map(id => String(id)))
+    : null;
+
+  return services.filter(s => {
+    if (s.status !== 'active') return false;
+    if (!s.providerId || !s.providerServiceId) return false;
+    if (!(Number(s.rate) > 0 && Number(s.min) > 0 && Number(s.max) >= Number(s.min))) return false;
+
+    if (hasLoadedProviders) {
+      return activeIdSetFromProviders.has(s.providerId);
+    }
+    if (activeIdSetFromSettings) {
+      return activeIdSetFromSettings.has(s.providerId);
+    }
+    return true;
+  });
 }
 
 export async function saveService(service: SMMService): Promise<void> {
@@ -2032,6 +2072,21 @@ export async function saveProvider(provider: SMMProvider): Promise<void> {
   const path = `providers/${provider.id}`;
   try {
     await setDoc(doc(db, 'providers', provider.id), sanitizeForFirestore(provider), { merge: true });
+    if (provider.status === 'inactive') {
+      const snap = await getDocs(query(collection(db, 'services'), where('providerId', '==', provider.id)));
+      if (!snap.empty) {
+        const docsToDelete = snap.docs;
+        const CHUNK_SIZE = 400;
+        for (let i = 0; i < docsToDelete.length; i += CHUNK_SIZE) {
+          const chunk = docsToDelete.slice(i, i + CHUNK_SIZE);
+          const batch = writeBatch(db);
+          for (const d of chunk) {
+            batch.delete(d.ref);
+          }
+          await batch.commit();
+        }
+      }
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
@@ -2048,23 +2103,108 @@ export async function removeProvider(providerId: string): Promise<void> {
 
 export async function removeProviderAndLinkedServices(
   providerId: string,
-  allServices: SMMService[],
+  allServices: SMMService[] = [],
   deleteLinkedServices: boolean = true
 ): Promise<number> {
-  const linked = allServices.filter(s => s.providerId === providerId);
   await deleteDoc(doc(db, 'providers', providerId));
-  if (deleteLinkedServices && linked.length > 0) {
-    const CHUNK_SIZE = 400;
-    for (let i = 0; i < linked.length; i += CHUNK_SIZE) {
-      const chunk = linked.slice(i, i + CHUNK_SIZE);
-      const batch = writeBatch(db);
-      for (const srv of chunk) {
-        batch.delete(doc(db, 'services', srv.id));
+  let deletedCount = 0;
+
+  if (deleteLinkedServices) {
+    const idsToDelete = new Set<string>(
+      allServices.filter(s => s.providerId === providerId).map(s => s.id)
+    );
+    try {
+      const snap = await getDocs(query(collection(db, 'services'), where('providerId', '==', providerId)));
+      snap.docs.forEach(d => idsToDelete.add(d.id));
+    } catch {
+      // fallback to in-memory list
+    }
+
+    const idList = Array.from(idsToDelete);
+    deletedCount = idList.length;
+    if (idList.length > 0) {
+      const CHUNK_SIZE = 400;
+      for (let i = 0; i < idList.length; i += CHUNK_SIZE) {
+        const chunk = idList.slice(i, i + CHUNK_SIZE);
+        const batch = writeBatch(db);
+        for (const id of chunk) {
+          batch.delete(doc(db, 'services', id));
+        }
+        await batch.commit();
       }
-      await batch.commit();
     }
   }
-  return deleteLinkedServices ? linked.length : 0;
+  return deletedCount;
+}
+
+/**
+ * 100% Autonomous Catalog Guardian:
+ * Automatically purges any service in Firestore that:
+ * 1. Belongs to a deleted or non-existent API provider
+ * 2. Belongs to an inactive API provider (status !== 'active')
+ * 3. Has status !== 'active' or is missing providerId / providerServiceId
+ * And synchronizes activeProviderIds into settings/global so all users see only active provider services.
+ */
+export async function reconcileAndPurgeInactiveServices(
+  providers: SMMProvider[]
+): Promise<{ purgedCount: number; activeProviderIds: string[] }> {
+  if (isFirestoreQuotaExhausted()) {
+    return { purgedCount: 0, activeProviderIds: [] };
+  }
+
+  const activeProviders = providers.filter(
+    p => p.status === 'active' && Boolean(p.apiUrl?.trim() && p.apiKey?.trim())
+  );
+  const activeProviderIds = activeProviders.map(p => p.id);
+  const activeIdSet = new Set(activeProviderIds);
+
+  let purgedCount = 0;
+  try {
+    const snap = await getDocs(collection(db, 'services'));
+    const docsToDelete = snap.docs.filter(d => {
+      const s = d.data() as SMMService;
+      if (s.status !== 'active') return true;
+      if (!s.providerId || !s.providerServiceId) return true;
+      if (!activeIdSet.has(s.providerId)) return true;
+      if (!(Number(s.rate) > 0 && Number(s.min) > 0 && Number(s.max) >= Number(s.min))) return true;
+      return false;
+    });
+
+    if (docsToDelete.length > 0) {
+      const CHUNK_SIZE = 400;
+      for (let i = 0; i < docsToDelete.length; i += CHUNK_SIZE) {
+        const chunk = docsToDelete.slice(i, i + CHUNK_SIZE);
+        const batch = writeBatch(db);
+        for (const docSnap of chunk) {
+          batch.delete(docSnap.ref);
+        }
+        await batch.commit();
+      }
+      purgedCount = docsToDelete.length;
+    }
+
+    // Sync activeProviderIds to settings/global if changed
+    const currentSettingIds = cachedGlobalSettings.activeProviderIds || [];
+    const idsChanged =
+      currentSettingIds.length !== activeProviderIds.length ||
+      activeProviderIds.some(id => !currentSettingIds.includes(id));
+
+    if (idsChanged || purgedCount > 0) {
+      await setDoc(
+        doc(db, 'settings', 'global'),
+        sanitizeForFirestore({
+          activeProviderIds,
+          providerAutoSyncEnabled: true,
+          providerLastAutoSyncAt: Date.now()
+        }),
+        { merge: true }
+      );
+    }
+  } catch (e) {
+    if (isQuotaError(e)) markFirestoreQuotaExhausted();
+  }
+
+  return { purgedCount, activeProviderIds };
 }
 
 /**
@@ -2311,16 +2451,23 @@ export async function syncProviderServices(
       (!options.selectedServiceIds || options.selectedServiceIds.length === 0) &&
       (!options.selectedCategories || options.selectedCategories.length === 0);
 
-    if (isFullCatalogSync && existingServices.length > 0) {
+    if (isFullCatalogSync) {
       const importedIdSet = new Set(importedServices.map(s => s.id));
-      const staleLocalServices = existingServices.filter(
-        s => s.providerId === provider.id && !importedIdSet.has(s.id) && s.status !== 'disabled'
-      );
+      let providerLocalServices = existingServices.filter(s => s.providerId === provider.id);
+      if (providerLocalServices.length === 0) {
+        try {
+          const snap = await getDocs(query(collection(db, 'services'), where('providerId', '==', provider.id)));
+          providerLocalServices = snap.docs.map(d => ({ ...(d.data() as SMMService), id: d.id }));
+        } catch {
+          // ignore
+        }
+      }
+      const staleLocalServices = providerLocalServices.filter(s => !importedIdSet.has(s.id));
       for (let i = 0; i < staleLocalServices.length; i += CHUNK_SIZE) {
         const chunk = staleLocalServices.slice(i, i + CHUNK_SIZE);
         const batch = writeBatch(db);
         for (const stale of chunk) {
-          batch.update(doc(db, 'services', stale.id), { status: 'disabled' });
+          batch.delete(doc(db, 'services', stale.id));
         }
         await batch.commit();
       }
@@ -2342,7 +2489,7 @@ export async function syncProviderServices(
 /**
  * Full 1-Click & Background Auto-Sync for a Provider:
  * 1. Pings provider & updates live balance, currency, latency, and active status
- * 2. Imports & updates ALL 100% of provider services (rates, min/max, status) in Firestore
+ * 2. Imports & updates ALL 100% of active provider services (rates, min/max, status) and deletes removed/inactive ones
  * 3. Dispatches any undispatched pending API orders & updates all active API order statuses, startCount, and remains
  */
 export async function fullSyncProviderServicesAndStatuses(
@@ -2381,7 +2528,7 @@ export async function fullSyncProviderServicesAndStatuses(
     lastSyncAt: Date.now()
   };
 
-  // 2. Sync ALL 100% of services from this provider (limit: 0)
+  // 2. Sync ALL 100% of active services from this provider (limit: 0)
   const importedServices = await syncProviderServices(
     updatedProvider,
     usdToBdtRate,
@@ -2425,8 +2572,8 @@ export async function fullSyncProviderServicesAndStatuses(
 }
 
 /**
- * Syncs ALL connected active providers (all services + provider balances + all active order statuses).
- * Used by the automatic 5-minute background sync engine.
+ * Syncs ALL connected active providers (all active services + provider balances + all active order statuses)
+ * and automatically purges any services belonging to deleted/inactive providers or disabled upstream services.
  */
 export async function autoSyncAllProvidersEverything(
   providers: SMMProvider[],
@@ -2437,8 +2584,12 @@ export async function autoSyncAllProvidersEverything(
   providersSynced: number;
   totalServicesSynced: number;
   totalOrdersUpdated: number;
+  purgedInactiveServices: number;
 }> {
-  const activeProviders = providers.filter(p => p.status === 'active' && p.apiUrl && p.apiKey);
+  // 1. Purge any services from inactive/deleted providers or disabled services first
+  const { purgedCount } = await reconcileAndPurgeInactiveServices(providers);
+
+  const activeProviders = providers.filter(p => p.status === 'active' && p.apiUrl?.trim() && p.apiKey?.trim());
   let providersSynced = 0;
   let totalServicesSynced = 0;
   let totalOrdersUpdated = 0;
@@ -2455,14 +2606,15 @@ export async function autoSyncAllProvidersEverything(
       totalServicesSynced += res.importedServices;
       totalOrdersUpdated += res.updatedOrders + res.dispatchedOrders;
     } catch (e) {
-      console.warn(`Background 5m sync failed for provider ${prv.name}:`, e);
+      console.warn(`Background auto-sync warning for provider ${prv.name}:`, e);
     }
   }
 
   return {
     providersSynced,
     totalServicesSynced,
-    totalOrdersUpdated
+    totalOrdersUpdated,
+    purgedInactiveServices: purgedCount
   };
 }
 

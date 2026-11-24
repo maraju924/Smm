@@ -119,10 +119,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const activeProfileUnsubRef = useRef<(() => void) | null>(null);
 
-  // In-memory state synced directly with Firestore server user profile (zero browser localStorage)
+  // In-memory state synced with user preference (defaults to Crisp Light Studio mode: darkMode = false)
   const [currency, setCurrencyState] = useState<Currency>('BDT');
   const [language, setLanguageState] = useState<Language>('bn');
-  const [darkMode, setDarkModeState] = useState<boolean>(true);
+  const [darkMode, setDarkModeState] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('boostlagbe_theme_mode');
+      if (saved === 'dark') return true;
+      if (saved === 'light') return false;
+    } catch {
+      // ignore storage errors
+    }
+    return false;
+  });
 
   // Purge any leftover browser localStorage keys from previous versions on mount
   useEffect(() => {
@@ -167,8 +176,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const setDarkMode = async (d: boolean) => {
-    if (d === darkMode) return;
     setDarkModeState(d);
+    try {
+      localStorage.setItem('boostlagbe_theme_mode', d ? 'dark' : 'light');
+      localStorage.setItem('boostlagbe_landing_dark', String(d));
+    } catch {
+      // ignore storage errors
+    }
     if (d) {
       document.documentElement.classList.add('dark');
     } else {
@@ -219,7 +233,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       role: isEmailAdmin ? 'admin' : 'user',
       currency: 'BDT',
       language: 'bn',
-      darkMode: true,
+      darkMode: false,
       apiKey: '',
       referralCode: `BL-${activeUser.uid.replace(/^usr_/, '').substring(0, 6).toUpperCase()}`,
       referralCount: 0,
@@ -249,7 +263,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (data.currency) setCurrencyState(data.currency);
         if (data.language) setLanguageState(data.language);
-        if (data.darkMode !== undefined) setDarkModeState(data.darkMode);
+        try {
+          const explicitLocal = localStorage.getItem('boostlagbe_theme_mode');
+          if (!explicitLocal && data.darkMode !== undefined) {
+            setDarkModeState(false);
+          }
+        } catch {
+          // ignore storage errors
+        }
 
         const normalizedRefCode =
           data.referralCode && !data.referralCode.startsWith('AMT-')
@@ -273,7 +294,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: isEmailAdmin ? 'admin' : 'user',
           currency: 'BDT',
           language: 'bn',
-          darkMode: true,
+          darkMode: false,
           apiKey: 'amt_live_' + Array.from({ length: 24 }, () => Math.floor(Math.random() * 36).toString(36)).join(''),
           referralCode: `BL-${activeUser.uid.replace(/^usr_/, '').substring(0, 6).toUpperCase()}`,
           referralCount: 0,

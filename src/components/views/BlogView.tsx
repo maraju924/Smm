@@ -2,19 +2,14 @@ import React, { useState, useMemo, useEffect } from 'react';
 import {
   BookOpen,
   Search,
-  Calendar,
   Clock,
-  Eye,
-  Tag,
   ArrowLeft,
   Share2,
   Check,
   ChevronRight,
-  Sparkles,
   Zap,
   HelpCircle,
   ChevronDown,
-  ExternalLink,
   Award,
   TrendingUp,
   Layers,
@@ -22,7 +17,6 @@ import {
   ShieldCheck,
   CheckCircle2,
   Volume2,
-  Pause,
   Square,
   Bookmark,
   BookmarkCheck,
@@ -37,30 +31,26 @@ import {
   FileDown,
   Globe,
   Hash,
-  Users,
   BarChart3,
   Lock,
-  Unlock
+  Unlock,
+  X
 } from 'lucide-react';
-import { SMMBlogPost, SMMService, SiteSettings, UserProfile, Coupon, SMMBlogTopicRequest } from '../../types';
+import {
+  SMMBlogPost,
+  SMMService,
+  SiteSettings,
+  UserProfile,
+  Coupon
+} from '../../types';
 import {
   incrementBlogViews,
   voteBlogHelpfulAndRating,
   addBlogCommentOrQuestion,
-  PROGRAMMATIC_SEO_LANDING_PAGES,
-  COMPETITOR_VS_BOOSTLAGBE_MATRIX,
-  GOOGLE_WEB_STORIES_SLIDES,
-  generateBanglishVoiceSearchFaqs,
-  DIVISIONAL_LOCAL_SEO_HUBS,
   analyzeProfileLinkHealth,
   MONETIZATION_COMBO_BUNDLES,
   generate60sReelsScriptFromBlog,
-  generateSocialCarouselSlidesFromBlog,
-  getCommunityTopicRequests,
-  submitCommunityTopicRequest,
-  upvoteCommunityTopicRequest,
-  recordBlogConversionEvent,
-  generateResellerWhiteLabelProposal
+  recordBlogConversionEvent
 } from '../../services/blogSeoService';
 
 interface BlogViewProps {
@@ -95,7 +85,7 @@ const BD_BEST_POST_TIMES = [
     platform: 'Facebook Page & Reels',
     primeSlot: 'সন্ধ্যা ৭:৩০ – রাত ১০:৩০ (BST)',
     secondarySlot: 'দুপুর ১:৩০ – বিকেল ৩:০০',
-    tip: 'রিলস আপলোডের প্রথম ৩০ মিনিটে কমেন্টের রিপ্লাই দিলে রিচ ৩ গুণ বাড়ে।'
+    tip: 'রিলস আপলোডের প্রথম ৩০ মিনিটে কমেন্টের রিপ্লাই দিলে অর্গানিক রিচ ৩ গুণ বাড়ে।'
   },
   {
     platform: 'YouTube Long & Shorts',
@@ -107,52 +97,13 @@ const BD_BEST_POST_TIMES = [
     platform: 'TikTok Bangladesh',
     primeSlot: 'রাত ৮:০০ – রাত ১১:৩০ (BST)',
     secondarySlot: 'সকাল ৯:০০ – বেলা ১১:০০',
-    tip: 'প্রথম ৩ সেকেন্ডে টেক্সট হুক ও ট্রেন্ডিং সাউন্ড ব্যবহার করলে ForYou পেজে দ্রুত যায়।'
+    tip: 'প্রথম ৩ সেকেন্ডে টেক্সট হুক ও ট্রেন্ডিং সাউন্ড ব্যবহার করলে দ্রুত ForYou পেজে যায়।'
   },
   {
     platform: 'Instagram Reels & Business',
     primeSlot: 'সন্ধ্যা ৭:০০ – রাত ১০:০০ (BST)',
     secondarySlot: 'দুপুর ১২:৩০ – ২:০০',
     tip: 'ক্যারোসেল পোস্ট ও রিলসে লোকেশন ট্যাগ (Dhaka, Bangladesh) ব্যবহার করুন।'
-  }
-];
-
-const SMM_GLOSSARY_TERMS = [
-  {
-    term: 'Drip-Feed Delivery (ড্রিপ-ফিড ডেলিভারি)',
-    category: 'Algorithm Safety',
-    definition:
-      'একসাথে সব ফলোয়ার বা ভিউ না নিয়ে নির্দিষ্ট সময় পর পর (যেমন প্রতি ৩০ মিনিটে ২০০টি করে) ধাপে ধাপে নেওয়ার প্রযুক্তি। এতে গুগল ও ফেসবুক অ্যালগরিদমে ১০০% অর্গানিক সিগন্যাল যায়।'
-  },
-  {
-    term: 'Non-Drop & Auto-Refill (নন-ড্রপ ও অটো রিফিল)',
-    category: 'Service Guarantee',
-    definition:
-      'উচ্চমানের রিয়েল-প্যাটার্ন প্রোফাইল থেকে আসা সার্ভিস যা সাধারণত কমে না। আর ৩০ দিনের রিফিল গ্যারান্টি থাকায় কোনো কারণে সামান্য কমলেও সিস্টেম স্বয়ংক্রিয়ভাবে তা পূরণ করে দেয়।'
-  },
-  {
-    term: 'RPM & CPM (মনিটাইজেশন রেভিনিউ রেট)',
-    category: 'Monetization',
-    definition:
-      'RPM (Revenue Per Mille) হলো প্রতি ১,০০০ মনিটাইজড ভিউ থেকে ক্রিয়েটরের প্রকৃত আয়। বাংলাদেশ ও প্রবাসী অডিয়েন্স মিলিয়ে ফেসবুক ও ইউটিউবে গড় RPM $0.45 থেকে $2.50+ হয়ে থাকে।'
-  },
-  {
-    term: '60K Minutes Watchtime (৬০,০০০ মিনিট ওয়াচটাইম)',
-    category: 'Facebook Eligibility',
-    definition:
-      'ফেসবুক পেজে In-Stream Ads মনিটাইজেশন চালু করার জন্য গত ৬০ দিনে কমপক্ষে ৫,০০০ ফলোয়ার এবং ৬০,০০০ মিনিট ভ্যালিড ওয়াচটাইম প্রয়োজন হয়।'
-  },
-  {
-    term: 'Engagement Velocity (এনগেজমেন্ট ভেলোসিটি)',
-    category: 'Viral Ranking',
-    definition:
-      'ভিডিও বা রিলস আপলোডের প্রথম ৩০ থেকে ৬০ মিনিটের মধ্যে যত দ্রুত ভিউ, লাইক, শেয়ার ও কমেন্ট আসে তাকে এনগেজমেন্ট ভেলোসিটি বলে। এটি বেশি হলে ভিডিও দ্রুত ভাইরাল হয়।'
-  },
-  {
-    term: 'REST API v2 Reseller (এপিআই রিসেলার প্যানেল)',
-    category: 'Agency Business',
-    definition:
-      'Boostlagbe.com-এর API Key ব্যবহার করে নিজের ওয়েবসাইট বা এজেন্সি প্যানেল থেকে স্বয়ংক্রিয়ভাবে পাইকারি রেটে ক্লায়েন্টদের অর্ডার ডেলিভারি করার সুবিধা।'
   }
 ];
 
@@ -171,13 +122,15 @@ export const BlogView: React.FC<BlogViewProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [activeHubSection, setActiveHubSection] = useState<'articles' | 'tools'>('articles');
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedReferral, setCopiedReferral] = useState(false);
   const [copiedHashtags, setCopiedHashtags] = useState(false);
   const [copiedPromo, setCopiedPromo] = useState(false);
+  const [copiedScript, setCopiedScript] = useState(false);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
 
-  // 1. Reading Progress Bar & Bookmarks
+  // Reading Progress & Bookmarks
   const [readingProgress, setReadingProgress] = useState(0);
   const [bookmarkedSlugs, setBookmarkedSlugs] = useState<string[]>(() => {
     try {
@@ -188,80 +141,39 @@ export const BlogView: React.FC<BlogViewProps> = ({
     }
   });
 
-  // 2. Dual-Language Summary & Audio TTS Player
+  // Language & Audio TTS Player
   const [languageView, setLanguageView] = useState<'bn' | 'en'>('bn');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speechRate, setSpeechRate] = useState<1 | 1.25>(1);
 
-  // 3. In-Article Live Service Price Estimator
+  // Live Service Price Estimator
   const [calcServiceId, setCalcServiceId] = useState<string>('');
   const [calcQuantity, setCalcQuantity] = useState<number>(1000);
+  const [expressCheckoutOpen, setExpressCheckoutOpen] = useState(false);
+  const [expressTargetLink, setExpressTargetLink] = useState('');
+  const [expressOrderSuccess, setExpressOrderSuccess] = useState(false);
 
-  // 4. Creator Micro-Tools Suite Tabs (Expanded with Reels Script, Social Carousel, Link Scanner, Combo Bundles & Reseller Proposal)
+  // Creator Toolkit Tabs
   const [activeMicroTool, setActiveMicroTool] = useState<
-    | 'earnings'
-    | 'besttime'
-    | 'checklist'
-    | 'hashtags'
-    | 'glossary'
-    | 'linkscanner'
-    | 'combos'
-    | 'reelsscript'
-    | 'carousel'
-    | 'reseller'
+    'earnings' | 'besttime' | 'checklist' | 'linkscanner' | 'combos' | 'reelsscript'
   >('earnings');
   const [earningsPlatform, setEarningsPlatform] = useState<'facebook' | 'youtube' | 'tiktok'>('facebook');
   const [monthlyViewsInput, setMonthlyViewsInput] = useState<number>(500000);
   const [checkedReadyItems, setCheckedReadyItems] = useState<number[]>([0, 1, 2]);
+  const [scannerInputUrl, setScannerInputUrl] = useState('');
+  const [scannerResult, setScannerResult] = useState<ReturnType<typeof analyzeProfileLinkHealth> | null>(null);
 
-  // 5. Gamified Quiz, Secret Promo Unlock & Creator Academy Certificate
+  // Quiz & Promo Unlock
   const [selectedQuizOption, setSelectedQuizOption] = useState<number | null>(null);
   const [promoUnlocked, setPromoUnlocked] = useState(false);
-  const [certificateRecipientName, setCertificateRecipientName] = useState(
-    userProfile?.displayName || 'ভেরিফাইড ক্রিয়েটর'
-  );
-  const [showCertificateModal, setShowCertificateModal] = useState(false);
 
-  // 6. Helpfulness Voting, Star Rating & Verified Q&A Comments
+  // Helpfulness Voting & Q&A Comments
   const [hasVotedHelpful, setHasVotedHelpful] = useState<'yes' | 'no' | null>(null);
   const [selectedStars, setSelectedStars] = useState<number>(5);
   const [commentAuthor, setCommentAuthor] = useState(userProfile?.displayName || '');
   const [commentText, setCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [commentSuccessMsg, setCommentSuccessMsg] = useState('');
-
-  // 7. NEW 25-FEATURE STATES: Express Checkout Modal, Link Scanner, Web Stories, Loyalty Streak, Poll, Topic Requests & Reseller Proposal
-  const [expressCheckoutOpen, setExpressCheckoutOpen] = useState(false);
-  const [expressTargetLink, setExpressTargetLink] = useState('');
-  const [expressOrderSuccess, setExpressOrderSuccess] = useState(false);
-  const [scannerInputUrl, setScannerInputUrl] = useState('');
-  const [scannerResult, setScannerResult] = useState<ReturnType<typeof analyzeProfileLinkHealth> | null>(null);
-  const [activeStorySlide, setActiveStorySlide] = useState<number | null>(null);
-  const [copiedScript, setCopiedScript] = useState(false);
-  const [copiedProposal, setCopiedProposal] = useState(false);
-  const [agencyNameInput, setAgencyNameInput] = useState('Digital Growth Agency BD');
-  const [clientNameInput, setClientNameInput] = useState('Brand / Page Owner');
-  const [marginPercentInput, setMarginPercentInput] = useState<number>(60);
-  const [selectedPollChoice, setSelectedPollChoice] = useState<string | null>(null);
-  const [topicRequests, setTopicRequests] = useState<SMMBlogTopicRequest[]>(() =>
-    getCommunityTopicRequests()
-  );
-  const [newTopicTitleInput, setNewTopicTitleInput] = useState('');
-  const [newTopicCategoryInput, setNewTopicCategoryInput] = useState('Facebook');
-  const [loyaltyPoints, setLoyaltyPoints] = useState<number>(() => {
-    try {
-      return Number(localStorage.getItem('boostlagbe_loyalty_points_v1') || '120');
-    } catch {
-      return 120;
-    }
-  });
-  const [readingStreakDays] = useState<number>(() => {
-    try {
-      return Number(localStorage.getItem('boostlagbe_reading_streak_v1') || '3');
-    } catch {
-      return 3;
-    }
-  });
 
   const publishedBlogs = useMemo(
     () =>
@@ -280,7 +192,7 @@ export const BlogView: React.FC<BlogViewProps> = ({
     );
   }, [publishedBlogs, selectedSlug]);
 
-  // Scroll listener for Top Reading Progress Bar (0% - 100%)
+  // Reading progress listener
   useEffect(() => {
     if (!activePost) {
       setReadingProgress(0);
@@ -302,7 +214,7 @@ export const BlogView: React.FC<BlogViewProps> = ({
     return () => window.removeEventListener('scroll', handleScroll);
   }, [activePost?.id]);
 
-  // Stop speech synthesis on article change or unmount
+  // Reset article states when switching post
   useEffect(() => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
@@ -312,17 +224,10 @@ export const BlogView: React.FC<BlogViewProps> = ({
     setSelectedQuizOption(null);
     setPromoUnlocked(false);
     setHasVotedHelpful(null);
+    setExpressCheckoutOpen(false);
+    setExpressOrderSuccess(false);
     if (activePost) {
       incrementBlogViews(activePost.id, activePost.views || 0);
-      setLoyaltyPoints((prev) => {
-        const next = prev + 15;
-        try {
-          localStorage.setItem('boostlagbe_loyalty_points_v1', String(next));
-        } catch {
-          // ignore
-        }
-        return next;
-      });
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, [activePost?.id]);
@@ -368,6 +273,18 @@ export const BlogView: React.FC<BlogViewProps> = ({
     });
   }, [publishedBlogs, selectedCategory, searchQuery, bookmarkedSlugs]);
 
+  const featuredLeadPost = useMemo(() => {
+    if (searchQuery.trim() || selectedCategory !== 'All') return null;
+    return filteredBlogs[0] || null;
+  }, [filteredBlogs, searchQuery, selectedCategory]);
+
+  const gridBlogs = useMemo(() => {
+    if (featuredLeadPost && filteredBlogs.length > 1) {
+      return filteredBlogs.slice(1);
+    }
+    return filteredBlogs;
+  }, [filteredBlogs, featuredLeadPost]);
+
   // Extract Table of Contents headings and inject anchor IDs into HTML content
   const processedArticle = useMemo(() => {
     if (!activePost) return { html: '', toc: [] as { id: string; text: string; level: number }[] };
@@ -402,7 +319,6 @@ export const BlogView: React.FC<BlogViewProps> = ({
     return (matched.length > 0 ? matched : services).slice(0, 6);
   }, [activePost, services]);
 
-  // Keep calculator service synced with relatedServices
   useEffect(() => {
     if (relatedServices.length > 0) {
       setCalcServiceId(relatedServices[0].id);
@@ -425,7 +341,6 @@ export const BlogView: React.FC<BlogViewProps> = ({
     return Number(((rate * Math.max(1, calcQuantity)) / 1000).toFixed(2));
   }, [selectedCalcService, calcQuantity]);
 
-  // Topic Silo Cluster (Same category posts)
   const siloClusterPosts = useMemo(() => {
     if (!activePost) return [];
     const sameCat = publishedBlogs.filter((b) => b.category === activePost.category);
@@ -437,10 +352,8 @@ export const BlogView: React.FC<BlogViewProps> = ({
     return publishedBlogs.filter((b) => b.id !== activePost.id).slice(0, 4);
   }, [publishedBlogs, activePost]);
 
-  // Estimated Creator Earnings Calculation
   const creatorEarningsEstimate = useMemo(() => {
     const views = Math.max(1000, monthlyViewsInput || 0);
-    // Realistic BD RPM ranges per 1,000 monetized views
     const rpmUsd =
       earningsPlatform === 'youtube' ? 0.85 : earningsPlatform === 'facebook' ? 0.55 : 0.28;
     const usd = Math.round((views / 1000) * rpmUsd);
@@ -448,7 +361,6 @@ export const BlogView: React.FC<BlogViewProps> = ({
     return { usd, bdt, rpmUsd };
   }, [earningsPlatform, monthlyViewsInput]);
 
-  // Active Secret Promo Code (either from post or active coupons)
   const effectiveSecretPromo = useMemo(() => {
     const activeCoupon = coupons.find((c) => c.active);
     const code = activePost?.secretPromoCode || activeCoupon?.code || 'BLOGVIP';
@@ -456,11 +368,10 @@ export const BlogView: React.FC<BlogViewProps> = ({
       activePost?.secretPromoDiscountText ||
       (activeCoupon
         ? `এই কোডটি ব্যবহারে পাবেন ৳${activeCoupon.amount} ফ্রি ওয়ালেট বোনাস!`
-        : 'ব্লগ পাঠকদের জন্য স্পেশাল ভিআইপি প্রোমো কোড — ডিপোজিট ও অর্ডারে প্রাধান্য সুবিধা!');
+        : 'ব্লগ পাঠকদের জন্য স্পেশাল প্রোমো কোড — ডিপোজিট ও অর্ডারে প্রাধান্য সুবিধা!');
     return { code, desc };
   }, [activePost, coupons]);
 
-  // User Referral Share Link (?ref=USER_CODE)
   const referralShareUrl = useMemo(() => {
     if (!activePost) return window.location.origin;
     const refCode = userProfile?.referralCode || 'BOOSTVIP';
@@ -482,7 +393,6 @@ export const BlogView: React.FC<BlogViewProps> = ({
     setTimeout(() => setCopiedReferral(false), 2500);
   };
 
-  // Audio Blog TTS Handler
   const handleToggleSpeech = () => {
     if (!activePost || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     if (isSpeaking) {
@@ -510,18 +420,16 @@ export const BlogView: React.FC<BlogViewProps> = ({
     window.speechSynthesis.speak(utterance);
   };
 
-  // Vote Helpful & Star Rating Handler
   const handleVoteHelpful = async (helpful: boolean) => {
     if (!activePost || hasVotedHelpful) return;
     setHasVotedHelpful(helpful ? 'yes' : 'no');
     try {
       await voteBlogHelpfulAndRating(activePost, helpful, selectedStars);
     } catch {
-      // handled gracefully
+      // ignore
     }
   };
 
-  // Submit Reader Question / Comment
   const handleSubmitComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activePost || !commentText.trim()) return;
@@ -540,7 +448,6 @@ export const BlogView: React.FC<BlogViewProps> = ({
     }
   };
 
-  // SPA click handler for internal links inside article HTML
   const handleArticleBodyClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = (e.target as HTMLElement).closest('a');
     if (!target) return;
@@ -557,7 +464,7 @@ export const BlogView: React.FC<BlogViewProps> = ({
           onNavigate(tab);
         }
       } catch {
-        // Fallback to standard navigation
+        // ignore
       }
     }
   };
@@ -566,7 +473,7 @@ export const BlogView: React.FC<BlogViewProps> = ({
     try {
       return new Date(timestamp).toLocaleDateString('bn-BD', {
         year: 'numeric',
-        month: 'long',
+        month: 'short',
         day: 'numeric'
       });
     } catch {
@@ -579,34 +486,18 @@ export const BlogView: React.FC<BlogViewProps> = ({
     if (activePost.howToSteps && activePost.howToSteps.length > 0) return activePost.howToSteps;
     return [
       {
-        name: 'ধাপ ১: প্রোফাইল ও পাবলিক লিংক প্রস্তুত করুন',
+        name: '০১. পাবলিক লিংক প্রস্তুত করুন',
         text: `আপনার ${activePost.category} প্রোফাইল, পেজ বা ভিডিওর প্রাইভেসি Public রেখে লিংকটি কপি করুন।`
       },
       {
-        name: 'ধাপ ২: বিকাশ/নগদে ইনস্ট্যান্ট ওয়ালেট রিচার্জ',
-        text: 'Boostlagbe.com ওয়ালেটে বিকাশ বা নগদ দিয়ে মাত্র ২০ টাকা থেকে তাৎক্ষণিক ব্যালেন্স যুক্ত করুন।'
+        name: '০২. ইনস্ট্যান্ট ওয়ালেট রিচার্জ',
+        text: 'ওয়ালেটে বিকাশ বা নগদ দিয়ে মাত্র ২০ টাকা থেকে তাৎক্ষণিক ব্যালেন্স যুক্ত করুন।'
       },
       {
-        name: 'ধাপ ৩: সার্ভিস নির্বাচন ও অটোমেটিক ডেলিভারি',
-        text: 'New Order সেকশন থেকে কাঙ্ক্ষিত সার্ভিস সিলেক্ট করে লিংক দিন এবং Live Tracker-এ প্রগ্রেস দেখুন।'
+        name: '০৩. সার্ভিস সিলেক্ট ও অটো ডেলিভারি',
+        text: 'New Order সেকশন থেকে সার্ভিস সিলেক্ট করে লিংক দিন এবং Live Tracker-এ অগ্রগতি দেখুন।'
       }
     ];
-  }, [activePost]);
-
-  const activeCaseStudy = useMemo(() => {
-    if (!activePost) return null;
-    return (
-      activePost.caseStudy || {
-        clientName: 'তানজিম হাসান (ঢাকা)',
-        niche: `${activePost.category} Content Creator & Brand`,
-        beforeMetric: '৪৫০ ফলোয়ার ও কম অর্গানিক রিচ',
-        afterMetric: '১৪,৫০০+ অ্যাক্টিভ ফলোয়ার ও মনিটাইজেশন চালু',
-        timeframe: '৭ দিন',
-        budgetSpentBdt: '৳৬৫০ (বিকাশ পেমেন্ট)',
-        summary:
-          'নিয়মিত অরিজিনাল ভিডিও আপলোডের পাশাপাশি Boostlagbe.com থেকে নন-ড্রপ প্যাক ব্যবহার করে মাত্র ১ সপ্তাহে অর্গানিক রিচ ৪ গুণ বৃদ্ধি পেয়েছে।'
-      }
-    );
   }, [activePost]);
 
   const activeQuiz = useMemo(() => {
@@ -622,7 +513,7 @@ export const BlogView: React.FC<BlogViewProps> = ({
         ],
         correctIndex: 0,
         explanation:
-          'Boostlagbe.com শতভাগ নিরাপদ এবং পাসওয়ার্ড-মুক্ত; শুধুমাত্র আপনার পাবলিক লিংক দিয়েই ১–৫ মিনিটে অটোমেটিক ডেলিভারি শুরু করা যায়।'
+          'শুধুমাত্র আপনার পাবলিক লিংক দিয়েই ১–৫ মিনিটে নিরাপদে অটোমেটিক ডেলিভারি শুরু করা যায়।'
       }
     );
   }, [activePost]);
@@ -645,59 +536,83 @@ export const BlogView: React.FC<BlogViewProps> = ({
   return (
     <div
       className={
-        isPublicStandalone ? 'min-h-screen bg-slate-50 dark:bg-slate-950 pb-24' : 'space-y-6 pb-20'
+        isPublicStandalone
+          ? 'min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 pb-20'
+          : 'space-y-6 pb-12 text-slate-900 dark:text-slate-100'
       }
     >
-      {/* Top Fixed Reading Progress Bar (0% to 100%) */}
+      {/* Top Reading Progress Bar */}
       {activePost && (
-        <div className="fixed top-0 left-0 right-0 z-50 h-1.5 bg-slate-200/40 dark:bg-slate-800/40 pointer-events-none">
+        <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-slate-200/50 dark:bg-slate-800/50 pointer-events-none">
           <div
-            className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 transition-all duration-150"
+            className="h-full bg-indigo-600 transition-all duration-150"
             style={{ width: `${readingProgress}%` }}
           />
         </div>
       )}
 
-      {/* Standalone Top Header for Public / Googlebot Visitors */}
+      {/* Standalone Public Header (Only when unauthenticated visitor opens /?tab=blog) */}
       {isPublicStandalone && (
-        <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800">
-          <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
+        <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+          <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-8">
             <button
+              type="button"
               onClick={() => onNavigate('landing')}
-              className="flex items-center gap-2.5 text-left group"
+              className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white whitespace-nowrap shrink-0 cursor-pointer"
             >
-              <img
-                src="/assets/aistudio/file_00000000117c8208a1cede2cdfee706a_42e73997.png"
-                alt={siteSettings?.siteName || 'Boostlagbe.com'}
-                className="w-9 h-9 rounded-xl object-cover border border-indigo-500/20 shadow-sm"
-              />
-              <div>
-                <span className="font-extrabold text-base tracking-tight text-slate-900 dark:text-white block leading-none">
-                  {siteSettings?.siteName || 'Boostlagbe.com'}
-                </span>
-                <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold">
-                  অফিসিয়াল এসএমএম গাইড ও ব্লগ
-                </span>
-              </div>
+              {siteSettings?.siteName || 'Boostlagbe.com'}
             </button>
 
-            <div className="flex items-center gap-2.5">
-              {activePost && (
-                <span className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[11px] font-bold">
-                  পড়া হয়েছে: {readingProgress}%
-                </span>
-              )}
+            <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600 dark:text-slate-300">
               <button
-                onClick={() => onNavigate('landing')}
-                className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                type="button"
+                onClick={() => {
+                  onSelectSlug(null);
+                  setSelectedCategory('All');
+                }}
+                className="hover:text-slate-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
               >
-                হোমপেজ
+                সব গাইড
               </button>
               <button
-                onClick={() => (onOpenAuth ? onOpenAuth() : onNavigate('new-order'))}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition-colors flex items-center gap-1.5"
+                type="button"
+                onClick={() => {
+                  onSelectSlug(null);
+                  setSelectedCategory('Facebook');
+                }}
+                className="hover:text-slate-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
               >
-                <Zap className="w-3.5 h-3.5" /> অর্ডার শুরু করুন
+                Facebook
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectSlug(null);
+                  setSelectedCategory('YouTube');
+                }}
+                className="hover:text-slate-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                YouTube
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectSlug(null);
+                  setSelectedCategory('TikTok');
+                }}
+                className="hover:text-slate-900 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                TikTok
+              </button>
+            </nav>
+
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => (onOpenAuth ? onOpenAuth() : onNavigate('new-order'))}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                অর্ডার শুরু করুন
               </button>
             </div>
           </div>
@@ -706,354 +621,282 @@ export const BlogView: React.FC<BlogViewProps> = ({
 
       <div className={isPublicStandalone ? 'max-w-6xl mx-auto px-4 pt-6 space-y-6' : 'space-y-6'}>
         {activePost ? (
-          /* ==========================================
-             SINGLE SEO ARTICLE READER VIEW (ALL 11 ADVANCED SUITES)
-             ========================================== */
+          /* =====================================================================
+             EDITORIAL ARTICLE READER VIEW
+             ===================================================================== */
           <article
             itemScope
             itemType={`https://schema.org/${activePost.schemaType || 'BlogPosting'}`}
             className="space-y-6"
           >
-            {/* Breadcrumb & Utility Action Bar */}
+            {/* Sticky Editorial Reader Utility Bar */}
             <nav
-              aria-label="Breadcrumb"
-              className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 px-4 py-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs"
+              aria-label="Article Navigation"
+              className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs"
             >
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex items-center gap-2 min-w-0">
                 <button
+                  type="button"
                   onClick={() => onSelectSlug(null)}
-                  className="inline-flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 hover:underline font-bold mr-2"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap shrink-0 cursor-pointer"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5" /> সব ব্লগ আর্টিকেল
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>সব ব্লগ গাইড</span>
                 </button>
-                <span className="text-slate-300 dark:text-slate-700">|</span>
-                <button
-                  onClick={() => onNavigate('home')}
-                  className="hover:text-indigo-600 transition-colors"
-                >
-                  হোম
-                </button>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                <button
-                  onClick={() => onSelectSlug(null)}
-                  className="hover:text-indigo-600 transition-colors"
-                >
-                  ব্লগ ও গাইড
-                </button>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                <span className="text-indigo-600 dark:text-indigo-400">{activePost.category}</span>
+                <span className="text-slate-300 dark:text-slate-700">·</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                  {activePost.category}
+                </span>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-extrabold">
-                  পড়া হয়েছে: {readingProgress}%
-                </span>
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Audio Reader Button */}
+                <button
+                  type="button"
+                  onClick={handleToggleSpeech}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    isSpeaking
+                      ? 'bg-rose-600 text-white'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  {isSpeaking ? (
+                    <>
+                      <Square className="w-3.5 h-3.5" />
+                      <span>অডিও থামান</span>
+                    </>
+                  ) : (
+                    <>
+                      <Volume2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                      <span>অডিও শুনুন</span>
+                    </>
+                  )}
+                </button>
+
+                {isSpeaking && (
+                  <button
+                    type="button"
+                    onClick={() => setSpeechRate((r) => (r === 1 ? 1.25 : 1))}
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-mono font-bold text-slate-700 dark:text-slate-300 cursor-pointer"
+                  >
+                    {speechRate}x
+                  </button>
+                )}
+
+                {/* Language Switch (BN / EN Summary) */}
+                <button
+                  type="button"
+                  onClick={() => setLanguageView((v) => (v === 'bn' ? 'en' : 'bn'))}
+                  className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <Globe className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span>{languageView === 'bn' ? 'EN Summary' : 'বাংলা গাইড'}</span>
+                </button>
+
+                {/* Bookmark */}
                 <button
                   type="button"
                   onClick={() => toggleBookmark(activePost.slug)}
-                  className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-bold border transition-all ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
                     bookmarkedSlugs.includes(activePost.slug)
-                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-600 dark:text-amber-300'
-                      : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                      ? 'bg-amber-50 dark:bg-amber-500/15 border-amber-300 dark:border-amber-500/40 text-amber-700 dark:text-amber-300'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
                   }`}
                 >
                   {bookmarkedSlugs.includes(activePost.slug) ? (
                     <>
-                      <BookmarkCheck className="w-3.5 h-3.5" /> সেভ করা হয়েছে
+                      <BookmarkCheck className="w-3.5 h-3.5" />
+                      <span>সেভড</span>
                     </>
                   ) : (
                     <>
-                      <Bookmark className="w-3.5 h-3.5" /> বুকমার্ক করুন
+                      <Bookmark className="w-3.5 h-3.5" />
+                      <span>সেভ করুন</span>
                     </>
                   )}
                 </button>
+
+                {/* Share */}
                 <button
                   type="button"
-                  onClick={() => window.print()}
-                  className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-300 text-[11px] font-bold border border-slate-200 dark:border-slate-700"
+                  onClick={() => handleCopyCanonicalLink(activePost)}
+                  className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
                 >
-                  <FileDown className="w-3.5 h-3.5 text-indigo-500" /> PDF ডাউনলোড
+                  {copiedLink ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>কপি হয়েছে</span>
+                    </>
+                  ) : (
+                    <>
+                      <Share2 className="w-3.5 h-3.5" />
+                      <span>শেয়ার</span>
+                    </>
+                  )}
                 </button>
               </div>
             </nav>
 
-            {/* Article Hero Card */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-xs">
-              {activePost.coverImage && (
-                <div className="relative h-56 sm:h-80 w-full bg-slate-900 overflow-hidden">
-                  <img
-                    itemProp="image"
-                    src={activePost.coverImage}
-                    alt={activePost.coverImageAlt || activePost.title}
-                    referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).src = FALLBACK_BLOG_IMAGE;
-                    }}
-                    className="w-full h-full object-cover opacity-90"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent" />
-                  <div className="absolute bottom-4 left-4 right-4 sm:bottom-6 sm:left-6 sm:right-6 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="px-3 py-1 rounded-lg bg-indigo-600 text-white text-xs font-bold tracking-wide shadow-sm">
-                        {activePost.category}
-                      </span>
-                      <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-extrabold backdrop-blur-md flex items-center gap-1">
-                        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                        {activePost.ratingValue || 4.9} ({activePost.ratingCount || 68} রিভিউ)
-                      </span>
-                    </div>
+            {/* Editorial Article Header & Cover Frame */}
+            <header className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-8 shadow-xs space-y-5">
+              {/* Unboxed Editorial Metadata Kicker */}
+              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                <span className="text-indigo-600 dark:text-indigo-400 font-bold">
+                  {activePost.category}
+                </span>
+                <span aria-hidden="true">·</span>
+                <time
+                  itemProp="datePublished"
+                  dateTime={new Date(
+                    activePost.publishedAt || activePost.createdAt
+                  ).toISOString()}
+                >
+                  {formatDateBn(activePost.publishedAt || activePost.createdAt)}
+                </time>
+                <span aria-hidden="true">·</span>
+                <span>{activePost.readingTimeMinutes || 4} মিনিট পড়ুন</span>
+                <span aria-hidden="true">·</span>
+                <span className="font-mono tabular-nums">
+                  {(activePost.views || 120).toLocaleString()} বার পঠিত
+                </span>
+                <span aria-hidden="true">·</span>
+                <span>পড়া হয়েছে {readingProgress}%</span>
+              </div>
 
-                    {/* Live Order Social Proof Badge */}
-                    <span className="px-3 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-[11px] font-bold backdrop-blur-md flex items-center gap-1.5">
-                      <Users className="w-3.5 h-3.5" /> গত ২৪ ঘণ্টায় এই গাইড পড়ে অর্ডার করেছেন{' '}
-                      {activePost.recentOrdersProofCount || 54}+ জন ক্রিয়েটর
-                    </span>
+              {/* Headline */}
+              <h1
+                itemProp="headline"
+                className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 dark:text-white leading-tight tracking-tight max-w-4xl"
+              >
+                {activePost.title}
+              </h1>
+
+              {/* Deck / Excerpt (Clean unboxed editorial lead-in, no border-l-4) */}
+              <p
+                itemProp="description"
+                className="text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed max-w-3xl"
+              >
+                {activePost.excerpt}
+              </p>
+
+              {/* English Summary Panel (if toggled) */}
+              {languageView === 'en' && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1.5">
+                  <div className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                    English Executive Summary
                   </div>
+                  <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
+                    {activePost.englishSummary ||
+                      `Practical 2026 guide on ${activePost.focusKeyword} in Bangladesh. Combine consistent original content with Boostlagbe.com's automated bKash/Nagad social media growth and monetization packages safely using only your public link.`}
+                  </p>
                 </div>
               )}
 
-              <div className="p-5 sm:p-8 space-y-5">
-                <h1
-                  itemProp="headline"
-                  className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 dark:text-white leading-tight"
+              {/* Author Byline & Print Action */}
+              <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-200/80 dark:border-slate-800">
+                <div
+                  itemProp="author"
+                  itemScope
+                  itemType="https://schema.org/Person"
+                  className="flex items-center gap-3"
                 >
-                  {activePost.title}
-                </h1>
-
-                <p
-                  itemProp="description"
-                  className="text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed border-l-4 border-indigo-500 pl-4 py-1 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-r-xl"
-                >
-                  {activePost.excerpt}
-                </p>
-
-                {/* Interactive Audio TTS Player + Dual Language Toggle Bar */}
-                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleToggleSpeech}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all shadow-xs ${
-                        isSpeaking
-                          ? 'bg-rose-600 text-white'
-                          : 'bg-indigo-600 hover:bg-indigo-500 text-white'
-                      }`}
-                    >
-                      {isSpeaking ? (
-                        <>
-                          <Square className="w-3.5 h-3.5" /> অডিও থামান (Stop Audio)
-                        </>
-                      ) : (
-                        <>
-                          <Volume2 className="w-4 h-4" /> আর্টিকেলটি অডিও শুনুন (Listen)
-                        </>
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setSpeechRate((r) => (r === 1 ? 1.25 : 1))}
-                      className="px-2.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-700 dark:text-slate-300"
-                    >
-                      স্পিড: {speechRate}x
-                    </button>
+                  <div className="w-10 h-10 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-xs shrink-0">
+                    TA
                   </div>
-
-                  {/* Dual-Language Toggle (বাংলা গাইড ↔ English Summary) */}
-                  <div className="inline-flex items-center p-1 rounded-xl bg-slate-200/70 dark:bg-slate-900 border border-slate-300/60 dark:border-slate-700">
-                    <button
-                      type="button"
-                      onClick={() => setLanguageView('bn')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all ${
-                        languageView === 'bn'
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : 'text-slate-600 dark:text-slate-400'
-                      }`}
+                  <div>
+                    <span
+                      itemProp="name"
+                      className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white block"
                     >
-                      বাংলা সম্পূর্ণ গাইড
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLanguageView('en')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1 transition-all ${
-                        languageView === 'en'
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : 'text-slate-600 dark:text-slate-400'
-                      }`}
+                      {activePost.authorName || 'তানভীর আহমেদ (Tanvir Ahmed)'}
+                    </span>
+                    <span
+                      itemProp="jobTitle"
+                      className="text-[11px] text-slate-500 dark:text-slate-400"
                     >
-                      <Globe className="w-3 h-3" /> English Summary
-                    </button>
+                      {activePost.authorRole || 'Senior Social Media Growth Strategist'}
+                    </span>
                   </div>
                 </div>
 
-                {/* English Executive Summary Box (when toggled) */}
-                {languageView === 'en' && (
-                  <div className="p-5 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-                        English Executive Summary (International & AI Search Overview)
-                      </span>
-                      <span className="text-[11px] font-mono text-slate-500">en-US / en-BD</span>
-                    </div>
-                    <p className="text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-medium">
-                      {activePost.englishSummary ||
-                        `Complete 2026 practical guide on ${activePost.focusKeyword} in Bangladesh. Learn how to combine authentic organic content with Boostlagbe.com's instant bKash/Nagad automated non-drop social media growth and monetization packages safely without sharing any account password.`}
-                    </p>
-                  </div>
-                )}
-
-                {/* Author & Publication Metadata Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 text-xs text-slate-500 dark:text-slate-400">
-                  <div className="flex flex-wrap items-center gap-4">
-                    <div
-                      itemProp="author"
-                      itemScope
-                      itemType="https://schema.org/Person"
-                      className="flex items-center gap-2"
-                    >
-                      <div className="w-8 h-8 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-xs">
-                        TA
-                      </div>
-                      <div>
-                        <span
-                          itemProp="name"
-                          className="font-bold text-slate-800 dark:text-slate-200 block"
-                        >
-                          {activePost.authorName || 'তানভীর আহমেদ (Tanvir Ahmed)'}
-                        </span>
-                        <span itemProp="jobTitle" className="text-[11px] text-slate-400">
-                          {activePost.authorRole || 'Senior Social Media Growth Strategist'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-indigo-500" />
-                      <time
-                        itemProp="datePublished"
-                        dateTime={new Date(
-                          activePost.publishedAt || activePost.createdAt
-                        ).toISOString()}
-                      >
-                        {formatDateBn(activePost.publishedAt || activePost.createdAt)}
-                      </time>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-amber-500" />
-                      <span>{activePost.readingTimeMinutes || 4} মিনিট পড়ুন</span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <Eye className="w-3.5 h-3.5 text-emerald-500" />
-                      <span>{(activePost.views || 120).toLocaleString()} বার পঠিত</span>
-                    </div>
-                  </div>
-
-                  {/* Share Button */}
-                  <button
-                    onClick={() => handleCopyCanonicalLink(activePost)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-300 font-bold text-xs transition-colors"
-                  >
-                    {copiedLink ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-500" /> লিংক কপি হয়েছে!
-                      </>
-                    ) : (
-                      <>
-                        <Share2 className="w-3.5 h-3.5 text-indigo-500" /> শেয়ার লিংক কপি করুন
-                      </>
-                    )}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                >
+                  <FileDown className="w-3.5 h-3.5" />
+                  <span>PDF সেভ করুন</span>
+                </button>
               </div>
-            </div>
 
-            {/* Main Content + Sidebar Grid */}
+              {/* Cover Image */}
+              {activePost.coverImage && (
+                <figure className="pt-2">
+                  <div className="relative aspect-video max-h-[420px] w-full rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-800">
+                    <img
+                      itemProp="image"
+                      src={activePost.coverImage}
+                      alt={activePost.coverImageAlt || activePost.title}
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = FALLBACK_BLOG_IMAGE;
+                      }}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </figure>
+              )}
+            </header>
+
+            {/* Asymmetric 2-Column Reading Canvas (8 Cols Article / 4 Cols Margin Rail) */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Left 8 Cols: SGE Direct Answer + Anti-Duplicate Shield + Key Takeaways + TOC + Rich Content */}
-              <div className="lg:col-span-8 space-y-6">
-                {/* NEXT-GEN SEO: Google AI Overview / SGE Position #0 Direct Answer Snippet + Zero-Duplicate Fingerprint Strip */}
-                <div className="bg-gradient-to-br from-indigo-500/10 via-violet-500/5 to-emerald-500/10 dark:from-indigo-950/50 dark:via-slate-900 dark:to-emerald-950/30 rounded-3xl border border-indigo-500/30 p-5 space-y-3.5 shadow-xs">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1 shadow-xs">
-                        <Sparkles className="w-3 h-3" /> Google AI Overview • Position #0 Direct Answer
-                      </span>
-                      <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-[10px] font-extrabold">
-                        100% Unique • N-Gram Overlap: {activePost.nGramSimilarityPercent ?? 4}%
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
-                      Fingerprint: {activePost.contentFingerprint || `BL-FP-${activePost.id.slice(0, 8).toUpperCase()}`}
-                    </span>
-                  </div>
-
-                  <p
-                    itemProp="abstract"
-                    className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 leading-relaxed bg-white/80 dark:bg-slate-900/80 p-3.5 rounded-2xl border border-indigo-500/20"
-                  >
-                    {activePost.sgeDirectAnswer ||
-                      `সংক্ষিপ্ত উত্তর (Quick Answer): বাংলাদেশে নিরাপদে ও দ্রুত "${activePost.focusKeyword || activePost.title}" নিশ্চিত করতে নিয়মিত অরিজিনাল কন্টেন্টের পাশাপাশি Boostlagbe.com-এ বিকাশ বা নগদে মাত্র ২০ টাকা থেকে ইনস্ট্যান্ট ওয়ালেট রিচার্জ করে পাসওয়ার্ড ছাড়াই কেবল পাবলিক লিংক দিয়ে ১–৫ মিনিটে অটোমেটেড নন-ড্রপ ডেলিভারি ও ৩০ দিনের রিফিল গ্যারান্টি পাওয়া যায়।`}
-                  </p>
-
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 dark:text-slate-400 pt-1">
-                    <span>
-                      🎯 <strong>Search Intent Angle:</strong>{' '}
-                      {activePost.intentAngle || 'Step-by-Step Practical Blueprint (ধাপে ধাপে প্র্যাকটিক্যাল গাইড)'}
-                    </span>
-                    <a
-                      href="/rss.xml"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-indigo-600 dark:text-indigo-400 font-extrabold hover:underline inline-flex items-center gap-1"
-                    >
-                      <Globe className="w-3 h-3" /> RSS 2.0 Feed
-                    </a>
-                  </div>
-                </div>
-
-                {/* Key Takeaways Highlight Card */}
+              {/* Left 8 Cols: Main Reading Column */}
+              <div className="lg:col-span-8 space-y-6 min-w-0">
+                {/* Key Takeaways Card */}
                 {activePost.keyTakeaways && activePost.keyTakeaways.length > 0 && (
-                  <div className="bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent dark:from-emerald-950/40 dark:to-slate-900 rounded-2xl border border-emerald-500/30 p-5 space-y-3">
-                    <div className="flex items-center gap-2 font-extrabold text-sm text-emerald-700 dark:text-emerald-300">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-extrabold text-slate-900 dark:text-white">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                       <span>এক নজরে মূল পয়েন্টসমূহ (Key Takeaways)</span>
                     </div>
-                    <ul className="space-y-2 text-xs sm:text-sm text-slate-700 dark:text-slate-200">
+                    <ul className="space-y-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300">
                       {activePost.keyTakeaways.map((pt, idx) => (
-                        <li key={idx} className="flex items-start gap-2">
-                          <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                          <span className="font-medium leading-relaxed">{pt}</span>
+                        <li key={idx} className="flex items-start gap-2.5">
+                          <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">
+                            0{idx + 1}.
+                          </span>
+                          <span className="leading-relaxed">{pt}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
 
-                {/* Auto Table of Contents */}
+                {/* Table of Contents */}
                 {processedArticle.toc.length > 0 && (
-                  <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs">
+                  <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-xs">
                     <div className="flex items-center gap-2 font-extrabold text-sm text-slate-900 dark:text-white mb-3">
-                      <List className="w-4 h-4 text-indigo-500" />
-                      <span>এই আর্টিকেলের সূচিপত্র (Table of Contents)</span>
+                      <List className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      <span>সূচিপত্র (Table of Contents)</span>
                     </div>
-                    <ul className="space-y-2 text-xs sm:text-sm">
+                    <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs sm:text-sm">
                       {processedArticle.toc.map((item, idx) => (
                         <li
                           key={item.id}
                           className={
                             item.level === 3
-                              ? 'pl-4 text-slate-600 dark:text-slate-400'
+                              ? 'text-slate-600 dark:text-slate-400'
                               : 'font-semibold text-slate-800 dark:text-slate-200'
                           }
                         >
                           <a
                             href={`#${item.id}`}
-                            className="hover:text-indigo-600 dark:hover:text-indigo-400 inline-flex items-center gap-2 transition-colors"
+                            className="hover:text-indigo-600 dark:hover:text-indigo-400 inline-flex items-start gap-2 transition-colors py-0.5"
                           >
-                            <span className="text-indigo-500 font-mono text-xs">{idx + 1}.</span>
-                            <span>{item.text}</span>
+                            <span className="text-indigo-600 dark:text-indigo-400 font-mono text-xs tabular-nums shrink-0">
+                              {String(idx + 1).padStart(2, '0')}.
+                            </span>
+                            <span className="line-clamp-1">{item.text}</span>
                           </a>
                         </li>
                       ))}
@@ -1061,275 +904,54 @@ export const BlogView: React.FC<BlogViewProps> = ({
                   </div>
                 )}
 
-                {/* SUITE 1: In-Article Live BDT Service Price Calculator & Instant 1-Click Order */}
-                {selectedCalcService && (
-                  <div className="bg-gradient-to-br from-indigo-950 via-slate-900 to-indigo-950 text-white rounded-3xl border border-indigo-500/30 p-5 sm:p-6 shadow-md space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300">
-                          <Calculator className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-300 block">
-                            লাইভ প্রাইস ক্যালকুলেটর (Instant BDT Rate Estimator)
-                          </span>
-                          <h3 className="text-sm sm:text-base font-extrabold">
-                            ব্লগ পড়তে পড়তেই আপনার কাঙ্ক্ষিত বুস্টের খরচ হিসাব করুন
-                          </h3>
-                        </div>
-                      </div>
-                      <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-[11px] font-bold">
-                        বিকাশ ও নগদ অটো পেমেন্ট
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                      <div className="sm:col-span-6 space-y-1">
-                        <label className="text-[11px] font-bold text-slate-300 block">
-                          সার্ভিস নির্বাচন করুন ({activePost.category})
-                        </label>
-                        <select
-                          value={selectedCalcService.id}
-                          onChange={(e) => setCalcServiceId(e.target.value)}
-                          className="w-full px-3 py-2.5 rounded-xl bg-slate-900 border border-indigo-500/40 text-xs font-bold text-white"
-                        >
-                          {relatedServices.map((srv) => (
-                            <option key={srv.id} value={srv.id}>
-                              #{srv.id} — {srv.name} (৳{srv.rate || srv.ratePer1000}/1K)
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="sm:col-span-3 space-y-1">
-                        <label className="text-[11px] font-bold text-slate-300 block">
-                          পরিমাণ (Quantity)
-                        </label>
-                        <input
-                          type="number"
-                          min={selectedCalcService.min || 100}
-                          max={selectedCalcService.max || 1000000}
-                          step={100}
-                          value={calcQuantity}
-                          onChange={(e) => setCalcQuantity(Math.max(100, Number(e.target.value)))}
-                          className="w-full px-3 py-2.5 rounded-xl bg-slate-900 border border-indigo-500/40 text-xs font-mono font-extrabold text-white"
-                        />
-                      </div>
-
-                      <div className="sm:col-span-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (activePost) {
-                              recordBlogConversionEvent(activePost, 'calculator_click', estimatedServicePriceBdt);
-                            }
-                            setExpressCheckoutOpen(true);
-                          }}
-                          className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all"
-                        >
-                          <Zap className="w-4 h-4" /> মাত্র ৳{estimatedServicePriceBdt} ১-ক্লিক অর্ডার
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Feature 8, 10 & 14: Live Rate Drop Alert + First-Order Coupon + WhatsApp/Telegram Direct Order Context */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/10 text-[11px] text-slate-300">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-400/40 text-amber-300 font-extrabold">
-                          🔥 Lowest BDT Rate • Instant Auto Delivery
-                        </span>
-                        <span>
-                          প্রতি ১,০০০ রেট: <strong className="text-emerald-300">৳{selectedCalcService.rate || selectedCalcService.ratePer1000}</strong> • কোড: <strong className="text-amber-300">FIRST10</strong>
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <a
-                          href={`https://wa.me/${(siteSettings?.whatsappNumber || '8801700000000').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                            `হ্যালো Boostlagbe টিম! আমি "${activePost.title}" ব্লগটি পড়েছি এবং "${selectedCalcService.name}" (${calcQuantity} ইউনিট — ৳${estimatedServicePriceBdt}) অর্ডার করতে চাই।`
-                          )}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 font-extrabold inline-flex items-center gap-1"
-                        >
-                          💬 WhatsApp ১-ক্লিক অর্ডার
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => setExpressCheckoutOpen(true)}
-                          className="px-2.5 py-1 rounded-lg bg-indigo-500/30 hover:bg-indigo-500/40 border border-indigo-400/40 text-indigo-200 font-extrabold"
-                        >
-                          ⚡ ব্লগের ভেতরেই এক্সপ্রেস চেকআউট
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Feature 6: Zero-Redirect 1-Click Express Checkout Modal / Drawer Inside Blog */}
-                {expressCheckoutOpen && selectedCalcService && (
-                  <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white border-2 border-emerald-500/50 shadow-2xl space-y-4">
-                    <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-3">
-                      <div>
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400 block">
-                          Zero-Redirect 1-Click Express Checkout
-                        </span>
-                        <h4 className="text-base font-extrabold">
-                          ব্লগ না ছেড়েই তাৎক্ষণিক অর্ডার সম্পন্ন করুন ({selectedCalcService.name})
-                        </h4>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setExpressCheckoutOpen(false);
-                          setExpressOrderSuccess(false);
-                        }}
-                        className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold"
-                      >
-                        বন্ধ করুন ✕
-                      </button>
-                    </div>
-
-                    {expressOrderSuccess ? (
-                      <div className="p-4 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 space-y-2 text-center">
-                        <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto" />
-                        <h5 className="text-sm font-extrabold text-emerald-200">
-                          আপনার অর্ডার কনফিগারেশন প্রস্তুত হয়েছে!
-                        </h5>
-                        <p className="text-xs text-slate-300">
-                          সার্ভিস: <strong>{selectedCalcService.name}</strong> • পরিমাণ: <strong>{calcQuantity}</strong> • চার্জ: <strong>৳{estimatedServicePriceBdt}</strong>
-                        </p>
-                        <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (onSelectService) {
-                                onSelectService(selectedCalcService);
-                              } else {
-                                onNavigate('new-order');
-                              }
-                            }}
-                            className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-extrabold"
-                          >
-                            নিউ অর্ডার ড্যাশবোর্ডে কনফার্ম করুন →
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onNavigate('add-funds')}
-                            className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold"
-                          >
-                            বিকাশ/নগদ ওয়ালেট রিচার্জ (৳২০+)
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                          <div className="sm:col-span-8">
-                            <label className="text-[11px] font-bold text-slate-300 block mb-1">
-                              আপনার পাবলিক পেজ, প্রোফাইল বা ভিডিও লিংক দিন *
-                            </label>
-                            <input
-                              type="url"
-                              value={expressTargetLink}
-                              onChange={(e) => setExpressTargetLink(e.target.value)}
-                              placeholder="https://www.facebook.com/... অথবা https://youtu.be/..."
-                              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-indigo-500/40 text-xs text-white"
-                            />
-                          </div>
-                          <div className="sm:col-span-4">
-                            <label className="text-[11px] font-bold text-slate-300 block mb-1">
-                              মোট বিডিটি চার্জ
-                            </label>
-                            <div className="px-3.5 py-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-sm font-mono font-extrabold text-emerald-300">
-                              ৳{estimatedServicePriceBdt} BDT ({calcQuantity} ইউনিট)
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                          <span className="text-[11px] text-slate-400">
-                            🔒 কোনো পাসওয়ার্ড লাগবে না • ওয়ালেট ব্যালেন্স: <strong>৳{(userProfile?.balance ?? 0).toFixed(2)}</strong>
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => onNavigate('add-funds')}
-                              className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-bold text-amber-300"
-                            >
-                              + বিকাশ/নগদ ডিপোজিট
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (activePost) {
-                                  recordBlogConversionEvent(activePost, 'express_order', estimatedServicePriceBdt);
-                                }
-                                setExpressOrderSuccess(true);
-                              }}
-                              className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-extrabold flex items-center gap-1.5"
-                            >
-                              <Zap className="w-3.5 h-3.5" /> এখনই অর্ডার সাবমিট করুন
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Semantic Article Body */}
-                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-8 shadow-xs">
+                {/* Main Long-Form Editorial Body */}
+                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-8 shadow-xs">
                   <div
                     itemProp="articleBody"
                     onClick={handleArticleBodyClick}
                     className="prose prose-slate dark:prose-invert max-w-none
                       prose-headings:font-extrabold prose-headings:text-slate-900 dark:prose-headings:text-white
-                      prose-h2:text-xl sm:prose-h2:text-2xl prose-h2:mt-7 prose-h2:mb-3 prose-h2:pb-2 prose-h2:border-b prose-h2:border-slate-100 dark:prose-h2:border-slate-800
-                      prose-h3:text-lg sm:prose-h3:text-xl prose-h3:mt-5 prose-h3:mb-2
+                      prose-h2:text-xl sm:prose-h2:text-2xl prose-h2:mt-8 prose-h2:mb-3 prose-h2:pb-2.5 prose-h2:border-b prose-h2:border-slate-200 dark:prose-h2:border-slate-800
+                      prose-h3:text-lg sm:prose-h3:text-xl prose-h3:mt-6 prose-h3:mb-2
                       prose-p:text-slate-700 dark:prose-p:text-slate-300 prose-p:leading-relaxed prose-p:mb-4
                       prose-li:text-slate-700 dark:prose-li:text-slate-300 prose-li:my-1.5
                       prose-a:text-indigo-600 dark:prose-a:text-indigo-400 prose-a:font-bold hover:prose-a:underline
-                      prose-blockquote:border-l-4 prose-blockquote:border-indigo-500 prose-blockquote:bg-indigo-50/50 dark:prose-blockquote:bg-indigo-950/20 prose-blockquote:p-4 prose-blockquote:rounded-r-xl prose-blockquote:not-italic
-                      prose-table:w-full prose-table:border-collapse prose-th:bg-slate-100 dark:prose-th:bg-slate-800 prose-th:p-2.5 prose-th:text-left prose-td:p-2.5 prose-td:border-t prose-td:border-slate-200 dark:prose-td:border-slate-800
-                      prose-img:rounded-2xl prose-img:shadow-md
+                      prose-blockquote:border prose-blockquote:border-slate-200 dark:prose-blockquote:border-slate-800 prose-blockquote:bg-slate-50 dark:prose-blockquote:bg-slate-800/50 prose-blockquote:p-4 prose-blockquote:rounded-2xl prose-blockquote:not-italic
+                      prose-table:w-full prose-table:border-collapse prose-th:bg-slate-100 dark:prose-th:bg-slate-800 prose-th:p-3 prose-th:text-left prose-td:p-3 prose-td:border-t prose-td:border-slate-200 dark:prose-td:border-slate-800
+                      prose-img:rounded-2xl
                       prose-strong:text-slate-900 dark:prose-strong:text-white"
                     dangerouslySetInnerHTML={{ __html: processedArticle.html }}
                   />
 
-                  {/* SUITE 7: Google HowTo Step-by-Step Visual Cards */}
+                  {/* Step-by-Step HowTo Section */}
                   {activeHowToSteps.length > 0 && (
                     <div
                       itemScope
+                      itemProp="step"
                       itemType="https://schema.org/HowTo"
-                      className="mt-8 p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 space-y-4"
+                      className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800 space-y-4"
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <h3
-                          itemProp="name"
-                          className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2"
-                        >
-                          <CheckCircle2 className="w-5 h-5 text-indigo-500" /> ধাপে ধাপে কাজের গাইডলাইন (Step-by-Step HowTo)
-                        </h3>
-                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-                          Google HowTo Schema
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <h3
+                        itemProp="name"
+                        className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white"
+                      >
+                        ধাপে ধাপে বাস্তবায়ন গাইড (Step-by-Step Action Plan)
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
                         {activeHowToSteps.map((step, idx) => (
                           <div
                             key={idx}
-                            id={`howto-step-${idx + 1}`}
                             itemScope
                             itemProp="step"
                             itemType="https://schema.org/HowToStep"
-                            className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 space-y-1.5"
+                            className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 space-y-1.5"
                           >
-                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-indigo-600 text-white text-xs font-extrabold">
-                              {idx + 1}
+                            <span className="font-mono text-xs font-extrabold text-indigo-600 dark:text-indigo-400">
+                              ধাপ ০{idx + 1}
                             </span>
                             <h4
                               itemProp="name"
-                              className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white"
+                              className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white"
                             >
                               {step.name || step.title || `ধাপ ${idx + 1}`}
                             </h4>
@@ -1344,674 +966,159 @@ export const BlogView: React.FC<BlogViewProps> = ({
                       </div>
                     </div>
                   )}
-
-                  {/* SUITE 10: Real Bangladesh Creator & Reseller Case Study Card */}
-                  {activeCaseStudy && (
-                    <div className="mt-6 p-5 rounded-2xl bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-500/30 space-y-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-emerald-600 dark:text-emerald-400">
-                          <Award className="w-4 h-4" /> বাস্তব বাংলাদেশি ক্রিয়েটর কেস স্টাডি (Verified Success Story)
-                        </span>
-                        <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold">
-                          সময়কাল: {activeCaseStudy.timeframe} • খরচ: {activeCaseStudy.budgetSpentBdt}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/60 dark:border-slate-800">
-                          <span className="text-[10px] text-slate-400 block">ক্রিয়েটর ও নিশ</span>
-                          <span className="text-xs font-extrabold text-slate-900 dark:text-white block">
-                            {activeCaseStudy.clientName}
-                          </span>
-                          <span className="text-[11px] text-indigo-500 font-semibold">
-                            {activeCaseStudy.niche}
-                          </span>
-                        </div>
-                        <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/60 dark:border-slate-800">
-                          <span className="text-[10px] text-rose-500 font-bold block">আগের অবস্থা (Before)</span>
-                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                            {activeCaseStudy.beforeMetric}
-                          </span>
-                        </div>
-                        <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-emerald-500/30">
-                          <span className="text-[10px] text-emerald-500 font-bold block">বর্তমান ফলাফল (After)</span>
-                          <span className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400">
-                            {activeCaseStudy.afterMetric}
-                          </span>
-                        </div>
-                      </div>
-                      <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                        {activeCaseStudy.summary}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Conversion CTA Banner Inside Article */}
-                  <div className="mt-8 p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-md">
-                    <div className="space-y-1">
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-indigo-100">
-                        <Sparkles className="w-3.5 h-3.5" /> ইনস্ট্যান্ট অটোমেটেড ডেলিভারি
-                      </span>
-                      <h3 className="text-lg font-extrabold">
-                        আপনার পেজ বা চ্যানেল আজই বুস্ট করতে চান?
-                      </h3>
-                      <p className="text-xs text-indigo-100">
-                        বিকাশ ও নগদে মাত্র ২০ টাকা থেকে ইনস্ট্যান্ট ফলোয়ার, ভিউ ও মনিটাইজেশন প্যাক অর্ডার করুন।
-                      </p>
-                    </div>
-                    <button
-                      onClick={() =>
-                        isPublicStandalone && onOpenAuth ? onOpenAuth() : onNavigate('new-order')
-                      }
-                      className="px-5 py-3 rounded-xl bg-white text-indigo-700 hover:bg-indigo-50 font-extrabold text-xs shrink-0 shadow-sm transition-all flex items-center gap-1.5"
-                    >
-                      <Zap className="w-4 h-4" /> এখনই অর্ডার করুন
-                    </button>
-                  </div>
                 </div>
 
-                {/* SUITE 3 & 6: Interactive Creator Micro-Tools Suite (Earnings Calc, Best Time, Checklist, Viral Hashtags) */}
-                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-5">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-indigo-500">
-                        Free Creator Growth Toolkit
-                      </span>
-                      <h3 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white">
-                        ক্রিয়েটর ফ্রি টুলবক্স: ইনকাম ক্যালকুলেটর, ভাইরাল টাইম ও হ্যাশট্যাগ
-                      </h3>
-                    </div>
-                  </div>
-
-                  {/* Micro-Tool Selector Tabs (10 Interactive Growth, AI & Reseller Tools) */}
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-800/70">
-                    <button
-                      type="button"
-                      onClick={() => setActiveMicroTool('earnings')}
-                      className={`py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
-                        activeMicroTool === 'earnings'
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : 'text-slate-600 dark:text-slate-300'
-                      }`}
-                    >
-                      <BarChart3 className="w-3.5 h-3.5" /> ইনকাম ক্যালকুলেটর
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveMicroTool('linkscanner')}
-                      className={`py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
-                        activeMicroTool === 'linkscanner'
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : 'text-slate-600 dark:text-slate-300'
-                      }`}
-                    >
-                      <ShieldCheck className="w-3.5 h-3.5" /> লিংক ও এলিজিবিলিটি স্ক্যানার
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveMicroTool('combos')}
-                      className={`py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
-                        activeMicroTool === 'combos'
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : 'text-slate-600 dark:text-slate-300'
-                      }`}
-                    >
-                      <Zap className="w-3.5 h-3.5" /> মনিটাইজেশন কম্বো প্যাক
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveMicroTool('reelsscript')}
-                      className={`py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
-                        activeMicroTool === 'reelsscript'
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : 'text-slate-600 dark:text-slate-300'
-                      }`}
-                    >
-                      <Sparkles className="w-3.5 h-3.5" /> 60s Reels/TikTok স্ক্রিপ্ট
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveMicroTool('carousel')}
-                      className={`py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
-                        activeMicroTool === 'carousel'
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : 'text-slate-600 dark:text-slate-300'
-                      }`}
-                    >
-                      <Layers className="w-3.5 h-3.5" /> ৫-স্লাইড ক্যারোসেল
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveMicroTool('reseller')}
-                      className={`py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
-                        activeMicroTool === 'reseller'
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : 'text-slate-600 dark:text-slate-300'
-                      }`}
-                    >
-                      <Award className="w-3.5 h-3.5" /> রিসেলার ক্লায়েন্ট প্রপোজাল
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveMicroTool('besttime')}
-                      className={`py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
-                        activeMicroTool === 'besttime'
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : 'text-slate-600 dark:text-slate-300'
-                      }`}
-                    >
-                      <Clock className="w-3.5 h-3.5" /> সেরা পোস্ট টাইম (BD)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveMicroTool('checklist')}
-                      className={`py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
-                        activeMicroTool === 'checklist'
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : 'text-slate-600 dark:text-slate-300'
-                      }`}
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" /> মনিটাইজেশন চেকলিস্ট
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveMicroTool('hashtags')}
-                      className={`py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
-                        activeMicroTool === 'hashtags'
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : 'text-slate-600 dark:text-slate-300'
-                      }`}
-                    >
-                      <Hash className="w-3.5 h-3.5" /> ভাইরাল হ্যাশট্যাগ
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveMicroTool('glossary')}
-                      className={`py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
-                        activeMicroTool === 'glossary'
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : 'text-slate-600 dark:text-slate-300'
-                      }`}
-                    >
-                      <BookOpen className="w-3.5 h-3.5" /> SMM গ্লোসারি উইকি
-                    </button>
-                  </div>
-
-                  {/* Tool 1: BD Creator Monetization Earnings Calculator */}
-                  {activeMicroTool === 'earnings' && (
-                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700 space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                            প্ল্যাটফর্ম নির্বাচন করুন
-                          </label>
-                          <select
-                            value={earningsPlatform}
-                            onChange={(e) =>
-                              setEarningsPlatform(e.target.value as 'facebook' | 'youtube' | 'tiktok')
-                            }
-                            className="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
-                          >
-                            <option value="facebook">Facebook In-Stream & Ads on Reels (BD)</option>
-                            <option value="youtube">YouTube Long Video & Shorts AdSense</option>
-                            <option value="tiktok">TikTok Creator Rewards & Live Gifts</option>
-                          </select>
+                {/* In-Article Live Service Rate Calculator & Instant Order Card */}
+                {selectedCalcService && (
+                  <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                          <Calculator className="w-5 h-5" />
                         </div>
-
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                            মাসিক মোট ভিউ সংখ্যা (Monthly Views)
-                          </label>
-                          <input
-                            type="number"
-                            min={10000}
-                            step={50000}
-                            value={monthlyViewsInput}
-                            onChange={(e) => setMonthlyViewsInput(Math.max(1000, Number(e.target.value)))}
-                            className="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono font-extrabold text-slate-900 dark:text-white"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/15 to-teal-500/10 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-4">
                         <div>
-                          <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 block">
-                            আনুমানিক মাসিক মনিটাইজেশন আয় (বাংলাদেশ RPM: ~${creatorEarningsEstimate.rpmUsd}/1K)
-                          </span>
-                          <div className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white mt-0.5">
-                            ৳{creatorEarningsEstimate.bdt.toLocaleString()} BDT{' '}
-                            <span className="text-sm font-mono text-emerald-600 dark:text-emerald-400">
-                              (${creatorEarningsEstimate.usd.toLocaleString()} USD / মাস)
-                            </span>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => onNavigate('services')}
-                          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold"
-                        >
-                          মনিটাইজেশন প্যাক দেখুন
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Tool 2: Bangladesh Best Time to Post Viral Chart */}
-                  {activeMicroTool === 'besttime' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {BD_BEST_POST_TIMES.map((row, i) => (
-                        <div
-                          key={i}
-                          className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700 space-y-1.5"
-                        >
-                          <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 block">
-                            {row.platform}
-                          </span>
-                          <p className="text-xs font-extrabold text-slate-900 dark:text-white">
-                            🔥 পিক টাইম: {row.primeSlot}
-                          </p>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                            বিকল্প সময়: {row.secondarySlot}
-                          </p>
-                          <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium pt-1">
-                            টিপস: {row.tip}
+                          <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
+                            লাইভ সার্ভিস রেট ক্যালকুলেটর ({activePost.category})
+                          </h3>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            আপনার কাঙ্ক্ষিত সার্ভিস ও পরিমাণ সিলেক্ট করে তাৎক্ষণিক খরচ দেখুন
                           </p>
                         </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Tool 3: Interactive 5-Point Monetization Readiness Checklist */}
-                  {activeMicroTool === 'checklist' && (
-                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200">
-                          আপনার পেজ বা চ্যানেলের মনিটাইজেশন প্রস্তুতি যাচাই করুন:
-                        </span>
-                        <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-xs font-extrabold">
-                          প্রস্তুতি স্কোর: {checkedReadyItems.length * 20}%
-                        </span>
-                      </div>
-                      <div className="space-y-2">
-                        {MONETIZATION_CHECKLIST_ITEMS.map((item, idx) => {
-                          const checked = checkedReadyItems.includes(idx);
-                          return (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() =>
-                                setCheckedReadyItems((prev) =>
-                                  prev.includes(idx)
-                                    ? prev.filter((i) => i !== idx)
-                                    : [...prev, idx]
-                                )
-                              }
-                              className={`w-full text-left p-3 rounded-xl border text-xs font-semibold flex items-center gap-2.5 transition-all ${
-                                checked
-                                  ? 'bg-emerald-500/10 border-emerald-500/30 text-slate-900 dark:text-white'
-                                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
-                              }`}
-                            >
-                              <div
-                                className={`w-4 h-4 rounded flex items-center justify-center shrink-0 ${
-                                  checked
-                                    ? 'bg-emerald-500 text-white'
-                                    : 'border border-slate-400'
-                                }`}
-                              >
-                                {checked && <Check className="w-3 h-3" />}
-                              </div>
-                              <span>{item}</span>
-                            </button>
-                          );
-                        })}
                       </div>
                     </div>
-                  )}
 
-                  {/* Tool 4: 1-Click Copy Viral Hashtags */}
-                  {activeMicroTool === 'hashtags' && (
-                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700 space-y-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                          {activePost.category} ভাইরাল করার সেরা হ্যাশট্যাগ সেট:
-                        </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                      <div className="sm:col-span-6 space-y-1">
+                        <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block">
+                          সার্ভিস নির্বাচন করুন
+                        </label>
+                        <select
+                          value={selectedCalcService.id}
+                          onChange={(e) => setCalcServiceId(e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
+                        >
+                          {relatedServices.map((srv) => (
+                            <option key={srv.id} value={srv.id}>
+                              #{srv.id} — {srv.name} (৳{srv.rate || srv.ratePer1000}/1K)
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="sm:col-span-3 space-y-1">
+                        <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block">
+                          পরিমাণ (Quantity)
+                        </label>
+                        <input
+                          type="number"
+                          min={selectedCalcService.min || 100}
+                          max={selectedCalcService.max || 1000000}
+                          step={100}
+                          value={calcQuantity}
+                          onChange={(e) => setCalcQuantity(Math.max(100, Number(e.target.value)))}
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono font-extrabold text-slate-900 dark:text-white tabular-nums"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-3">
                         <button
                           type="button"
                           onClick={() => {
-                            navigator.clipboard.writeText(activeViralHashtags.join(' '));
-                            setCopiedHashtags(true);
-                            setTimeout(() => setCopiedHashtags(false), 2500);
+                            if (activePost) {
+                              recordBlogConversionEvent(
+                                activePost,
+                                'calculator_click',
+                                estimatedServicePriceBdt
+                              );
+                            }
+                            setExpressCheckoutOpen(true);
                           }}
-                          className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5"
+                          className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                         >
-                          {copiedHashtags ? (
-                            <>
-                              <Check className="w-3.5 h-3.5" /> কপি হয়েছে!
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3.5 h-3.5" /> ১-ক্লিকে সব হ্যাশট্যাগ কপি করুন
-                            </>
-                          )}
+                          <Zap className="w-3.5 h-3.5" />
+                          <span>মাত্র ৳{estimatedServicePriceBdt} অর্ডার</span>
                         </button>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        {activeViralHashtags.map((ht, i) => (
-                          <span
-                            key={i}
-                            className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400"
-                          >
-                            {ht}
+                    </div>
+
+                    {/* Express Order Drawer */}
+                    {expressCheckoutOpen && (
+                      <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-extrabold text-slate-900 dark:text-white">
+                            কুইক অর্ডার কনফিগারেশন ({selectedCalcService.name})
                           </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Tool 5: Programmatic A-Z SMM & Monetization Glossary Wiki */}
-                  {activeMicroTool === 'glossary' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {SMM_GLOSSARY_TERMS.map((item, idx) => (
-                        <div
-                          key={idx}
-                          className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700 space-y-1.5"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400">
-                              {item.term}
-                            </span>
-                            <span className="px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 text-[10px] font-bold">
-                              {item.category}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                            {item.definition}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Feature 7: Live Profile & Video Link Health & Monetization Eligibility Scanner */}
-                  {activeMicroTool === 'linkscanner' && (
-                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700 space-y-4">
-                      <div className="space-y-1">
-                        <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 block">
-                          লাইভ প্রোফাইল ও ভিডিও লিংক হেলথ এবং মনিটাইজেশন এলিজিবিলিটি স্ক্যানার
-                        </span>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          আপনার Facebook, YouTube, TikTok বা Instagram লিংক পেস্ট করে দেখে নিন লিংকটি বুস্ট ও মনিটাইজেশনের জন্য প্রস্তুত কিনা।
-                        </p>
-                      </div>
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <input
-                          type="url"
-                          value={scannerInputUrl}
-                          onChange={(e) => setScannerInputUrl(e.target.value)}
-                          placeholder="https://www.facebook.com/yourpage অথবা https://www.youtube.com/@channel"
-                          className="flex-1 px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setScannerResult(
-                              analyzeProfileLinkHealth(
-                                scannerInputUrl || `https://www.facebook.com/boostlagbe`,
-                                services
-                              )
-                            )
-                          }
-                          className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold shrink-0"
-                        >
-                          লিংক স্ক্যান করুন
-                        </button>
-                      </div>
-
-                      {scannerResult && (
-                        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-emerald-500/30 space-y-2.5">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400">
-                              ✓ প্ল্যাটফর্ম: {scannerResult.detectedPlatform} • স্কোর: {scannerResult.readinessScore}/100
-                            </span>
-                            <span className="px-2.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 text-[11px] font-bold">
-                              {scannerResult.statusLabel}
-                            </span>
-                          </div>
-                          {scannerResult.recommendedServices.length > 0 && (
-                            <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                              প্রস্তাবিত সার্ভিস:{' '}
-                              <span className="text-indigo-600 dark:text-indigo-400">
-                                {scannerResult.recommendedServices.map((s) => s.name).join(' • ')}
-                              </span>
-                            </p>
-                          )}
-                          <ul className="space-y-1 text-[11px] text-slate-600 dark:text-slate-400">
-                            {scannerResult.diagnosticNotes.map((t: string, idx: number) => (
-                              <li key={idx}>• {t}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Feature 9: 1-Click Monetization Combo Bundles */}
-                  {activeMicroTool === 'combos' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {MONETIZATION_COMBO_BUNDLES.map((bundle) => (
-                        <div
-                          key={bundle.id}
-                          className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-indigo-500/30 flex flex-col justify-between space-y-3"
-                        >
-                          <div className="space-y-1.5">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-extrabold">
-                                {bundle.badge}
-                              </span>
-                              <span className="text-xs font-mono text-slate-400 line-through">
-                                ৳{bundle.regularPriceBdt}
-                              </span>
-                            </div>
-                            <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
-                              {bundle.title}
-                            </h4>
-                            <ul className="space-y-1 text-[11px] text-slate-600 dark:text-slate-300">
-                              {bundle.items.map((it, idx) => (
-                                <li key={idx} className="flex items-center gap-1.5">
-                                  <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                                  <span>{it}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                          <div className="pt-2 border-t border-slate-200/70 dark:border-slate-700 flex items-center justify-between">
-                            <div>
-                              <span className="text-[10px] text-slate-400 block">কম্বো অফার মূল্য ({bundle.timeframe})</span>
-                              <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
-                                ৳{bundle.bundlePriceBdt} BDT
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                recordBlogConversionEvent(activePost, 'express_order', bundle.bundlePriceBdt);
-                                onNavigate('new-order');
-                              }}
-                              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1"
-                            >
-                              <Zap className="w-3.5 h-3.5" /> ১-ক্লিকে কম্বো অর্ডার
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Feature 11: Blog-to-60s Reels / TikTok / YouTube Shorts Video Script Generator */}
-                  {activeMicroTool === 'reelsscript' && (() => {
-                    const scriptObj = generate60sReelsScriptFromBlog(activePost);
-                    const formattedScript = `${scriptObj.hook0to5s}\n\n${scriptObj.body5to45s.join('\n')}\n\n${scriptObj.cta45to60s}\n\n--- ক্যাপশন ও হ্যাশট্যাগ ---\n${scriptObj.captionWithHashtags}`;
-                    return (
-                      <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700 space-y-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div>
-                            <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 block">
-                              ৬০ সেকেন্ডের ভাইরাল Reels / TikTok / Shorts ভিডিও স্ক্রিপ্ট
-                            </span>
-                            <span className="text-[11px] text-slate-500">
-                              এই ব্লগ থেকে স্বয়ংক্রিয়ভাবে তৈরি ৩-সেকেন্ড হুক, মূল পয়েন্ট ও কল-টু-অ্যাকশন স্ক্রিপ্ট
-                            </span>
-                          </div>
                           <button
                             type="button"
                             onClick={() => {
-                              navigator.clipboard.writeText(formattedScript);
-                              setCopiedScript(true);
-                              setTimeout(() => setCopiedScript(false), 2500);
+                              setExpressCheckoutOpen(false);
+                              setExpressOrderSuccess(false);
                             }}
-                            className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5"
+                            className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
                           >
-                            {copiedScript ? (
-                              <>
-                                <Check className="w-3.5 h-3.5" /> স্ক্রিপ্ট কপি হয়েছে!
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="w-3.5 h-3.5" /> ১-ক্লিকে স্ক্রিপ্ট কপি করুন
-                              </>
-                            )}
+                            <X className="w-4 h-4" />
                           </button>
                         </div>
-                        <pre className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-200 whitespace-pre-wrap font-sans leading-relaxed">
-                          {formattedScript}
-                        </pre>
-                      </div>
-                    );
-                  })()}
 
-                  {/* Feature 12: Blog-to-5-Slide Social Media Infographic Carousel Builder */}
-                  {activeMicroTool === 'carousel' && (
-                    <div className="space-y-3">
-                      <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 block">
-                        সোশ্যাল মিডিয়া ৫-স্লাইড ইনফোগ্রাফিক ক্যারোসেল ডেক (Facebook & Instagram Post Ready)
-                      </span>
-                      <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
-                        {generateSocialCarouselSlidesFromBlog(activePost).map((sl) => (
-                          <div
-                            key={sl.slideNumber}
-                            className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white border border-indigo-500/30 flex flex-col justify-between space-y-2"
-                          >
-                            <div className="space-y-1">
-                              <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px] font-extrabold">
-                                Slide #{sl.slideNumber}/5
-                              </span>
-                              <h5 className="text-xs font-extrabold text-amber-300 leading-snug">
-                                {sl.headline}
-                              </h5>
-                              <p className="text-[11px] text-slate-200 leading-relaxed">{sl.bullet}</p>
-                            </div>
-                            <span className="text-[10px] font-mono text-emerald-400 pt-2 border-t border-white/10 block">
-                              {sl.footerTag}
+                        {expressOrderSuccess ? (
+                          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                              ✓ অর্ডার প্রস্তুত! নিউ অর্ডার পেজে কনফার্ম করুন।
                             </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (onSelectService) {
+                                  onSelectService(selectedCalcService);
+                                } else {
+                                  onNavigate('new-order');
+                                }
+                              }}
+                              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer"
+                            >
+                              অর্ডার পেজে যান →
+                            </button>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Feature 25: Reseller White-Label Client Pitch & Proposal Generator */}
-                  {activeMicroTool === 'reseller' && (
-                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700 space-y-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 block">
-                            এজেন্সি ও রিসেলার হোয়াইট-লেবেল ক্লায়েন্ট প্রপোজাল জেনারেটর
-                          </span>
-                          <span className="text-[11px] text-slate-500">
-                            আপনার নিজস্ব এজেন্সির নামে ও কাস্টম প্রফিট মার্জিনে ক্লায়েন্টকে প্রপোজাল পাঠান
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const text = generateResellerWhiteLabelProposal(
-                              activePost,
-                              `${agencyNameInput} (Client: ${clientNameInput})`,
-                              marginPercentInput
-                            );
-                            navigator.clipboard.writeText(text);
-                            setCopiedProposal(true);
-                            setTimeout(() => setCopiedProposal(false), 2500);
-                          }}
-                          className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold flex items-center gap-1.5"
-                        >
-                          {copiedProposal ? (
-                            <>
-                              <Check className="w-3.5 h-3.5" /> প্রপোজাল কপি হয়েছে!
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3.5 h-3.5" /> হোয়াইট-লেবেল প্রপোজাল কপি করুন
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                        <input
-                          type="text"
-                          value={agencyNameInput}
-                          onChange={(e) => setAgencyNameInput(e.target.value)}
-                          placeholder="আপনার এজেন্সির নাম"
-                          className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
-                        />
-                        <input
-                          type="text"
-                          value={clientNameInput}
-                          onChange={(e) => setClientNameInput(e.target.value)}
-                          placeholder="ক্লায়েন্ট বা পেজের নাম"
-                          className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
-                        />
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-slate-600 dark:text-slate-300 shrink-0">
-                            মার্জিন %:
-                          </span>
-                          <input
-                            type="number"
-                            min={10}
-                            max={300}
-                            value={marginPercentInput}
-                            onChange={(e) => setMarginPercentInput(Number(e.target.value))}
-                            className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-900 dark:text-white"
-                          />
-                        </div>
-                      </div>
-
-                      <pre className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-200 whitespace-pre-wrap font-sans leading-relaxed">
-                        {generateResellerWhiteLabelProposal(
-                          activePost,
-                          `${agencyNameInput} (Client: ${clientNameInput})`,
-                          marginPercentInput
+                        ) : (
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <input
+                              type="url"
+                              value={expressTargetLink}
+                              onChange={(e) => setExpressTargetLink(e.target.value)}
+                              placeholder="আপনার পাবলিক পেজ বা ভিডিও লিংক দিন (https://...)"
+                              className="flex-1 px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (activePost) {
+                                  recordBlogConversionEvent(
+                                    activePost,
+                                    'express_order',
+                                    estimatedServicePriceBdt
+                                  );
+                                }
+                                setExpressOrderSuccess(true);
+                              }}
+                              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shrink-0 cursor-pointer"
+                            >
+                              অর্ডার প্রস্তুত করুন (৳{estimatedServicePriceBdt})
+                            </button>
+                          </div>
                         )}
-                      </pre>
-                    </div>
-                  )}
-                </div>
-
-                {/* SUITE 9: Gamified Read-to-Earn Quick Quiz & Secret Reader Promo Code Box */}
-                {activeQuiz && (
-                  <div className="bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent dark:from-amber-950/30 dark:to-slate-900 rounded-3xl border border-amber-500/30 p-5 sm:p-6 space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <Gift className="w-5 h-5 text-amber-500" />
-                        <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
-                          কুইজের উত্তর দিন এবং সিক্রেট প্রোমো ভাউচার কোড আনলক করুন!
-                        </h3>
                       </div>
-                      <span className="px-2.5 py-0.5 rounded-md bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[11px] font-extrabold">
-                        Read-to-Earn Reward
-                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Quick Quiz & Reader Promo Unlock */}
+                {activeQuiz && (
+                  <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+                    <div className="flex items-center gap-2">
+                      <Gift className="w-5 h-5 text-amber-500" />
+                      <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
+                        পাঠক কুইজ ও প্রোমো কোড রিওয়ার্ড
+                      </h3>
                     </div>
 
                     <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200">
@@ -2030,12 +1137,12 @@ export const BlogView: React.FC<BlogViewProps> = ({
                               setSelectedQuizOption(idx);
                               setPromoUnlocked(true);
                             }}
-                            className={`p-3 rounded-xl border text-left text-xs font-bold transition-all flex items-center justify-between gap-2 ${
+                            className={`p-3 rounded-xl border text-left text-xs font-semibold transition-all flex items-center justify-between gap-2 cursor-pointer ${
                               isSelected
                                 ? isCorrect
-                                  ? 'bg-emerald-500/20 border-emerald-500 text-emerald-700 dark:text-emerald-300'
-                                  : 'bg-amber-500/20 border-amber-500 text-amber-700 dark:text-amber-300'
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-amber-500/50'
+                                  ? 'bg-emerald-50 dark:bg-emerald-500/15 border-emerald-500 text-emerald-700 dark:text-emerald-300'
+                                  : 'bg-amber-50 dark:bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300'
+                                : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
                             }`}
                           >
                             <span>{opt}</span>
@@ -2047,291 +1154,78 @@ export const BlogView: React.FC<BlogViewProps> = ({
 
                     {selectedQuizOption !== null && (
                       <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
-                        ✓ ব্যাখ্যা: {activeQuiz.explanation}
+                        ✓ {activeQuiz.explanation}
                       </p>
                     )}
 
-                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-amber-500/30 flex flex-wrap items-center justify-between gap-3">
+                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
                         {promoUnlocked ? (
-                          <Unlock className="w-5 h-5 text-emerald-500 shrink-0" />
+                          <Unlock className="w-5 h-5 text-emerald-600 shrink-0" />
                         ) : (
                           <Lock className="w-5 h-5 text-amber-500 shrink-0" />
                         )}
                         <div>
-                          <span className="text-[11px] text-slate-400 block">
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
                             {effectiveSecretPromo.desc}
                           </span>
-                          <span className="text-sm font-mono font-extrabold text-slate-900 dark:text-white">
+                          <span className="text-xs sm:text-sm font-mono font-extrabold text-slate-900 dark:text-white">
                             প্রোমো কোড:{' '}
-                            <strong className="text-amber-500">
-                              {promoUnlocked ? effectiveSecretPromo.code : '•••••• (উপরে ক্লিক করে আনলক করুন)'}
+                            <strong className="text-indigo-600 dark:text-indigo-400">
+                              {promoUnlocked ? effectiveSecretPromo.code : '••••••'}
                             </strong>
                           </span>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        {!promoUnlocked ? (
-                          <button
-                            type="button"
-                            onClick={() => setPromoUnlocked(true)}
-                            className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-extrabold"
-                          >
-                            কোড আনলক করুন
-                          </button>
-                        ) : (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                navigator.clipboard.writeText(effectiveSecretPromo.code);
-                                setCopiedPromo(true);
-                                setTimeout(() => setCopiedPromo(false), 2500);
-                              }}
-                              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold flex items-center gap-1.5"
-                            >
-                              {copiedPromo ? (
-                                <>
-                                  <Check className="w-3.5 h-3.5" /> কপি হয়েছে!
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="w-3.5 h-3.5" /> কোড কপি করুন
-                                </>
-                              )}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setShowCertificateModal((prev) => !prev)}
-                              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5"
-                            >
-                              <Award className="w-3.5 h-3.5" /> সার্টিফিকেট নিন
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Feature 16: Boostlagbe Creator Academy Digital Certificate */}
-                    {showCertificateModal && (
-                      <div className="p-6 rounded-3xl bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 text-white border-2 border-amber-400/60 shadow-xl space-y-4 text-center">
-                        <Award className="w-10 h-10 text-amber-400 mx-auto" />
-                        <span className="text-[11px] font-extrabold uppercase tracking-widest text-amber-300 block">
-                          Boostlagbe Creator Academy • Verified Certification 2026
-                        </span>
-                        <h4 className="text-lg sm:text-xl font-extrabold text-white">
-                          Certified {activePost.category} Growth & Monetization Strategist
-                        </h4>
-                        <p className="text-xs text-slate-300 max-w-md mx-auto">
-                          এই মর্মে প্রত্যয়ন করা যাচ্ছে যে নিচের ক্রিয়েটর সফলভাবে "{activePost.title}" মাস্টারক্লাস ও এসেসমেন্ট সম্পন্ন করেছেন:
-                        </p>
-                        <div className="max-w-xs mx-auto">
-                          <input
-                            type="text"
-                            value={certificateRecipientName}
-                            onChange={(e) => setCertificateRecipientName(e.target.value)}
-                            className="w-full text-center px-3 py-2 rounded-xl bg-white/10 border border-amber-400/40 text-sm font-extrabold text-amber-300"
-                          />
-                        </div>
-                        <div className="flex flex-wrap items-center justify-center gap-3 pt-2 text-[11px] text-slate-400">
-                          <span>Certificate ID: BL-CERT-{activePost.id.slice(0, 6).toUpperCase()}</span>
-                          <span>•</span>
-                          <span>Issued by: Boostlagbe.com Editorial Board</span>
-                        </div>
+                      {!promoUnlocked ? (
                         <button
                           type="button"
-                          onClick={() => window.print()}
-                          className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-extrabold inline-flex items-center gap-1.5"
+                          onClick={() => setPromoUnlocked(true)}
+                          className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold cursor-pointer"
                         >
-                          <FileDown className="w-3.5 h-3.5" /> সার্টিফিকেট প্রিন্ট / PDF সেভ করুন
+                          কোড আনলক করুন
                         </button>
-                      </div>
-                    )}
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(effectiveSecretPromo.code);
+                            setCopiedPromo(true);
+                            setTimeout(() => setCopiedPromo(false), 2500);
+                          }}
+                          className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                        >
+                          {copiedPromo ? (
+                            <>
+                              <Check className="w-3.5 h-3.5" /> কপি হয়েছে
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5" /> কোড কপি করুন
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
 
-                {/* Feature 18: Interactive 1-Click Live Creator Poll Widget */}
-                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-3.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
-                      📊 লাইভ ক্রিয়েটর পোল (Community Pulse Poll)
-                    </span>
-                    <span className="text-[11px] text-slate-400 font-bold">১-ক্লিকে ভোট দিন</span>
-                  </div>
-                  <h4 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
-                    ২০২৬ সালে আপনার মূল সোশ্যাল মিডিয়া মনিটাইজেশন টার্গেট কোনটি?
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                    {[
-                      { id: 'fb', label: 'Facebook Page In-Stream & Reels', pct: 48 },
-                      { id: 'yt', label: 'YouTube 4000h & AdSense', pct: 31 },
-                      { id: 'tt', label: 'TikTok Viral & Brand Deals', pct: 21 }
-                    ].map((opt) => {
-                      const active = selectedPollChoice === opt.id;
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => setSelectedPollChoice(opt.id)}
-                          className={`p-3 rounded-2xl border text-left transition-all space-y-1.5 ${
-                            active
-                              ? 'bg-indigo-600/10 border-indigo-500 text-indigo-700 dark:text-indigo-300'
-                              : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between text-xs font-extrabold">
-                            <span>{opt.label}</span>
-                            {selectedPollChoice && (
-                              <span className="text-emerald-600 dark:text-emerald-400">
-                                {active ? opt.pct + 1 : opt.pct}%
-                              </span>
-                            )}
-                          </div>
-                          {selectedPollChoice && (
-                            <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                              <div
-                                className="h-full bg-indigo-600"
-                                style={{ width: `${active ? opt.pct + 1 : opt.pct}%` }}
-                              />
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Feature 4: Voice Search & Banglish (বাংলিশ) Phonetic FAQ Block */}
-                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-3.5">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
-                        Google Voice Search & Banglish Phonetic Queries (Speakable Schema)
-                      </span>
-                      <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
-                        ভয়েস সার্চ ও বাংলিশ (Banglish) জনপ্রিয় প্রশ্নোত্তর
-                      </h3>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {generateBanglishVoiceSearchFaqs(activePost).map((bf, bIdx) => (
-                      <div
-                        key={bIdx}
-                        className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700 space-y-1.5"
-                      >
-                        <span className="text-xs font-mono font-extrabold text-indigo-600 dark:text-indigo-400 block">
-                          🎤 {bf.banglishQuestion}
-                        </span>
-                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                          {bf.voiceAnswerBn}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* SUITE 5: Share Blog with Referral Link (?ref=USER_CODE) to Earn ৳10 */}
-                <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 text-white rounded-3xl border border-indigo-500/30 p-5 sm:p-6 space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="space-y-0.5">
-                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400">
-                        Share & Earn ৳10 Per Verified Referral
-                      </span>
-                      <h3 className="text-base font-extrabold">
-                        এই ব্লগটি বন্ধুদের শেয়ার করে প্রতি রেফারেলে ৳১০ বোনাস + আজীবন কমিশন আয় করুন!
-                      </h3>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onNavigate('affiliates')}
-                      className="text-xs font-bold text-indigo-300 hover:underline"
-                    >
-                      রেফারেল ড্যাশবোর্ড →
-                    </button>
-                  </div>
-
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    নিচের লিংকে আপনার রেফারেল ট্র্যাকিং কোড যুক্ত আছে। কেউ এই গাইড পড়ে সাইনআপ করে ন্যূনতম ১০০ টাকা ডিপোজিট করলেই আপনার ওয়ালেটে স্বয়ংক্রিয়ভাবে <strong>৳১০ ভেরিফাইড রেফারেল বোনাস</strong> জমা হবে!
-                  </p>
-
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={referralShareUrl}
-                      className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950/90 border border-indigo-500/30 text-xs font-mono text-indigo-200"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleCopyReferralLink}
-                      className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs shrink-0 flex items-center justify-center gap-1.5"
-                    >
-                      {copiedReferral ? (
-                        <>
-                          <Check className="w-4 h-4" /> রেফারেল লিংক কপি হয়েছে!
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-4 h-4" /> রেফারেল ব্লগ লিংক কপি করুন
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Google E-E-A-T Verified Author & Editorial Reviewer Credential Box */}
-                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-                    <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-emerald-600 dark:text-emerald-400">
-                      <ShieldCheck className="w-4 h-4" /> Google E-E-A-T Verified Editorial Author & Fact-Checked Guide
-                    </span>
-                    <span className="text-[11px] text-slate-400 font-semibold">
-                      Reviewed by: {activePost.reviewedBy || 'Boostlagbe Editorial & SEO Review Board'}
-                    </span>
-                  </div>
-
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white font-extrabold flex items-center justify-center text-base shrink-0 shadow-sm">
-                      TA
-                    </div>
-                    <div className="space-y-1">
-                      <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
-                        {activePost.authorName || 'তানভীর আহমেদ (Tanvir Ahmed)'}
-                      </h3>
-                      <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                        {activePost.authorRole || 'Senior Social Media Growth Strategist, Boostlagbe.com'}
-                      </p>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                        {activePost.authorBio ||
-                          'তানভীর আহমেদ গত ৬+ বছর ধরে বাংলাদেশের ১০,০০০+ ফেসবুক পেজ, ইউটিউব চ্যানেল এবং ই-কমার্স ব্র্যান্ডের অর্গানিক গ্রোথ, মনিটাইজেশন ও এসইও স্ট্র্যাটেজি নিয়ে কাজ করছেন।'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Google Rich Snippet FAQPage Section */}
+                {/* FAQ Section */}
                 {activePost.faqItems && activePost.faqItems.length > 0 && (
                   <section
                     itemScope
                     itemType="https://schema.org/FAQPage"
-                    className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-8 shadow-xs space-y-4"
+                    className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4"
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                        <HelpCircle className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">
-                          সচরাচর জিজ্ঞাসিত প্রশ্নাবলী (FAQ)
-                        </h2>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          গুগল সার্চ ও ইউজারদের সবচেয়ে গুরুত্বপূর্ণ প্রশ্ন ও উত্তর
-                        </p>
-                      </div>
+                      <HelpCircle className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                      <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white">
+                        সচরাচর জিজ্ঞাসিত প্রশ্নাবলী (FAQ)
+                      </h2>
                     </div>
 
-                    <div className="space-y-3 pt-2">
+                    <div className="space-y-2.5">
                       {activePost.faqItems.map((faq, idx) => {
                         const isOpen = openFaqIndex === idx;
                         return (
@@ -2340,22 +1234,22 @@ export const BlogView: React.FC<BlogViewProps> = ({
                             itemScope
                             itemProp="mainEntity"
                             itemType="https://schema.org/Question"
-                            className="rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden"
+                            className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden"
                           >
                             <button
                               type="button"
                               onClick={() => setOpenFaqIndex(isOpen ? null : idx)}
-                              className="w-full px-4 py-3.5 text-left bg-slate-50/70 dark:bg-slate-800/40 hover:bg-slate-100/80 dark:hover:bg-slate-800 flex items-center justify-between gap-3 transition-colors"
+                              className="w-full px-4 py-3.5 text-left bg-slate-50/70 dark:bg-slate-800/40 hover:bg-slate-100/80 dark:hover:bg-slate-800 flex items-center justify-between gap-3 transition-colors cursor-pointer"
                             >
                               <span
                                 itemProp="name"
-                                className="font-bold text-sm text-slate-900 dark:text-white"
+                                className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white"
                               >
                                 {faq.question}
                               </span>
                               <ChevronDown
                                 className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${
-                                  isOpen ? 'rotate-180 text-indigo-500' : ''
+                                  isOpen ? 'rotate-180 text-indigo-600' : ''
                                 }`}
                               />
                             </button>
@@ -2364,7 +1258,7 @@ export const BlogView: React.FC<BlogViewProps> = ({
                                 itemScope
                                 itemProp="acceptedAnswer"
                                 itemType="https://schema.org/Answer"
-                                className="px-4 py-3.5 text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800"
+                                className="px-4 py-3.5 text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed bg-white dark:bg-slate-900 border-t border-slate-200/70 dark:border-slate-800"
                               >
                                 <div itemProp="text">{faq.answer}</div>
                               </div>
@@ -2376,13 +1270,12 @@ export const BlogView: React.FC<BlogViewProps> = ({
                   </section>
                 )}
 
-                {/* SUITE 4: Helpfulness Voting, 5-Star Rating & Verified Reader Q&A Comments */}
-                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-8 shadow-xs space-y-6">
-                  {/* Voting & Star Rating Bar */}
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700 flex flex-wrap items-center justify-between gap-4">
+                {/* Rating & Reader Comments */}
+                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-6">
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-4">
                     <div className="space-y-1">
-                      <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
-                        এই গাইডটি কি আপনার উপকারে এসেছে? (রেটিং দিন)
+                      <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
+                        এই গাইডটি কি আপনার উপকারে এসেছে?
                       </h3>
                       <div className="flex items-center gap-1">
                         {[1, 2, 3, 4, 5].map((st) => (
@@ -2390,7 +1283,7 @@ export const BlogView: React.FC<BlogViewProps> = ({
                             key={st}
                             type="button"
                             onClick={() => setSelectedStars(st)}
-                            className="p-0.5"
+                            className="p-0.5 cursor-pointer"
                           >
                             <Star
                               className={`w-4 h-4 ${
@@ -2401,8 +1294,8 @@ export const BlogView: React.FC<BlogViewProps> = ({
                             />
                           </button>
                         ))}
-                        <span className="text-xs font-bold text-slate-500 ml-2">
-                          গড় রেটিং: {activePost.ratingValue || 4.9}/5 ({activePost.ratingCount || 68} ভোট)
+                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 ml-2">
+                          {activePost.ratingValue || 4.9}/5 ({activePost.ratingCount || 68} রিভিউ)
                         </span>
                       </div>
                     </div>
@@ -2412,40 +1305,42 @@ export const BlogView: React.FC<BlogViewProps> = ({
                         type="button"
                         disabled={hasVotedHelpful !== null}
                         onClick={() => handleVoteHelpful(true)}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 border transition-all ${
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-colors cursor-pointer ${
                           hasVotedHelpful === 'yes'
                             ? 'bg-emerald-600 text-white border-emerald-500'
-                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-emerald-500'
+                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200'
                         }`}
                       >
-                        <ThumbsUp className="w-3.5 h-3.5 text-emerald-500" /> হ্যাঁ, দারুণ ({activePost.helpfulYesCount || 72})
+                        <ThumbsUp className="w-3.5 h-3.5 text-emerald-500" />
+                        <span>হ্যাঁ ({activePost.helpfulYesCount || 72})</span>
                       </button>
                       <button
                         type="button"
                         disabled={hasVotedHelpful !== null}
                         onClick={() => handleVoteHelpful(false)}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 border transition-all ${
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-colors cursor-pointer ${
                           hasVotedHelpful === 'no'
                             ? 'bg-rose-600 text-white border-rose-500'
                             : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200'
                         }`}
                       >
-                        <ThumbsDown className="w-3.5 h-3.5 text-rose-500" /> না ({activePost.helpfulNoCount || 2})
+                        <ThumbsDown className="w-3.5 h-3.5 text-rose-500" />
+                        <span>না ({activePost.helpfulNoCount || 2})</span>
                       </button>
                     </div>
                   </div>
 
-                  {/* Verified Reader Q&A Form */}
+                  {/* Comment Form */}
                   <div className="space-y-4">
                     <div className="flex items-center gap-2">
-                      <MessageSquare className="w-5 h-5 text-indigo-500" />
-                      <h3 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white">
-                        পাঠকদের প্রশ্ন ও অভিজ্ঞতা ({(activePost.comments || []).length})
+                      <MessageSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
+                        পাঠকদের প্রশ্ন ও মন্তব্য ({(activePost.comments || []).length})
                       </h3>
                     </div>
 
                     {commentSuccessMsg && (
-                      <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
+                      <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold">
                         {commentSuccessMsg}
                       </div>
                     )}
@@ -2456,106 +1351,73 @@ export const BlogView: React.FC<BlogViewProps> = ({
                           type="text"
                           value={commentAuthor}
                           onChange={(e) => setCommentAuthor(e.target.value)}
-                          placeholder="আপনার নাম (যেমন: রাকিব হাসান)"
+                          placeholder="আপনার নাম"
                           className="px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
                         />
                         <input
                           type="text"
                           value={commentText}
                           onChange={(e) => setCommentText(e.target.value)}
-                          placeholder="আপনার প্রশ্ন বা মতামত লিখুন (প্রশ্ন করলে তাৎক্ষণিক উত্তর পাবেন)..."
+                          placeholder="আপনার প্রশ্ন বা মতামত লিখুন..."
                           className="sm:col-span-2 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
                         />
                       </div>
                       <button
                         type="submit"
                         disabled={isSubmittingComment || !commentText.trim()}
-                        className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-extrabold inline-flex items-center gap-1.5"
+                        className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
                       >
-                        <Send className="w-3.5 h-3.5" /> প্রশ্ন বা মন্তব্য পোস্ট করুন
+                        <Send className="w-3.5 h-3.5" />
+                        <span>মন্তব্য পোস্ট করুন</span>
                       </button>
                     </form>
 
-                    {/* Comments List */}
-                    <div className="space-y-3 pt-2">
-                      {(activePost.comments || []).map((cmt) => (
-                        <div
-                          key={cmt.id}
-                          className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800 space-y-2"
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              <span className="font-extrabold text-xs text-slate-900 dark:text-white">
-                                {cmt.authorName || cmt.userName || 'ভেরিফাইড ক্রিয়েটর'}
+                    {(activePost.comments || []).length > 0 && (
+                      <div className="space-y-3 pt-2">
+                        {(activePost.comments || []).map((cmt) => (
+                          <div
+                            key={cmt.id}
+                            className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-1.5"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-bold text-xs text-slate-900 dark:text-white">
+                                {cmt.authorName || cmt.userName || 'ভেরিফাইড পাঠক'}
                               </span>
-                              <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">
-                                {cmt.authorBadge || 'Verified Reader'}
+                              <span className="text-[11px] text-amber-500 font-bold">
+                                {'★'.repeat(cmt.rating || 5)}
                               </span>
                             </div>
-                            <span className="text-[11px] text-amber-500 font-bold">
-                              {'★'.repeat(cmt.rating || 5)}
-                            </span>
+                            <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                              {cmt.text || cmt.questionOrComment || ''}
+                            </p>
+                            {cmt.adminReply && (
+                              <div className="mt-2 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-200">
+                                <span className="font-bold text-indigo-600 dark:text-indigo-400 block mb-0.5">
+                                  ✓ Boostlagbe Support:
+                                </span>
+                                {cmt.adminReply}
+                              </div>
+                            )}
                           </div>
-                          <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-                            {cmt.text || cmt.questionOrComment || ''}
-                          </p>
-                          {cmt.adminReply && (
-                            <div className="ml-4 p-3 rounded-xl bg-indigo-500/10 border-l-2 border-indigo-500 text-xs text-slate-700 dark:text-slate-200">
-                              <span className="font-extrabold text-indigo-600 dark:text-indigo-400 block mb-0.5">
-                                ✓ Boostlagbe Expert Support Reply:
-                              </span>
-                              {cmt.adminReply}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* SEO Keywords & Topic Tags Footer */}
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
-                    <Tag className="w-3.5 h-3.5 text-indigo-500" />
-                    <span>সম্পর্কিত সার্চ ট্যাগ ও কীওয়ার্ডসমূহ:</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      activePost.focusKeyword,
-                      ...(activePost.tags || []),
-                      ...(activePost.secondaryKeywords || [])
-                    ]
-                      .filter(Boolean)
-                      .map((kw, i) => (
-                        <span
-                          key={i}
-                          itemProp="keywords"
-                          className="px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold"
-                        >
-                          #{kw}
-                        </span>
-                      ))}
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Right 4 Cols: Silo Cluster + Related Services + Popular Posts */}
-              <aside className="lg:col-span-4 space-y-6">
-                {/* SUITE 2: Pillar & Sub-Topic Silo Cluster Navigation */}
+              {/* Right 4 Cols: Sticky Editorial Sidebar */}
+              <aside className="lg:col-span-4 space-y-5 lg:sticky lg:top-20">
+                {/* Topic Series Navigation */}
                 {siloClusterPosts.length > 0 && (
-                  <div className="bg-white dark:bg-slate-900 rounded-3xl border border-indigo-500/30 p-5 shadow-xs space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-500">
-                        Topic Cluster Silo ({activePost.category})
+                  <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3">
+                    <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                      <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                        {activePost.category} গাইড সিরিজ
                       </span>
-                      <span className="text-[11px] font-bold text-slate-400">
-                        {siloClusterPosts.length} পর্বের সিরিজ
-                      </span>
+                      <span>{siloClusterPosts.length} পর্ব</span>
                     </div>
-                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                      {activePost.category} মাস্টারক্লাস গাইড সিরিজ
-                    </h3>
-                    <div className="space-y-2">
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800">
                       {siloClusterPosts.map((sp, idx) => {
                         const isCurrent = sp.id === activePost.id;
                         return (
@@ -2563,23 +1425,16 @@ export const BlogView: React.FC<BlogViewProps> = ({
                             key={sp.id}
                             type="button"
                             onClick={() => onSelectSlug(sp.slug)}
-                            className={`w-full text-left p-2.5 rounded-xl border text-xs transition-all flex items-start gap-2.5 ${
+                            className={`w-full text-left py-2.5 first:pt-0 last:pb-0 flex items-start gap-2.5 text-xs transition-colors cursor-pointer ${
                               isCurrent
-                                ? 'bg-indigo-600/10 border-indigo-500 text-indigo-600 dark:text-indigo-300 font-extrabold'
-                                : 'bg-slate-50/70 dark:bg-slate-800/40 border-slate-200/60 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-indigo-500/40 font-semibold'
+                                ? 'text-indigo-600 dark:text-indigo-400 font-bold'
+                                : 'text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400'
                             }`}
                           >
-                            <span className="w-5 h-5 rounded-md bg-indigo-500/15 text-indigo-500 font-mono text-[10px] font-extrabold flex items-center justify-center shrink-0 mt-0.5">
-                              {idx + 1}
+                            <span className="font-mono text-[11px] text-slate-400 shrink-0 mt-0.5 tabular-nums">
+                              0{idx + 1}.
                             </span>
-                            <div className="min-w-0 flex-1">
-                              <span className="line-clamp-2 leading-snug block">{sp.title}</span>
-                              {isCurrent && (
-                                <span className="text-[10px] text-emerald-500 font-extrabold mt-0.5 block">
-                                  ● এখন পড়ছেন (Currently Reading)
-                                </span>
-                              )}
-                            </div>
+                            <span className="line-clamp-2 leading-snug">{sp.title}</span>
                           </button>
                         );
                       })}
@@ -2587,18 +1442,17 @@ export const BlogView: React.FC<BlogViewProps> = ({
                   </div>
                 )}
 
-                {/* Popular Services Widget */}
-                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
+                {/* Related Popular Services */}
+                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3.5">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 text-indigo-500" />
-                      <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                        জনপ্রিয় বুস্ট সার্ভিসসমূহ
-                      </h3>
-                    </div>
+                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      <span>জনপ্রিয় বুস্ট সার্ভিস</span>
+                    </h3>
                     <button
+                      type="button"
                       onClick={() => onNavigate('services')}
-                      className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                      className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
                     >
                       সব দেখুন
                     </button>
@@ -2608,20 +1462,21 @@ export const BlogView: React.FC<BlogViewProps> = ({
                     {relatedServices.slice(0, 4).map((srv) => (
                       <div
                         key={srv.id}
-                        className="p-3 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-indigo-500/40 bg-slate-50/50 dark:bg-slate-800/30 transition-all space-y-2"
+                        className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 space-y-2"
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-500 dark:text-slate-400 font-medium truncate max-w-[150px]">
                             {srv.category}
                           </span>
-                          <span className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400">
-                            ৳{srv.rate || srv.ratePer1000} / ১,০০০
+                          <span className="font-mono font-extrabold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                            ৳{srv.rate || srv.ratePer1000} / 1K
                           </span>
                         </div>
-                        <p className="text-xs font-bold text-slate-800 dark:text-slate-200 line-clamp-2">
+                        <p className="text-xs font-bold text-slate-900 dark:text-white line-clamp-2 leading-snug">
                           {srv.name}
                         </p>
                         <button
+                          type="button"
                           onClick={() => {
                             if (onSelectService) {
                               onSelectService(srv);
@@ -2629,37 +1484,85 @@ export const BlogView: React.FC<BlogViewProps> = ({
                               onNavigate('new-order');
                             }
                           }}
-                          className="w-full py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] transition-colors flex items-center justify-center gap-1"
+                          className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                         >
-                          <Zap className="w-3 h-3" /> অর্ডার করুন
+                          <Zap className="w-3.5 h-3.5" />
+                          <span>অর্ডার করুন</span>
                         </button>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                {/* Other Pillar Articles (Contextual Internal Links) */}
+                {/* Referral Share Card */}
+                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3">
+                  <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                    শেয়ার ও রেফারেল আয়
+                  </div>
+                  <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                    গাইডটি শেয়ার করে প্রতি রেফারেলে ৳১০ বোনাস পান
+                  </h3>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={referralShareUrl}
+                      className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-mono text-slate-600 dark:text-slate-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCopyReferralLink}
+                      className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shrink-0 cursor-pointer"
+                    >
+                      {copiedReferral ? 'কপিড!' : 'কপি'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Viral Hashtags Box */}
+                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <Hash className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                      <span>ভাইরাল হ্যাশট্যাগ</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(activeViralHashtags.join(' '));
+                        setCopiedHashtags(true);
+                        setTimeout(() => setCopiedHashtags(false), 2000);
+                      }}
+                      className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                    >
+                      {copiedHashtags ? 'কপি হয়েছে!' : 'সব কপি করুন'}
+                    </button>
+                  </div>
+                  <p className="text-xs font-mono text-slate-600 dark:text-slate-400 leading-relaxed">
+                    {activeViralHashtags.join('  ')}
+                  </p>
+                </div>
+
+                {/* Related Articles */}
                 {relatedPosts.length > 0 && (
-                  <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
-                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                      <BookOpen className="w-4 h-4 text-indigo-500" /> সম্পর্কিত অন্যান্য গাইড (আরও পড়ুন)
+                  <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3">
+                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                      আরও পড়ুন
                     </h3>
-                    <div className="space-y-3">
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800">
                       {relatedPosts.map((rp) => (
                         <button
                           key={rp.id}
+                          type="button"
                           onClick={() => onSelectSlug(rp.slug)}
-                          className="w-full text-left p-3 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/60 border border-transparent hover:border-slate-200 dark:hover:border-slate-800 transition-all group"
+                          className="w-full text-left py-2.5 first:pt-0 last:pb-0 group cursor-pointer"
                         >
-                          <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">
-                            {rp.category}
-                          </span>
-                          <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 line-clamp-2 mt-0.5">
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                            {rp.category} · {rp.readingTimeMinutes || 4} মিনিট
+                          </div>
+                          <h4 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 line-clamp-2 mt-0.5">
                             {rp.title}
                           </h4>
-                          <span className="text-[11px] text-slate-400 mt-1 block">
-                            {rp.readingTimeMinutes || 4} মিনিট পড়ুন
-                          </span>
                         </button>
                       ))}
                     </div>
@@ -2667,478 +1570,592 @@ export const BlogView: React.FC<BlogViewProps> = ({
                 )}
               </aside>
             </div>
-
-            {/* Sticky Mobile Bottom CTA Bar */}
-            <div className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-slate-900/95 backdrop-blur-xl border-t border-indigo-500/30 px-4 py-2.5 flex items-center justify-between gap-3 shadow-2xl">
-              <div className="min-w-0">
-                <span className="text-[10px] text-emerald-400 font-extrabold block">
-                  {activePost.category} অটোমেটিক বুস্ট • বিকাশ/নগদ
-                </span>
-                <span className="text-xs font-extrabold text-white truncate block">
-                  মাত্র ২০ টাকা থেকে ইনস্ট্যান্ট ডেলিভারি
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (selectedCalcService && onSelectService) {
-                    onSelectService(selectedCalcService);
-                  } else {
-                    onNavigate('new-order');
-                  }
-                }}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-emerald-500 text-white text-xs font-extrabold shrink-0 flex items-center gap-1.5 shadow-md"
-              >
-                <Zap className="w-3.5 h-3.5" /> এখনই অর্ডার করুন
-              </button>
-            </div>
           </article>
         ) : (
-          /* ==========================================
-             BLOG HUB LISTING VIEW (ALL SEO ARTICLES + BOOKMARK FILTER)
-             ========================================== */
+          /* =====================================================================
+             BLOG HUB & CREATOR JOURNAL FRONT PAGE
+             ===================================================================== */
           <div className="space-y-6">
-            {/* Hero Banner */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white p-6 sm:p-8 border border-indigo-500/20 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="relative z-10 max-w-2xl space-y-3">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-bold">
-                  <BookOpen className="w-3.5 h-3.5" /> সোশ্যাল মিডিয়া মার্কেটিং ও গ্রোথ একাডেমি
+            {/* Clean Editorial Masthead + Mode Switcher */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-7 shadow-xs space-y-5">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="space-y-1.5 max-w-2xl">
+                  <div className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                    Boostlagbe.com · অফিসিয়াল ব্লগ ও ক্রিয়েটর গাইড
+                  </div>
+                  <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                    সোশ্যাল মিডিয়া গ্রোথ ও মনিটাইজেশন জার্নাল
+                  </h1>
+                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                    ফেসবুক পেজ মনিটাইজেশন, ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম, টিকটক ভাইরাল স্ট্র্যাটেজি এবং ফ্রি ক্রিয়েটর টুলকিট।
+                  </p>
                 </div>
-                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight">
-                  Boostlagbe.com অফিসিয়াল ব্লগ ও গাইডলাইন
-                </h1>
-                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                  ফেসবুক পেজ মনিটাইজেশন, টিকটক ভাইরাল ট্রিকস, ইউটিউব ৪০০০ ঘণ্টা ওয়াচটাইম, ইনকাম ক্যালকুলেটর এবং রিসেলার মার্কেটিং নিয়ে বিস্তারিত গাইড পড়ুন।
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 z-10">
-                {/* Feature 17: Daily Reading Streak & BoostPoints Loyalty Badge */}
-                <span className="px-3.5 py-2 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-xs font-extrabold text-emerald-300 inline-flex items-center gap-1.5">
-                  🔥 {readingStreakDays} দিনের স্ট্রিক • 🪙 {loyaltyPoints} BoostPoints
-                </span>
-                <a
-                  href="/rss.xml"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-extrabold text-amber-300 inline-flex items-center gap-1.5 transition-all"
-                >
-                  <Globe className="w-3.5 h-3.5" /> RSS 2.0 Feed
-                </a>
-                <a
-                  href="/sitemap.xml"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-extrabold text-emerald-300 inline-flex items-center gap-1.5 transition-all"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" /> Image Sitemap.xml
-                </a>
-              </div>
-            </div>
 
-            {/* Feature 3: Google Web Stories / Visual AMP 6-Slide Interactive Story Viewer */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-amber-500" />
-                  <h2 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
-                    Google Discover & Visual Web Stories (১৫ সেকেন্ডে কুইক গাইড)
-                  </h2>
-                </div>
-                <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
-                  যেকোনো স্টোরিতে ট্যাপ করুন
-                </span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-                {GOOGLE_WEB_STORIES_SLIDES.map((st, idx) => (
+                {/* Primary View Switcher: Articles vs Creator Toolkit */}
+                <div className="inline-flex items-center p-1 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 self-start lg:self-center shrink-0">
                   <button
-                    key={st.id}
                     type="button"
-                    onClick={() => setActiveStorySlide(activeStorySlide === idx ? null : idx)}
-                    className={`text-left p-3.5 rounded-2xl bg-gradient-to-br ${st.gradient} text-white shadow-sm hover:scale-[1.02] transition-all flex flex-col justify-between min-h-[128px] ${
-                      activeStorySlide === idx ? 'ring-2 ring-amber-400' : ''
+                    onClick={() => setActiveHubSection('articles')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
+                      activeHubSection === 'articles'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
-                    <span className="px-2 py-0.5 rounded bg-black/30 text-[10px] font-extrabold w-fit">
-                      {st.badge}
-                    </span>
-                    <div className="space-y-1 mt-2">
-                      <h3 className="text-xs font-extrabold leading-snug">{st.title}</h3>
-                      <span className="text-[10px] text-amber-200 font-bold block">{st.ctaLabel} →</span>
-                    </div>
+                    <BookOpen className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                    <span>সব আর্টিকেল ({publishedBlogs.length})</span>
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    onClick={() => setActiveHubSection('tools')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
+                      activeHubSection === 'tools'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <Calculator className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span>ক্রিয়েটর টুলকিট</span>
+                  </button>
+                </div>
               </div>
-              {activeStorySlide !== null && GOOGLE_WEB_STORIES_SLIDES[activeStorySlide] && (
-                <div className="p-4 rounded-2xl bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-extrabold text-amber-400 uppercase">
-                      Web Story Slide #{activeStorySlide + 1}/6 • {GOOGLE_WEB_STORIES_SLIDES[activeStorySlide].badge}
-                    </span>
-                    <h4 className="text-sm font-extrabold">
-                      {GOOGLE_WEB_STORIES_SLIDES[activeStorySlide].title}
-                    </h4>
-                    <p className="text-xs text-slate-300">
-                      {GOOGLE_WEB_STORIES_SLIDES[activeStorySlide].subtitle}
-                    </p>
+
+              {/* Search & Category Filter Bar */}
+              {activeHubSection === 'articles' && (
+                <div className="pt-4 border-t border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="টপিক বা কীওয়ার্ড দিয়ে গাইড খুঁজুন (যেমন: ফেসবুক মনিটাইজেশন, ইউটিউব ভিউ)..."
+                      className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => onNavigate(GOOGLE_WEB_STORIES_SLIDES[activeStorySlide].ctaTab || 'new-order')}
-                      className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-extrabold"
-                    >
-                      {GOOGLE_WEB_STORIES_SLIDES[activeStorySlide].ctaLabel} →
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveStorySlide(null)}
-                      className="px-3 py-2 rounded-xl bg-white/10 text-xs font-bold"
-                    >
-                      ✕
-                    </button>
+
+                  {/* Interactive Category Filter Buttons */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 sm:pb-0">
+                    {categories.map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setSelectedCategory(cat)}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
+                          selectedCategory === cat
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                        }`}
+                      >
+                        {cat === 'All'
+                          ? 'সব ক্যাটাগরি'
+                          : cat === 'Saved'
+                          ? `সেভ করা (${bookmarkedSlugs.length})`
+                          : cat}
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Search & Category Filter Bar */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="টপিক বা কীওয়ার্ড দিয়ে ব্লগ খুঁজুন (যেমন: ফেসবুক ফলোয়ার, টিকটক ভিউ)..."
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-                {categories.map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setSelectedCategory(cat)}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-                      selectedCategory === cat
-                        ? 'bg-indigo-600 text-white shadow-xs'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    {cat === 'All'
-                      ? 'সব ক্যাটাগরি'
-                      : cat === 'Saved'
-                      ? `🔖 বুকমার্ক (${bookmarkedSlugs.length})`
-                      : cat}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Blog Cards Grid */}
-            {filteredBlogs.length === 0 ? (
-              <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-12 text-center space-y-3">
-                <Layers className="w-10 h-10 text-slate-400 mx-auto" />
-                <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
-                  কোনো ব্লগ পোস্ট পাওয়া যায়নি
-                </h3>
-                <p className="text-xs text-slate-500">
-                  অন্য কোনো কীওয়ার্ড বা ক্যাটাগরি নির্বাচন করে আবার চেষ্টা করুন।
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {filteredBlogs.map((post) => {
-                  const isBookmarked = bookmarkedSlugs.includes(post.slug);
-                  return (
-                    <article
-                      key={post.id}
-                      onClick={() => onSelectSlug(post.slug)}
-                      className="group cursor-pointer bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-xs hover:shadow-xl hover:border-indigo-500/40 transition-all flex flex-col"
-                    >
-                      <div className="relative h-48 bg-slate-900 overflow-hidden">
-                        <img
-                          src={post.coverImage || FALLBACK_BLOG_IMAGE}
-                          alt={post.coverImageAlt || post.title}
-                          referrerPolicy="no-referrer"
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).src = FALLBACK_BLOG_IMAGE;
-                          }}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
-                        <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
-                          <span className="px-2.5 py-1 rounded-lg bg-indigo-600/95 text-white text-[11px] font-bold shadow-xs">
-                            {post.category}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={(e) => toggleBookmark(post.slug, e)}
-                            className={`p-1.5 rounded-lg backdrop-blur-md border transition-colors ${
-                              isBookmarked
-                                ? 'bg-amber-500/90 border-amber-400 text-slate-950'
-                                : 'bg-slate-900/60 border-white/20 text-white hover:bg-slate-900'
-                            }`}
-                            title="বুকমার্ক করুন"
-                          >
-                            {isBookmarked ? (
-                              <BookmarkCheck className="w-3.5 h-3.5" />
-                            ) : (
-                              <Bookmark className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-                        </div>
-                        <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-[11px] text-slate-200 font-medium">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-amber-400" /> {post.readingTimeMinutes || 4} মিনিট পড়ুন
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />{' '}
-                            {post.ratingValue || 4.9} • {(post.views || 120).toLocaleString()} ভিউ
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                        <div className="space-y-2.5">
-                          <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2 leading-snug">
-                            {post.title}
-                          </h2>
-                          <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-3 leading-relaxed">
-                            {post.excerpt}
-                          </p>
-                        </div>
-
-                        <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
-                          <span className="text-[11px] text-slate-400 font-medium">
-                            {formatDateBn(post.publishedAt || post.createdAt)}
-                          </span>
-                          <span className="inline-flex items-center gap-1 text-xs font-extrabold text-indigo-600 dark:text-indigo-400 group-hover:translate-x-0.5 transition-transform">
-                            সম্পূর্ণ পড়ুন <ExternalLink className="w-3.5 h-3.5" />
-                          </span>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Feature 1: Programmatic SEO Commercial Service Landing Pages Hub */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-indigo-500">
-                    Programmatic Commercial SEO Landing Hubs
-                  </span>
-                  <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white">
-                    বাংলাদেশ জনপ্রিয় বুস্ট ও মনিটাইজেশন সার্ভিস ল্যান্ডিং হাব (২০২৬ রেট)
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onNavigate('services')}
-                  className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 hover:underline"
-                >
-                  সম্পূর্ণ ক্যাটালগ দেখুন →
-                </button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                {PROGRAMMATIC_SEO_LANDING_PAGES.map((lp) => (
-                  <div
-                    key={lp.id}
-                    className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700 flex flex-col justify-between space-y-3"
-                  >
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-extrabold">
-                          {lp.category}
-                        </span>
-                        <span className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400">
-                          ৳{lp.startingRateBdt} / 1K থেকে
-                        </span>
-                      </div>
-                      <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
-                        {lp.title}
-                      </h3>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                        {lp.summary}
-                      </p>
-                      <p className="text-[10px] font-mono text-indigo-500">
-                        ⚡ {lp.deliverySpeed} • {lp.refillGuarantee}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onNavigate('new-order')}
-                      className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center justify-center gap-1"
-                    >
-                      <Zap className="w-3.5 h-3.5" /> ইনস্ট্যান্ট অর্ডার করুন
-                    </button>
+            {activeHubSection === 'tools' ? (
+              /* =================================================================
+                 CREATOR GROWTH TOOLKIT VIEW (Clean Interactive Utility Suite)
+                 ================================================================= */
+              <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-7 shadow-xs space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">
+                      ফ্রি ক্রিয়েটর গ্রোথ ও মনিটাইজেশন টুলবক্স
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      ইনকাম ক্যালকুলেটর, লিংক হেলথ স্ক্যানার, সেরা পোস্ট টাইম এবং মনিটাইজেশন কম্বো প্যাক
+                    </p>
                   </div>
-                ))}
-              </div>
-            </div>
 
-            {/* Feature 2: Dollar Card Boost vs. Boostlagbe.com Interactive Comparison Matrix */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
-              <div>
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                  Interactive Comparison Matrix 2026
-                </span>
-                <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white">
-                  সাধারণ ডলার কার্ড বুস্ট বনাম Boostlagbe.com অটোমেটেড প্যানেল (তুলনামূলক চিত্র)
-                </h2>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200">
-                      <th className="p-3 rounded-tl-xl font-extrabold">তুলনার বিষয় (Feature)</th>
-                      <th className="p-3 font-extrabold text-emerald-600 dark:text-emerald-400">
-                        Boostlagbe.com (বুস্ট লাগবে)
-                      </th>
-                      <th className="p-3 font-bold text-slate-500">সাধারণ ডলার কার্ড বুস্ট</th>
-                      <th className="p-3 rounded-tr-xl font-bold text-slate-500">সাধারণ লোকাল রিসেলার</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200/70 dark:divide-slate-800">
-                    {COMPETITOR_VS_BOOSTLAGBE_MATRIX.map((row, rIdx) => (
-                      <tr key={rIdx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
-                        <td className="p-3 font-extrabold text-slate-900 dark:text-white">
-                          {row.feature}
-                        </td>
-                        <td className="p-3 font-bold text-emerald-600 dark:text-emerald-400">
-                          ✓ {row.boostlagbe}
-                        </td>
-                        <td className="p-3 text-slate-600 dark:text-slate-400">{row.dollarAds}</td>
-                        <td className="p-3 text-slate-600 dark:text-slate-400">{row.traditionalAgency}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Feature 5 & 19: Divisional Local SEO Cluster + Reader Community Topic Request & Upvote Board */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Left 6 Cols: 8-Division Local SEO Hub */}
-              <div className="lg:col-span-6 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
-                <div>
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-indigo-500">
-                    Bangladesh 8-Division Local SEO Cluster
-                  </span>
-                  <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-                    বিভাগ ও শহরভিত্তিক লোকাল ই-কমার্স এবং ক্রিয়েটর গ্রোথ হাব
-                  </h2>
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar p-1 rounded-2xl bg-slate-100 dark:bg-slate-800">
+                    {[
+                      { id: 'earnings', label: 'ইনকাম ক্যালকুলেটর', icon: BarChart3 },
+                      { id: 'linkscanner', label: 'লিংক স্ক্যানার', icon: ShieldCheck },
+                      { id: 'besttime', label: 'সেরা পোস্ট টাইম', icon: Clock },
+                      { id: 'checklist', label: 'মনিটাইজেশন চেকলিস্ট', icon: CheckCircle2 },
+                      { id: 'combos', label: 'কম্বো প্যাক', icon: Zap },
+                      { id: 'reelsscript', label: '৬০ সে. রিলস স্ক্রিপ্ট', icon: Layers }
+                    ].map((tItem) => {
+                      const TIcon = tItem.icon;
+                      const active = activeMicroTool === tItem.id;
+                      return (
+                        <button
+                          key={tItem.id}
+                          type="button"
+                          onClick={() => setActiveMicroTool(tItem.id as any)}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all cursor-pointer ${
+                            active
+                              ? 'bg-indigo-600 text-white shadow-xs'
+                              : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                          }`}
+                        >
+                          <TIcon className="w-3.5 h-3.5" />
+                          <span>{tItem.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="space-y-2.5">
-                  {DIVISIONAL_LOCAL_SEO_HUBS.map((hub) => (
-                    <div
-                      key={hub.division}
-                      className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700 space-y-1"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400">
-                          📍 {hub.division}
-                        </span>
-                        <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
-                          {hub.activeClients}
-                        </span>
+
+                {/* Tool 1: Earnings Calculator */}
+                {activeMicroTool === 'earnings' && (
+                  <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                          প্ল্যাটফর্ম নির্বাচন করুন
+                        </label>
+                        <select
+                          value={earningsPlatform}
+                          onChange={(e) =>
+                            setEarningsPlatform(e.target.value as 'facebook' | 'youtube' | 'tiktok')
+                          }
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
+                        >
+                          <option value="facebook">Facebook In-Stream & Ads on Reels (BD)</option>
+                          <option value="youtube">YouTube Long Video & Shorts AdSense</option>
+                          <option value="tiktok">TikTok Creator Rewards & Live Gifts</option>
+                        </select>
                       </div>
-                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                        {hub.popularService}
-                      </p>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                        {hub.focusArea} • Keyword: {hub.localKeyword}
-                      </p>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                          মাসিক মোট ভিউ সংখ্যা (Monthly Views)
+                        </label>
+                        <input
+                          type="number"
+                          min={10000}
+                          step={50000}
+                          value={monthlyViewsInput}
+                          onChange={(e) => setMonthlyViewsInput(Math.max(1000, Number(e.target.value)))}
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono font-extrabold text-slate-900 dark:text-white tabular-nums"
+                        />
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </div>
 
-              {/* Right 6 Cols: Reader Community Topic Request & Upvote Board */}
-              <div className="lg:col-span-6 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
-                <div>
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-500">
-                    Community Topic Request & Upvote Board
-                  </span>
-                  <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-                    পরবর্তী ব্লগ কোন বিষয়ে চান? রিকোয়েস্ট ও আপভোট করুন
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    সবচেয়ে বেশি আপভোট পাওয়া টপিকগুলো আমাদের AI Autopilot স্বয়ংক্রিয়ভাবে লিখে পাবলিশ করবে।
-                  </p>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <select
-                    value={newTopicCategoryInput}
-                    onChange={(e) => setNewTopicCategoryInput(e.target.value)}
-                    className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
-                  >
-                    <option value="Facebook">Facebook</option>
-                    <option value="YouTube">YouTube</option>
-                    <option value="TikTok">TikTok</option>
-                    <option value="Instagram">Instagram</option>
-                    <option value="SMM Guide">SMM Guide</option>
-                  </select>
-                  <input
-                    type="text"
-                    value={newTopicTitleInput}
-                    onChange={(e) => setNewTopicTitleInput(e.target.value)}
-                    placeholder="আপনার পছন্দের ব্লগের টপিক লিখুন..."
-                    className="flex-1 px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!newTopicTitleInput.trim()) return;
-                      const updated = submitCommunityTopicRequest({
-                        topic: newTopicTitleInput,
-                        category: newTopicCategoryInput,
-                        requestedBy: userProfile?.displayName || 'ভেরিফাইড পাঠক'
-                      });
-                      setTopicRequests(updated);
-                      setNewTopicTitleInput('');
-                    }}
-                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold shrink-0"
-                  >
-                    + টপিক যোগ করুন
-                  </button>
-                </div>
-
-                <div className="space-y-2.5">
-                  {topicRequests.slice(0, 5).map((req) => (
-                    <div
-                      key={req.id}
-                      className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700 flex items-center justify-between gap-3"
-                    >
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-extrabold">
-                            {req.category}
-                          </span>
-                          <span className="text-[10px] text-slate-400">
-                            Requested by {req.requestedBy}
+                    <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4">
+                      <div>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 block">
+                          আনুমানিক মাসিক মনিটাইজেশন আয় (গড় RPM: ~${creatorEarningsEstimate.rpmUsd}/1K)
+                        </span>
+                        <div className="text-2xl sm:text-3xl font-extrabold font-mono tabular-nums text-slate-900 dark:text-white mt-1">
+                          ৳{creatorEarningsEstimate.bdt.toLocaleString()} BDT{' '}
+                          <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                            (~${creatorEarningsEstimate.usd.toLocaleString()} USD)
                           </span>
                         </div>
-                        <p className="text-xs font-extrabold text-slate-800 dark:text-slate-200">
-                          {req.topicTitle || req.topic}
-                        </p>
                       </div>
                       <button
                         type="button"
-                        onClick={() => setTopicRequests(upvoteCommunityTopicRequest(req.id))}
-                        className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-700 text-xs font-extrabold text-indigo-600 dark:text-indigo-400 shrink-0"
+                        onClick={() => onNavigate('services')}
+                        className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold cursor-pointer"
                       >
-                        ▲ {req.upvotes}
+                        মনিটাইজেশন সার্ভিস দেখুন →
                       </button>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
+
+                {/* Tool 2: Link Scanner */}
+                {activeMicroTool === 'linkscanner' && (
+                  <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 space-y-4">
+                    <div className="flex flex-col sm:flex-row gap-2.5">
+                      <input
+                        type="url"
+                        value={scannerInputUrl}
+                        onChange={(e) => setScannerInputUrl(e.target.value)}
+                        placeholder="https://www.facebook.com/yourpage অথবা https://www.youtube.com/@channel"
+                        className="flex-1 px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setScannerResult(
+                            analyzeProfileLinkHealth(
+                              scannerInputUrl || 'https://www.facebook.com/boostlagbe',
+                              services
+                            )
+                          )
+                        }
+                        className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shrink-0 cursor-pointer"
+                      >
+                        লিংক স্ক্যান করুন
+                      </button>
+                    </div>
+
+                    {scannerResult && (
+                      <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
+                          <span className="text-emerald-600 dark:text-emerald-400">
+                            ✓ প্ল্যাটফর্ম: {scannerResult.detectedPlatform} · স্কোর: {scannerResult.readinessScore}/100
+                          </span>
+                          <span className="text-indigo-600 dark:text-indigo-400">
+                            {scannerResult.statusLabel}
+                          </span>
+                        </div>
+                        <ul className="space-y-1 text-xs text-slate-600 dark:text-slate-400">
+                          {scannerResult.diagnosticNotes.map((note: string, idx: number) => (
+                            <li key={idx}>• {note}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Tool 3: Best Time to Post */}
+                {activeMicroTool === 'besttime' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {BD_BEST_POST_TIMES.map((row, i) => (
+                      <div
+                        key={i}
+                        className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 space-y-1.5"
+                      >
+                        <div className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                          {row.platform}
+                        </div>
+                        <div className="text-sm font-extrabold text-slate-900 dark:text-white">
+                          পিক টাইম: {row.primeSlot}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          বিকল্প সময়: {row.secondarySlot}
+                        </div>
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium pt-1">
+                          টিপস: {row.tip}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Tool 4: Monetization Checklist */}
+                {activeMicroTool === 'checklist' && (
+                  <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="text-slate-700 dark:text-slate-300">
+                        আপনার পেজ বা চ্যানেলের মনিটাইজেশন প্রস্তুতি যাচাই করুন:
+                      </span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-mono">
+                        প্রস্তুতি স্কোর: {checkedReadyItems.length * 20}%
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {MONETIZATION_CHECKLIST_ITEMS.map((item, idx) => {
+                        const checked = checkedReadyItems.includes(idx);
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() =>
+                              setCheckedReadyItems((prev) =>
+                                prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx]
+                              )
+                            }
+                            className={`w-full text-left p-3.5 rounded-xl border text-xs font-semibold flex items-center gap-3 transition-colors cursor-pointer ${
+                              checked
+                                ? 'bg-white dark:bg-slate-900 border-emerald-500/40 text-slate-900 dark:text-white'
+                                : 'bg-white/60 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                            }`}
+                          >
+                            <div
+                              className={`w-4 h-4 rounded flex items-center justify-center shrink-0 ${
+                                checked ? 'bg-emerald-600 text-white' : 'border border-slate-400'
+                              }`}
+                            >
+                              {checked && <Check className="w-3 h-3" />}
+                            </div>
+                            <span>{item}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tool 5: Monetization Combo Packs */}
+                {activeMicroTool === 'combos' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {MONETIZATION_COMBO_BUNDLES.map((bundle) => (
+                      <div
+                        key={bundle.id}
+                        className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-4"
+                      >
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                              {bundle.badge}
+                            </span>
+                            <span className="font-mono text-slate-400 line-through">
+                              ৳{bundle.regularPriceBdt}
+                            </span>
+                          </div>
+                          <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                            {bundle.title}
+                          </h4>
+                          <ul className="space-y-1 text-xs text-slate-600 dark:text-slate-300">
+                            {bundle.items.map((it, idx) => (
+                              <li key={idx} className="flex items-center gap-2">
+                                <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <span>{it}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                          <div>
+                            <span className="text-[11px] text-slate-500 block">
+                              কম্বো মূল্য ({bundle.timeframe})
+                            </span>
+                            <span className="text-base font-extrabold font-mono text-emerald-600 dark:text-emerald-400">
+                              ৳{bundle.bundlePriceBdt} BDT
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => onNavigate('new-order')}
+                            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Zap className="w-3.5 h-3.5" />
+                            <span>অর্ডার করুন</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Tool 6: 60s Reels Script Generator */}
+                {activeMicroTool === 'reelsscript' &&
+                  publishedBlogs[0] &&
+                  (() => {
+                    const scriptObj = generate60sReelsScriptFromBlog(publishedBlogs[0]);
+                    const formattedScript = `${scriptObj.hook0to5s}\n\n${scriptObj.body5to45s.join('\n')}\n\n${scriptObj.cta45to60s}\n\n--- ক্যাপশন ও হ্যাশট্যাগ ---\n${scriptObj.captionWithHashtags}`;
+                    return (
+                      <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                            ৬০ সেকেন্ডের রিলস / টিকটক ভিডিও স্ক্রিপ্ট টেমপ্লেট
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(formattedScript);
+                              setCopiedScript(true);
+                              setTimeout(() => setCopiedScript(false), 2500);
+                            }}
+                            className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                          >
+                            {copiedScript ? (
+                              <>
+                                <Check className="w-3.5 h-3.5" /> স্ক্রিপ্ট কপি হয়েছে
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5" /> স্ক্রিপ্ট কপি করুন
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <pre className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-200 whitespace-pre-wrap font-sans leading-relaxed">
+                          {formattedScript}
+                        </pre>
+                      </div>
+                    );
+                  })()}
               </div>
-            </div>
+            ) : (
+              /* =================================================================
+                 EDITORIAL ARTICLES FEED (Lead Story + Curated 3-Column Grid)
+                 ================================================================= */
+              <>
+                {filteredBlogs.length === 0 ? (
+                  <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-12 text-center space-y-3">
+                    <Layers className="w-10 h-10 text-slate-400 mx-auto" />
+                    <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
+                      কোনো ব্লগ গাইড পাওয়া যায়নি
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      অন্য কোনো কীওয়ার্ড বা ক্যাটাগরি নির্বাচন করে আবার চেষ্টা করুন।
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setSelectedCategory('All');
+                      }}
+                      className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold cursor-pointer"
+                    >
+                      সব গাইড দেখুন
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Tier 1: Lead Featured Editorial Story */}
+                    {featuredLeadPost && (
+                      <article
+                        onClick={() => onSelectSlug(featuredLeadPost.slug)}
+                        className="group cursor-pointer bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs hover:border-indigo-500/40 transition-all grid grid-cols-1 lg:grid-cols-12 items-stretch"
+                      >
+                        <div className="lg:col-span-7 relative min-h-[220px] sm:min-h-[300px] bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                          <img
+                            src={featuredLeadPost.coverImage || FALLBACK_BLOG_IMAGE}
+                            alt={featuredLeadPost.coverImageAlt || featuredLeadPost.title}
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = FALLBACK_BLOG_IMAGE;
+                            }}
+                            className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-300"
+                          />
+                        </div>
+
+                        <div className="lg:col-span-5 p-5 sm:p-7 flex flex-col justify-between space-y-4">
+                          <div className="space-y-3">
+                            {/* Unboxed Metadata */}
+                            <div className="flex items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                                  {featuredLeadPost.category}
+                                </span>
+                                <span aria-hidden="true">·</span>
+                                <span>{featuredLeadPost.readingTimeMinutes || 4} মিনিট পড়ুন</span>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={(e) => toggleBookmark(featuredLeadPost.slug, e)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+                                title="বুকমার্ক করুন"
+                              >
+                                {bookmarkedSlugs.includes(featuredLeadPost.slug) ? (
+                                  <BookmarkCheck className="w-4 h-4 text-amber-500" />
+                                ) : (
+                                  <Bookmark className="w-4 h-4" />
+                                )}
+                              </button>
+                            </div>
+
+                            <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors leading-snug">
+                              {featuredLeadPost.title}
+                            </h2>
+
+                            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 line-clamp-3 leading-relaxed">
+                              {featuredLeadPost.excerpt}
+                            </p>
+                          </div>
+
+                          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                            <span className="text-slate-500 dark:text-slate-400">
+                              {formatDateBn(
+                                featuredLeadPost.publishedAt || featuredLeadPost.createdAt
+                              )}{' '}
+                              · {(featuredLeadPost.views || 120).toLocaleString()} ভিউ
+                            </span>
+                            <span className="font-bold text-indigo-600 dark:text-indigo-400 inline-flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                              <span>সম্পূর্ণ পড়ুন</span>
+                              <ChevronRight className="w-4 h-4" />
+                            </span>
+                          </div>
+                        </div>
+                      </article>
+                    )}
+
+                    {/* Tier 2: Curated 3-Column Editorial Article Grid */}
+                    {gridBlogs.length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                        {gridBlogs.map((post) => {
+                          const isBookmarked = bookmarkedSlugs.includes(post.slug);
+                          return (
+                            <article
+                              key={post.id}
+                              onClick={() => onSelectSlug(post.slug)}
+                              className="group cursor-pointer bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs hover:border-indigo-500/40 transition-all flex flex-col"
+                            >
+                              <div className="relative aspect-video bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                                <img
+                                  src={post.coverImage || FALLBACK_BLOG_IMAGE}
+                                  alt={post.coverImageAlt || post.title}
+                                  referrerPolicy="no-referrer"
+                                  onError={(e) => {
+                                    (e.currentTarget as HTMLImageElement).src = FALLBACK_BLOG_IMAGE;
+                                  }}
+                                  className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-300"
+                                />
+                              </div>
+
+                              <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                                <div className="space-y-2">
+                                  {/* Unboxed Metadata Line */}
+                                  <div className="flex items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+                                    <div className="flex items-center gap-1.5 truncate">
+                                      <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                                        {post.category}
+                                      </span>
+                                      <span aria-hidden="true">·</span>
+                                      <span>{post.readingTimeMinutes || 4} মিনিট</span>
+                                      <span aria-hidden="true">·</span>
+                                      <span className="font-mono tabular-nums">
+                                        {(post.views || 120).toLocaleString()} ভিউ
+                                      </span>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={(e) => toggleBookmark(post.slug, e)}
+                                      className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors shrink-0 cursor-pointer"
+                                      title="বুকমার্ক করুন"
+                                    >
+                                      {isBookmarked ? (
+                                        <BookmarkCheck className="w-4 h-4 text-amber-500" />
+                                      ) : (
+                                        <Bookmark className="w-4 h-4" />
+                                      )}
+                                    </button>
+                                  </div>
+
+                                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2 leading-snug">
+                                    {post.title}
+                                  </h3>
+
+                                  <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                                    {post.excerpt}
+                                  </p>
+                                </div>
+
+                                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                                  <span className="text-slate-400 dark:text-slate-500">
+                                    {formatDateBn(post.publishedAt || post.createdAt)}
+                                  </span>
+                                  <span className="font-bold text-indigo-600 dark:text-indigo-400 inline-flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                                    <span>পড়ুন</span>
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                  </span>
+                                </div>
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>

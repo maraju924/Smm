@@ -10,6 +10,10 @@ export default defineConfig(() => {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
+      dedupe: ['react', 'react-dom', 'react-dom/client'],
+    },
+    optimizeDeps: {
+      include: ['react', 'react-dom', 'react-dom/client', 'lucide-react'],
     },
     build: {
       target: 'es2020',
@@ -22,13 +26,16 @@ export default defineConfig(() => {
               if (id.includes('firebase') || id.includes('@firebase')) {
                 return 'vendor-firebase';
               }
-              if (id.includes('motion') || id.includes('framer-motion')) {
-                return 'vendor-motion';
-              }
               if (id.includes('lucide-react')) {
                 return 'vendor-icons';
               }
-              if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) {
+              if (
+                id.includes('react') ||
+                id.includes('react-dom') ||
+                id.includes('scheduler') ||
+                id.includes('motion') ||
+                id.includes('framer-motion')
+              ) {
                 return 'vendor-react';
               }
             }
